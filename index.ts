@@ -110,7 +110,6 @@ export type AncientTrait = {
 }
 
 
-
 // --- Runtime Cards ---
 type CardInstanceId = string                           // Primary ID for all cards in-play
 type CardSupertype = "Pokémon" | "Trainer" | "Energy"
@@ -120,8 +119,8 @@ type DamageModifier =
   | { operation: "add"; value: number }
 
 type CardInstance = {
-  id: CardInstanceId
-  sourceCardId: string
+  instanceId: CardInstanceId
+  sourceId: string
 
   name: string;
   sueprtype: CardSupertype
@@ -148,24 +147,37 @@ type CardInstance = {
 }
 
 
-
 // --- Card Locations ---
-type Zone = {
-  id: string
-  cards: CardInstanceId[]
+type Zone = CardInstanceId[]
+
+type ZoneName = "deck" | "hand" | "discard" | "prize"
+
+type ZonePosition = "top" | "bottom" | "shuffle"
+
+type ZoneRef = {
+  player: 1 | 2
+  zone: ZoneName
 }
+
+type ZoneDest = ZoneRef & {
+  position: ZonePosition
+}
+
+type Attachment = "evolution" | "energy" | "tools"
+
+type SlotRef =
+  | { player: 1 | 2; slot: "active"; attachment: Attachment }
+  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4; attachment: Attachment }
 
 // Board position for cards in-play
 type Slot = {
-  id: string
-  evolution_stack: CardInstanceId[] // top is active form
+  evolution: CardInstanceId[] // top is active form
   damage: number
-  status?: 'OK' | 'PSN' | 'PAR' | 'SLP' | 'FRZ'
+  status?: 'ok' | 'psn' | 'brn' | 'par' | 'slp' | 'frz'
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: []
 }
-
 
 type Player = {
   id: 1 | 2
@@ -177,65 +189,81 @@ type Player = {
   bench: Slot[]
 }
 
+type Effect = {
+  // card action (move, draw, discard, shuffle)
+  // apply status (+ / -)
+  // apply damage (+ / -)
+}
+
+// messages come from "event listener" system; centralized message definition
+
+
+type GameState = {
+  id: string
+  phase: "init" | "player_turn" | "checkup" | "ended"
+  players: {
+    1: Player
+    2: Player
+  }
+  turnCount: number
+  firstPlayer: 1 | 2 
+  activePlayer: 1 | 2
+
+  // All card data for both players live here
+  cardRegsitry: Record<string, CardInstance>
+
+  actionStack: []
+  actionHistory: []
+}
+
 
 function instantiatePlayers() {
   const playerOne: Player = {
     id: 1,
-    deck: { id: 'p1-deck', cards: [] },
-    discard: { id: 'p1-discard', cards: [] },
-    hand: { id: 'p1-hand', cards: [] },
-    prize: { id: 'p1-prize', cards: [] },
+    deck: [],
+    discard: [],
+    hand: [],
+    prize: [],
     active: {
-      id: 'p1-active',
-      evolution_stack: [],
+      evolution: [],
       damage: 0,
-      status: 'OK',
+      status: 'ok',
       energy: [],
       tools: [],
       modifiers: []
     },
     bench: [
       {
-        id: 'p1-bench-0',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p1-bench-1',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p1-bench-2',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p1-bench-3',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p1-bench-4',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
@@ -245,61 +273,51 @@ function instantiatePlayers() {
 
   const playerTwo: Player = {
     id: 2,
-    deck: { id: 'p2-deck', cards: [] },
-    discard: { id: 'p2-discard', cards: [] },
-    hand: { id: 'p2-hand', cards: [] },
-    prize: { id: 'p2-prize', cards: [] },
+    deck: [],
+    discard: [],
+    hand: [],
+    prize: [],
     active: {
-      id: 'p2-active',
-      evolution_stack: [],
+      evolution: [],
       damage: 0,
-      status: 'OK',
+      status: 'ok',
       energy: [],
       tools: [],
       modifiers: []
     },
     bench: [
       {
-        id: 'p2-bench-0',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p2-bench-1',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p2-bench-2',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p2-bench-3',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
+        status: 'ok',
         energy: [],
         tools: [],
         modifiers: []
       },
       {
-        id: 'p2-bench-4',
-        evolution_stack: [],
+        evolution: [],
         damage: 0,
-        status: 'OK',
         energy: [],
         tools: [],
         modifiers: []
@@ -310,59 +328,100 @@ function instantiatePlayers() {
   return { playerOne, playerTwo }
 }
 
-type ZoneRef = {
-  player: 1 | 2
-  zone: "deck" | "hand" | "discard" | "prize"
+
+const shuffleZone = (zone: Zone) => {
+  for (let i = zone.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+      ;[zone[i], zone[j]] = [zone[j], zone[i]]
+  }
 }
 
-type SlotRef =
-  | { player: 1 | 2; slot: "active"; place: "evolution_stack" | "energy" | "tools" }
-  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4; place: "evolution_stack" | "energy" | "tools" }
+const placeInZone = (zone: Zone, position: ZonePosition, cardId: CardInstanceId) => {
+  if (position === "top") {
+    zone.unshift(cardId)
+    return
+  }
+  zone.push(cardId) // bottom
+  if (position === "shuffle") {
+    shuffleZone(zone)
+  }
+}
 
-
-const moveCard = (
+const moveZoneToZone = (
   gamestate: GameState,
   cardId: CardInstanceId,
   from: ZoneRef,
-  to: ZoneRef
+  to: ZoneDest
 ) => {
   const location = gamestate.players[from.player][from.zone]
   const target = gamestate.players[to.player][to.zone]
 
-  const index = location.cards.indexOf(cardId)
+  const index = location.indexOf(cardId)
   if (index === -1) {
+    // throw error if invalid action should never make it here.
     return gamestate
   }
 
-  location.cards.splice(index, 1)
-  target.cards.push(cardId)
+  location.splice(index, 1)
+  placeInZone(target, to.position, cardId)
 
   return gamestate
 }
 
-const getSlotPlace = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
+const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
   const player = gamestate.players[ref.player]
   const slot = ref.slot === "active" ? player.active : player.bench[ref.index]
-  return slot[ref.place]
+  return slot[ref.attachment]
 }
 
-const getCardList = (gamestate: GameState, ref: ZoneRef | SlotRef): CardInstanceId[] => {
-  if ("zone" in ref) {
-    return gamestate.players[ref.player][ref.zone].cards
-  }
-  return getSlotPlace(gamestate, ref)
-}
-
-// const getCardById = (gamestate: GameState, ref: ZoneRef | SlotRef)
-
-const moveToSlot = (
+const moveZoneToSlot = (
   gamestate: GameState,
   cardId: CardInstanceId,
-  from: ZoneRef | SlotRef,
+  from: ZoneRef,
   to: SlotRef
 ) => {
-  const location = getCardList(gamestate, from)
-  const target = getSlotPlace(gamestate, to)
+  const location = gamestate.players[from.player][from.zone]
+  const target = getSlotAttachment(gamestate, to)
+
+  const index = location.indexOf(cardId)
+  if (index === -1) {
+    return gamestate
+  }
+
+  location.splice(index, 1)
+  target.push(cardId)
+
+  return gamestate
+}
+
+const moveSlotToZone = (
+  gamestate: GameState,
+  cardId: CardInstanceId,
+  from: SlotRef,
+  to: ZoneDest
+) => {
+  const location = getSlotAttachment(gamestate, from)
+  const target = gamestate.players[to.player][to.zone]
+
+  const index = location.indexOf(cardId)
+  if (index === -1) {
+    return gamestate
+  }
+
+  location.splice(index, 1)
+  placeInZone(target, to.position, cardId)
+
+  return gamestate
+}
+
+const moveSlotToSlot = (
+  gamestate: GameState,
+  cardId: CardInstanceId,
+  from: SlotRef,
+  to: SlotRef
+) => {
+  const location = getSlotAttachment(gamestate, from)
+  const target = getSlotAttachment(gamestate, to)
 
   const index = location.indexOf(cardId)
   if (index === -1) {
@@ -376,85 +435,59 @@ const moveToSlot = (
 }
 
 
-// function addSlotCard(
-//   gamestate: GameState,
-//   cardId: CardInstanceId,
-//   from: ZoneRef,
-//   to: SlotRef
-// ) {
-//   const location = gamestate.players[from.player][from.zone]
-//   const player = gamestate.players[to.player]
-//   const target = to.slot === "active" ? player.active : player.bench[to.index]
-
-//   const index = location.cards.indexOf(cardId)
-//   if (index === -1) {
-//     return gamestate
-//   }
-
-//   location.cards.splice(index, 1)
-//   target.
-// }
-
-function removeSlotCard() { }
-
-
-// function discard(player, zone, cardId) {
-
-// }
-
-type Action = "DRAW" | "PLAY_CARD"
-// Apply action result to gamestate
-// Name parent ApplyAction(action, gamestate) returns Effect
-// else push to stack
-type Effect = {
-  // card action (move, draw, discard, shuffle)
-  // apply status (+ / -)
-  // apply damage (+ / -)
-}
-
-// messages come from "event listener" system; centralized message definition
-
-type GameState = {
-  id: string
-  phase: "INIT" | "PLAYER_TURN" | "CHECKUP" | "ENDED"
-
-  turnCount: number
-  players: {
-    1: Player
-    2: Player
-  }
-
-  // All card data for both players live here
-  cardRegsitry: Record<string, string>
-
-  actionStack: []
-  actionHistory: []
-}
 
 const stack = []
 // stack is for async actions that need to occur in order
 // gamestate in suspended "awaiting" resolution
 
+type CoinResult = 'heads' | 'tails'
+const flipCoin = (count: number): CoinResult[] => {
+  const result: CoinResult[] = []
+
+  for (let i = 0; i < count; i++) {
+    const flip = Math.random()
+    if (flip > 0.5) {
+      result.push('heads')
+    } else {
+      result.push('tails')
+    }
+  }
+
+  return result
+}
 
 
-
-function initializeGameState() {
+function initializeGameState(): GameState {
   const { playerOne, playerTwo } = instantiatePlayers()
+  let firstPlayer: 1 | 2
+
+  const coinResult = flipCoin(1)
+  if (coinResult[0] === 'heads') {
+    firstPlayer = 1
+  } else {
+    firstPlayer = 2
+  }
+
   const gamestate: GameState = {
     id: "game-1",
-    phase: "PLAYER_TURN",
-    turnCount: 0,
-    // firstPlayer: 1
+    phase: "init",
     players: {
       1: playerOne,
       2: playerTwo
     },
+    turnCount: 0,
+    firstPlayer: firstPlayer,
+    activePlayer: 1,
 
     cardRegsitry: {},
 
     actionStack: [],
     actionHistory: []
   }
+
+
+
+  return gamestate
 }
 
 // reads primitive expression and returns delta gamestate
@@ -476,6 +509,6 @@ function evaluateAction() {
     // place in target zone 
   }
 
-  return gamestate
+  // return gamestate
 }
 
