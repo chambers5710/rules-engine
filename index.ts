@@ -1,4 +1,3 @@
-import CARD_SET from "./base1.json" with { type: "json" };
 
 // action needs no "check" string key because gamestate is omnipotent
 
@@ -164,16 +163,28 @@ type ZoneDest = ZoneRef & {
 }
 
 type Attachment = "evolution" | "energy" | "tools"
+type Status = 'psn' | 'brn' | 'par' | 'slp' | 'cnf'
+type StatusFlags = Record<Status, boolean>
 
-type SlotRef =
-  | { player: 1 | 2; slot: "active"; attachment: Attachment }
-  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4; attachment: Attachment }
+const emptyStatus = (): StatusFlags => ({
+  psn: false,
+  brn: false,
+  par: false,
+  slp: false,
+  cnf: false,
+})
+
+type SlotId =
+  | { player: 1 | 2; slot: "active" }
+  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
+
+type SlotRef = SlotId & { attachment: Attachment }
 
 // Board position for cards in-play
 type Slot = {
   evolution: CardInstanceId[] // top is active form
   damage: number
-  status?: 'ok' | 'psn' | 'brn' | 'par' | 'slp' | 'frz'
+  status: StatusFlags
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: []
@@ -217,6 +228,7 @@ type GameState = {
 }
 
 
+// probably want to pass decks by this point
 function instantiatePlayers() {
   const playerOne: Player = {
     id: 1,
@@ -227,7 +239,7 @@ function instantiatePlayers() {
     active: {
       evolution: [],
       damage: 0,
-      status: 'ok',
+      status: emptyStatus(),
       energy: [],
       tools: [],
       modifiers: []
@@ -236,6 +248,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -243,6 +256,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -250,6 +264,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -257,6 +272,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -264,6 +280,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -280,7 +297,7 @@ function instantiatePlayers() {
     active: {
       evolution: [],
       damage: 0,
-      status: 'ok',
+      status: emptyStatus(),
       energy: [],
       tools: [],
       modifiers: []
@@ -289,6 +306,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -296,6 +314,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -303,6 +322,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -310,7 +330,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
-        status: 'ok',
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -318,6 +338,7 @@ function instantiatePlayers() {
       {
         evolution: [],
         damage: 0,
+        status: emptyStatus(),
         energy: [],
         tools: [],
         modifiers: []
@@ -368,10 +389,13 @@ const moveZoneToZone = (
   return gamestate
 }
 
-const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
+const getSlot = (gamestate: GameState, ref: SlotId): Slot => {
   const player = gamestate.players[ref.player]
-  const slot = ref.slot === "active" ? player.active : player.bench[ref.index]
-  return slot[ref.attachment]
+  return ref.slot === "active" ? player.active : player.bench[ref.index]
+}
+
+const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
+  return getSlot(gamestate, ref)[ref.attachment]
 }
 
 const moveZoneToSlot = (
@@ -434,7 +458,36 @@ const moveSlotToSlot = (
   return gamestate
 }
 
+// can be negative
+const applyDamage = (
+  gamestate: GameState,
+  value: number,
+  to: SlotId
+) => {
+  const slot = getSlot(gamestate, to)
+  slot.damage += value
+  return gamestate
+}
 
+const applyStatus = (
+  gamestate: GameState,
+  status: Status,
+  to: SlotId
+) => {
+  const slot = getSlot(gamestate, to)
+  slot.status[status] = true
+  return gamestate
+}
+
+const removeStatus = (
+  gamestate: GameState,
+  status: Status,
+  from: SlotId
+) => {
+  const slot = getSlot(gamestate, from)
+  slot.status[status] = false
+  return gamestate
+}
 
 const stack = []
 // stack is for async actions that need to occur in order
@@ -459,6 +512,7 @@ const flipCoin = (count: number): CoinResult[] => {
 
 function initializeGameState(): GameState {
   const { playerOne, playerTwo } = instantiatePlayers()
+
   let firstPlayer: 1 | 2
 
   const coinResult = flipCoin(1)
@@ -484,8 +538,6 @@ function initializeGameState(): GameState {
     actionStack: [],
     actionHistory: []
   }
-
-
 
   return gamestate
 }
