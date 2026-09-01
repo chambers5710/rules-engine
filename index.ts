@@ -109,6 +109,30 @@ export type AncientTrait = {
 }
 
 
+///////////// IDK I THINK THESE TYPES MIGHT NEED WORK
+//Interface representing a Deck as defined in the schema
+export type Deck = {
+  id: string;
+  name: string;
+  types: string[];
+  setId?: string;
+}
+
+// Interface representing a card within a deck, including quantity
+export type DeckCard = {
+  id: string;
+  count: number;
+  deckId: string;
+  cardId: string;
+  card?: Card;
+}
+
+// Interface representing a complete deck with its cards
+export interface DeckWithCards extends Deck {
+  deckCards: DeckCard[];
+}
+
+
 // --- Runtime Cards ---
 type CardInstanceId = string                           // Primary ID for all cards in-play
 type CardSupertype = "Pokémon" | "Trainer" | "Energy"
@@ -122,13 +146,14 @@ type CardInstance = {
   sourceId: string
 
   name: string;
-  sueprtype: CardSupertype
+  supertype: CardSupertype
   subtypes?: string[] | null
 
   // Pokémon fields
   hp?: string | null
   types?: EnergyType[]
   evolvesFrom?: string | null
+  evolvesTo?: string | null
   retreatCost?: EnergyType[]
   weaknesses?: { type: EnergyType; modifier: DamageModifier }
   resistances?: { type: EnergyType; modifier: DamageModifier }
@@ -190,6 +215,15 @@ type Slot = {
   modifiers: []
 }
 
+const emptySlot = (): Slot => ({
+  evolution: [],
+  damage: 0,
+  status: emptyStatus(),
+  energy: [],
+  tools: [],
+  modifiers: []
+})
+
 type Player = {
   id: 1 | 2
   deck: Zone
@@ -208,6 +242,7 @@ type Effect = {
 
 // messages come from "event listener" system; centralized message definition
 
+type CardRegistry = Record<string, CardInstance>
 
 type GameState = {
   id: string
@@ -217,136 +252,14 @@ type GameState = {
     2: Player
   }
   turnCount: number
-  firstPlayer: 1 | 2 
+  firstPlayer: 1 | 2
   activePlayer: 1 | 2
 
   // All card data for both players live here
-  cardRegsitry: Record<string, CardInstance>
+  cardRegistry: CardRegistry
 
   actionStack: []
   actionHistory: []
-}
-
-
-// probably want to pass decks by this point
-function instantiatePlayers() {
-  const playerOne: Player = {
-    id: 1,
-    deck: [],
-    discard: [],
-    hand: [],
-    prize: [],
-    active: {
-      evolution: [],
-      damage: 0,
-      status: emptyStatus(),
-      energy: [],
-      tools: [],
-      modifiers: []
-    },
-    bench: [
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      }
-    ]
-  }
-
-  const playerTwo: Player = {
-    id: 2,
-    deck: [],
-    discard: [],
-    hand: [],
-    prize: [],
-    active: {
-      evolution: [],
-      damage: 0,
-      status: emptyStatus(),
-      energy: [],
-      tools: [],
-      modifiers: []
-    },
-    bench: [
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      },
-      {
-        evolution: [],
-        damage: 0,
-        status: emptyStatus(),
-        energy: [],
-        tools: [],
-        modifiers: []
-      }
-    ]
-  }
-
-  return { playerOne, playerTwo }
 }
 
 
@@ -509,39 +422,6 @@ const flipCoin = (count: number): CoinResult[] => {
   return result
 }
 
-
-function initializeGameState(): GameState {
-  const { playerOne, playerTwo } = instantiatePlayers()
-
-  let firstPlayer: 1 | 2
-
-  const coinResult = flipCoin(1)
-  if (coinResult[0] === 'heads') {
-    firstPlayer = 1
-  } else {
-    firstPlayer = 2
-  }
-
-  const gamestate: GameState = {
-    id: "game-1",
-    phase: "init",
-    players: {
-      1: playerOne,
-      2: playerTwo
-    },
-    turnCount: 0,
-    firstPlayer: firstPlayer,
-    activePlayer: 1,
-
-    cardRegsitry: {},
-
-    actionStack: [],
-    actionHistory: []
-  }
-
-  return gamestate
-}
-
 // reads primitive expression and returns delta gamestate
 // business logical difference between gameplay and atomic action
 function evaluateAction() {
@@ -564,3 +444,178 @@ function evaluateAction() {
   // return gamestate
 }
 
+
+function asEnergyType(value: string): EnergyType {
+  if ((EnergyTypes as readonly string[]).includes(value)) {
+    return value as EnergyType
+  }
+  throw new Error(`Unknown energy type: ${value}`)
+}
+
+function parseDamageModifier(value: string): DamageModifier {
+  if (value.startsWith("×") || value.startsWith("x") || value.startsWith("X")) {
+    return { operation: "multiply", value: Number(value.slice(1)) }
+  }
+  return { operation: "add", value: Number(value) }
+}
+
+function instantiateCard(cardData: Card): CardInstance {
+  const types = cardData.types?.map(asEnergyType)
+  const retreatCost = cardData.retreatCost?.map(asEnergyType)
+
+  // Do we need to handle case of multiple weaknesses? Check Database
+  const printedWeakness = cardData.weaknesses?.[0]
+  const weaknesses = printedWeakness
+    ? { type: asEnergyType(printedWeakness.type), modifier: parseDamageModifier(printedWeakness.value) }
+    : undefined
+
+  const printedResistance = cardData.resistances?.[0]
+  const resistances = printedResistance
+    ? { type: asEnergyType(printedResistance.type), modifier: parseDamageModifier(printedResistance.value) }
+    : undefined
+
+  let energyType: EnergyType | undefined
+  let energyValue: number | undefined
+  if (cardData.supertype === "Energy") {
+    // This clearly ain't gonna fucking work lmao
+    if (cardData.name === "Double Colorless Energy") {
+      energyType = "Colorless"
+      energyValue = 2
+    } else {
+      energyType = asEnergyType(cardData.name.replace(/ Energy$/, ""))
+      energyValue = 1
+    }
+  }
+
+  const cardInstance: CardInstance = {
+    instanceId: "",
+    sourceId: cardData.id,
+
+    name: cardData.name,
+    supertype: cardData.supertype,
+    subtypes: cardData.subtypes,
+
+    hp: cardData.hp,
+    types: types,
+    evolvesFrom: cardData.evolvesFrom,
+    evolvesTo: cardData.evolvesTo?.[0] ?? null,
+    retreatCost: retreatCost,
+    weaknesses: weaknesses,
+    resistances: resistances,
+
+    energyType: energyType,
+    energyValue: energyValue,
+
+    effects: [],
+
+    fieldOverrides: []
+  }
+
+  return cardInstance
+}
+
+function initializeDeck(
+  playerId: number,
+  deckData: Card[]): CardInstance[] {
+
+  const deck: CardInstance[] = []
+
+  for (let i = 0; i < deckData.length; i++) {
+    const gameCard = instantiateCard(deckData[i])
+    gameCard.instanceId = `${playerId}-${i}-${deckData[i].id}`
+    deck.push(gameCard)
+  }
+
+  return deck
+}
+
+function instantiatePlayers(p1DeckCardIds: string[], p2DeckCardIds: string[]) {
+  const playerOne: Player = {
+    id: 1,
+    deck: p1DeckCardIds,
+    discard: [],
+    hand: [],
+    prize: [],
+    active: emptySlot(),
+    bench: [emptySlot(), emptySlot(), emptySlot(), emptySlot(), emptySlot()]
+  }
+
+  const playerTwo: Player = {
+    id: 2,
+    deck: p2DeckCardIds,
+    discard: [],
+    hand: [],
+    prize: [],
+    active: emptySlot(),
+    bench: [emptySlot(), emptySlot(), emptySlot(), emptySlot(), emptySlot()]
+  }
+
+  return { playerOne, playerTwo }
+}
+
+function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): GameState {
+  let firstPlayer: 1 | 2
+
+  const coinResult = flipCoin(1)
+  if (coinResult[0] === 'heads') {
+    firstPlayer = 1
+  } else {
+    firstPlayer = 2
+  }
+
+  const p1Deck = initializeDeck(1, p1DeckData)
+  const p2Deck = initializeDeck(2, p2DeckData)
+
+  const p1DeckIds: string[] = []
+  p1Deck.forEach((card) => {
+    p1DeckIds.push(card.instanceId)
+  })
+
+  const p2DeckIds: string[] = []
+  p2Deck.forEach((card) => {
+    p2DeckIds.push(card.instanceId)
+  })
+
+  const { playerOne, playerTwo } = instantiatePlayers(p1DeckIds, p2DeckIds)
+
+  const cardRegistry: CardRegistry = {}
+  p1Deck.forEach((card) => {
+    cardRegistry[card.instanceId] = card
+  })
+  p2Deck.forEach((card) => {
+    cardRegistry[card.instanceId] = card
+  })
+
+  const gamestate: GameState = {
+    id: "game-1",
+    phase: "init",
+    players: {
+      1: playerOne,
+      2: playerTwo
+    },
+    turnCount: 0,
+    firstPlayer: firstPlayer,
+    activePlayer: firstPlayer,
+
+    cardRegistry: cardRegistry,
+
+    actionStack: [],
+    actionHistory: []
+  }
+
+  return gamestate
+}
+
+
+async function fetchDeckData(deckId: string) {
+  const response = await fetch(`http://localhost:8787/api/decks/${deckId}`)
+  return await response.json() as Card[]
+}
+
+// API handles card parsing into decks
+// These deck calls return Card[]
+const p1DeckData = await fetchDeckData('d-base1-2')
+const p2DeckData = await fetchDeckData('d-base1-3')
+
+const gamestate = initializeGameState(p1DeckData, p2DeckData)
+console.log(`Player 1 Deck Count: ${gamestate.players[1].deck.length} \n Player 2 Deck Count: ${gamestate.players[2].deck.length}`)
