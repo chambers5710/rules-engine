@@ -1,7 +1,7 @@
-import { Op, Primitive } from "./dsl.js"
+import { interpret } from "./interpret.js"
+import { Op } from "./dsl.js"
 import type { Card, GameState } from "./types.js"
 import { Phase } from "./types.js"
-import { moveZoneToZone } from "./ops.js"
 import { initializeGameState } from "./initialize.js"
 
 console.log("Initializing...")
@@ -90,34 +90,6 @@ function stateMachine(gamestate: GameState, action: any): GameState {
       // freeze; history is the log
       return gamestate
 
-    default:
-      return gamestate
-  }
-}
-
-
-function interpret(gamestate:GameState, primitive: Primitive): GameState {
-  switch(primitive.op) {
-    case Op.MoveZoneToZone:
-      return moveZoneToZone(gamestate, primitive.card, primitive.from, primitive.to)
-
-
-    case Op.MoveZoneToSlot:
-
-      return gamestate
-
-    
-    case Op.MoveSlotToSlot:
-
-      return gamestate
-
-    
-    case Op.MoveSlotToZone:
-
-
-      return gamestate
-
-    
     default:
       return gamestate
   }

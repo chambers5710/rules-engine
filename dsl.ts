@@ -13,16 +13,26 @@ export enum Op {
   If = "if",
 }
 
+export type BindingName = `$${string}`
+
+export type SlotTarget = SlotId | BindingName
+
+export type PipelineAmount = {
+  base: number
+  from: SlotTarget
+  to: SlotTarget
+}
+
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; from: ZoneRef; to: ZoneDest }
   | { op: Op.MoveZoneToSlot; card: string; from: ZoneRef; to: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; from: SlotRef; to: ZoneDest }
   | { op: Op.MoveSlotToSlot; card: string; from: SlotRef; to: SlotRef }
-  | { op: Op.ApplyDamage; amount: number; to: SlotId }
-  | { op: Op.ApplyStatus; status: Status; to: SlotId }
-  | { op: Op.RemoveStatus; status: Status; from: SlotId }
-  | { op: Op.FlipCoin; bind: string }
-  | { op: Op.Select; bind: string; from: ZoneRef | SlotRef }
-  | { op: Op.If; bind: string; equals: unknown; then: Primitive[] }
+  | { op: Op.ApplyDamage; amount: number | PipelineAmount; to: SlotTarget }
+  | { op: Op.ApplyStatus; status: Status; to: SlotTarget }
+  | { op: Op.RemoveStatus; status: Status; from: SlotTarget }
+  | { op: Op.FlipCoin; bind: BindingName }
+  | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef }
+  | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }
 
 export type Expr = Primitive[]
