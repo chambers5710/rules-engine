@@ -1,5 +1,7 @@
-import type { GameState } from "./engine.js"
-import { moveZoneToSlot, moveZoneToZone } from "./engine.js"
+import type { GameState } from "./types.js"
+import { moveZoneToSlot, moveZoneToZone } from "./ops.js"
+
+// these are extra helpers and not at this point used in ops
 
 export function draw(playerId: 1 | 2, gamestate: GameState, count: number) {
   for (let i = 0; i < count; i++) {

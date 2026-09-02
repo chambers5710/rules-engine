@@ -1,4 +1,4 @@
-import type { SlotId, SlotRef, Status, ZoneDest, ZoneRef } from "./engine.js"
+import type { SlotId, SlotRef, Status, ZoneDest, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",

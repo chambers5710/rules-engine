@@ -1,5 +1,8 @@
-import type { Card, GameState } from "./engine.js"
-import { initializeGameState, Phase } from "./engine.js"
+import { Op, Primitive } from "./dsl.js"
+import type { Card, GameState } from "./types.js"
+import { Phase } from "./types.js"
+import { moveZoneToZone } from "./ops.js"
+import { initializeGameState } from "./initialize.js"
 
 console.log("Initializing...")
 
@@ -45,7 +48,20 @@ function stateMachine(gamestate: GameState, action: any): GameState {
     case Phase.Turn:
       // if opening the turn (no action yet):
       //   draw { player: $active, count: 1 }
-      //   compute legal actions → client → wait
+      if (!action) {
+        const player = gamestate.activePlayer
+        const card = gamestate.players[player].deck[0]
+        if (card) {
+          gamestate = interpret(gamestate, {
+            op: Op.MoveZoneToZone,
+            card,
+            from: { player, zone: "deck" },
+            to: { player, zone: "hand", position: "bottom" },
+          })
+        }
+        // compute legal actions → client → wait
+        return gamestate
+      }
       // action is Primitive[] already deemed legal, e.g.
       //   play_active | play_bench | attach_energy
       //   trainer: [select, move_card, …]
@@ -79,6 +95,30 @@ function stateMachine(gamestate: GameState, action: any): GameState {
   }
 }
 
-function interpret() {
-  
+
+function interpret(gamestate:GameState, primitive: Primitive): GameState {
+  switch(primitive.op) {
+    case Op.MoveZoneToZone:
+      return moveZoneToZone(gamestate, primitive.card, primitive.from, primitive.to)
+
+
+    case Op.MoveZoneToSlot:
+
+      return gamestate
+
+    
+    case Op.MoveSlotToSlot:
+
+      return gamestate
+
+    
+    case Op.MoveSlotToZone:
+
+
+      return gamestate
+
+    
+    default:
+      return gamestate
+  }
 }
