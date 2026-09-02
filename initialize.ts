@@ -14,79 +14,46 @@ import { EnergyTypes, Phase } from "./types.js"
 
 // Game — coin flip, hydrate both decks, assemble the snapshot
 export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): GameState {
-  let firstPlayer: 1 | 2
+  const firstPlayer: 1 | 2 = flipCoin(1)[0] === "heads" ? 1 : 2
+  const deckData = { 1: p1DeckData, 2: p2DeckData }
 
-  const coinResult = flipCoin(1)
-  if (coinResult[0] === "heads") {
-    firstPlayer = 1
-  } else {
-    firstPlayer = 2
+  const decks: { 1: CardInstance[]; 2: CardInstance[] } = { 1: [], 2: [] }
+  const cardRegistry: CardRegistry = {}
+
+  for (const player of [1, 2] as const) {
+    decks[player] = initializeDeck(player, deckData[player])
+    for (const card of decks[player]) {
+      cardRegistry[card.instanceId] = card
+    }
   }
 
-  const p1Deck = initializeDeck(1, p1DeckData)
-  const p2Deck = initializeDeck(2, p2DeckData)
-
-  const p1DeckIds: string[] = []
-  p1Deck.forEach((card) => {
-    p1DeckIds.push(card.instanceId)
-  })
-
-  const p2DeckIds: string[] = []
-  p2Deck.forEach((card) => {
-    p2DeckIds.push(card.instanceId)
-  })
-
-  const { playerOne, playerTwo } = instantiatePlayers(p1DeckIds, p2DeckIds)
-
-  const cardRegistry: CardRegistry = {}
-  p1Deck.forEach((card) => {
-    cardRegistry[card.instanceId] = card
-  })
-  p2Deck.forEach((card) => {
-    cardRegistry[card.instanceId] = card
-  })
-
-  const gamestate: GameState = {
+  return {
     id: "game-1",
     phase: Phase.Init,
     players: {
-      1: playerOne,
-      2: playerTwo,
+      1: instantiatePlayer(1, decks[1].map((c) => c.instanceId)),
+      2: instantiatePlayer(2, decks[2].map((c) => c.instanceId)),
     },
     turnCount: 0,
-    firstPlayer: firstPlayer,
+    firstPlayer,
     activePlayer: firstPlayer,
-    cardRegistry: cardRegistry,
+    cardRegistry,
     actionStack: [],
     actionHistory: [],
   }
-
-  return gamestate
 }
 
-// Players — empty board, decks already minted as instance ids
-function instantiatePlayers(p1DeckCardIds: string[], p2DeckCardIds: string[]) {
-  const playerOne: Player = {
-    id: 1,
-    deck: p1DeckCardIds,
+// Player — empty board, deck already minted as instance ids
+function instantiatePlayer(id: 1 | 2, deck: string[]): Player {
+  return {
+    id,
+    deck,
     discard: [],
     hand: [],
     prize: [],
     active: emptySlot(),
     bench: [emptySlot(), emptySlot(), emptySlot(), emptySlot(), emptySlot()],
   }
-
-  const playerTwo: Player = {
-    id: 2,
-    deck: p2DeckCardIds,
-    discard: [],
-    hand: [],
-    prize: [],
-    active: emptySlot(),
-    bench: [emptySlot(), emptySlot(), emptySlot(), emptySlot(), emptySlot()],
-  }
-
-  return { playerOne, playerTwo }
 }
 
 // Empty slot — one vacant Pokémon seat
@@ -109,7 +76,7 @@ const emptyStatus = (): StatusFlags => ({
 })
 
 // Deck — one CardInstance per printed row, ids minted as player-index-source
-function initializeDeck(playerId: number, deckData: Card[]): CardInstance[] {
+function initializeDeck(playerId: 1 | 2, deckData: Card[]): CardInstance[] {
   const deck: CardInstance[] = []
 
   for (let i = 0; i < deckData.length; i++) {
