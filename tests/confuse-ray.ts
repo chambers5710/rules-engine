@@ -42,10 +42,13 @@ function boardAlakazamVsMachop(): GameState {
 
 const confuseRay: Expr = [
   {
-    op: Op.ApplyDamage,
-    amount: { base: 30, from: "$self_slot", to: "$defending" }, // don't like this redundancy
+    op: Op.Attack,
+    base: 30,
+    from: "$self_slot",
     to: "$defending",
+    bind: "$damage",
   },
+  { op: Op.ApplyDamage, amount: "$damage", to: "$defending" },
   { op: Op.FlipCoin, bind: "$coin" },
   {
     op: Op.If,
@@ -65,7 +68,7 @@ function attackCtx(script: InterpretCtx["script"]): InterpretCtx {
   }
 }
 
-function run(expr: Expr, ctx: InterpretCtx, gamestate: GameState): GameState {
+function run(gamestate: GameState, expr: Expr, ctx: InterpretCtx): GameState {
   for (const primitive of expr) {
     gamestate = interpret(gamestate, primitive, ctx)
   }
@@ -93,13 +96,13 @@ function check(name: string, expected: unknown, realized: unknown) {
 }
 
 let heads = boardAlakazamVsMachop()
-heads = run(confuseRay, attackCtx({ coins: ["heads"] }), heads)
+heads = run(heads, confuseRay, attackCtx({ coins: ["heads"] }))
 check("confuse ray heads: damage", 30, snapshot(heads).p2Damage)
 check("confuse ray heads: confused", true, snapshot(heads).p2Cnf)
 check("confuse ray heads: attacker undamaged", 0, snapshot(heads).p1Damage)
 
 let tails = boardAlakazamVsMachop()
-tails = run(confuseRay, attackCtx({ coins: ["tails"] }), tails)
+tails = run(tails, confuseRay, attackCtx({ coins: ["tails"] }))
 check("confuse ray tails: damage", 30, snapshot(tails).p2Damage)
 check("confuse ray tails: not confused", false, snapshot(tails).p2Cnf)
 

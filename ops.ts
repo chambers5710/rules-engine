@@ -11,6 +11,9 @@ import type {
   ZoneRef,
 } from "./types.js"
 
+// Copy — snapshot we can mutate; never write the object we were given
+const copy = (gamestate: GameState): GameState => structuredClone(gamestate)
+
 // Shuffle — Fisher–Yates in place; used by placeInZone("shuffle")
 const shuffleZone = (zone: Zone) => {
   for (let i = zone.length - 1; i > 0; i--) {
@@ -39,17 +42,16 @@ export const moveZoneToZone = (
   to: ZoneDest
 ) => {
   const location = gamestate.players[from.player][from.zone]
-  const target = gamestate.players[to.player][to.zone]
-
-  const index = location.indexOf(cardId)
-  if (index === -1) {
+  if (location.indexOf(cardId) === -1) {
     return gamestate
   }
 
-  location.splice(index, 1)
-  placeInZone(target, to.position, cardId)
-
-  return gamestate
+  const next = copy(gamestate)
+  const fromZone = next.players[from.player][from.zone]
+  const toZone = next.players[to.player][to.zone]
+  fromZone.splice(fromZone.indexOf(cardId), 1)
+  placeInZone(toZone, to.position, cardId)
+  return next
 }
 
 // Slot — resolve active or bench seat
@@ -71,17 +73,15 @@ export const moveZoneToSlot = (
   to: SlotRef
 ) => {
   const location = gamestate.players[from.player][from.zone]
-  const target = getSlotAttachment(gamestate, to)
-
-  const index = location.indexOf(cardId)
-  if (index === -1) {
+  if (location.indexOf(cardId) === -1) {
     return gamestate
   }
 
-  location.splice(index, 1)
-  target.push(cardId)
-
-  return gamestate
+  const next = copy(gamestate)
+  const fromZone = next.players[from.player][from.zone]
+  fromZone.splice(fromZone.indexOf(cardId), 1)
+  getSlotAttachment(next, to).push(cardId)
+  return next
 }
 
 // Slot to zone — off a Pokémon back into a pile
@@ -91,18 +91,15 @@ export const moveSlotToZone = (
   from: SlotRef,
   to: ZoneDest
 ) => {
-  const location = getSlotAttachment(gamestate, from)
-  const target = gamestate.players[to.player][to.zone]
-
-  const index = location.indexOf(cardId)
-  if (index === -1) {
+  if (getSlotAttachment(gamestate, from).indexOf(cardId) === -1) {
     return gamestate
   }
 
-  location.splice(index, 1)
-  placeInZone(target, to.position, cardId)
-
-  return gamestate
+  const next = copy(gamestate)
+  const fromPile = getSlotAttachment(next, from)
+  fromPile.splice(fromPile.indexOf(cardId), 1)
+  placeInZone(next.players[to.player][to.zone], to.position, cardId)
+  return next
 }
 
 // Slot to slot — between Pokémon piles (retreat, attach, evolve)
@@ -112,18 +109,15 @@ export const moveSlotToSlot = (
   from: SlotRef,
   to: SlotRef
 ) => {
-  const location = getSlotAttachment(gamestate, from)
-  const target = getSlotAttachment(gamestate, to)
-
-  const index = location.indexOf(cardId)
-  if (index === -1) {
+  if (getSlotAttachment(gamestate, from).indexOf(cardId) === -1) {
     return gamestate
   }
 
-  location.splice(index, 1)
-  target.push(cardId)
-
-  return gamestate
+  const next = copy(gamestate)
+  const fromPile = getSlotAttachment(next, from)
+  fromPile.splice(fromPile.indexOf(cardId), 1)
+  getSlotAttachment(next, to).push(cardId)
+  return next
 }
 
 // Damage — add to the slot; value may be negative
@@ -132,9 +126,9 @@ export const applyDamage = (
   value: number,
   to: SlotId
 ) => {
-  const slot = getSlot(gamestate, to)
-  slot.damage += value
-  return gamestate
+  const next = copy(gamestate)
+  getSlot(next, to).damage += value
+  return next
 }
 
 // Status — set one special-condition flag
@@ -143,9 +137,9 @@ export const applyStatus = (
   status: Status,
   to: SlotId
 ) => {
-  const slot = getSlot(gamestate, to)
-  slot.status[status] = true
-  return gamestate
+  const next = copy(gamestate)
+  getSlot(next, to).status[status] = true
+  return next
 }
 
 // Status — clear one special-condition flag
@@ -154,9 +148,9 @@ export const removeStatus = (
   status: Status,
   from: SlotId
 ) => {
-  const slot = getSlot(gamestate, from)
-  slot.status[status] = false
-  return gamestate
+  const next = copy(gamestate)
+  getSlot(next, from).status[status] = false
+  return next
 }
 
 // Coin — live RNG; persist results on history, do not re-roll on replay

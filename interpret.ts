@@ -1,4 +1,4 @@
-import { Op, type Primitive, type PipelineAmount, type SlotTarget } from "./dsl.js"
+import { Op, type BindingName, type Primitive, type SlotTarget } from "./dsl.js"
 import {
   applyDamage,
   applyStatus,
@@ -21,7 +21,12 @@ export type InterpretCtx = {
 }
 
 // Attack damage pipeline — stub: returns base; weakness / resistance / other modifiers later
-export function pipelineAttackDamage(base: number, _from: SlotId, _to: SlotId): number {
+export function pipelineAttackDamage(
+  _gamestate: GameState,
+  base: number,
+  _from: SlotId,
+  _to: SlotId
+): number {
   return base
 }
 
@@ -31,11 +36,9 @@ function resolveSlot(target: SlotTarget, ctx: InterpretCtx): SlotId {
   return bound as SlotId
 }
 
-function resolveAmount(amount: number | PipelineAmount, ctx: InterpretCtx): number {
+function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number {
   if (typeof amount === "number") return amount
-  const from = resolveSlot(amount.from, ctx)
-  const to = resolveSlot(amount.to, ctx)
-  return pipelineAttackDamage(amount.base, from, to)
+  return ctx.bindings[amount] as number
 }
 
 export function interpret(
@@ -55,6 +58,13 @@ export function interpret(
 
     case Op.MoveSlotToSlot:
       return moveSlotToSlot(gamestate, primitive.card, primitive.from, primitive.to)
+
+    case Op.Attack: {
+      const from = resolveSlot(primitive.from, ctx)
+      const to = resolveSlot(primitive.to, ctx)
+      ctx.bindings[primitive.bind] = pipelineAttackDamage(gamestate, primitive.base, from, to)
+      return gamestate
+    }
 
     case Op.ApplyDamage:
       return applyDamage(

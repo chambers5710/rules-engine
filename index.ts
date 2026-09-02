@@ -65,7 +65,7 @@ function stateMachine(gamestate: GameState, action: any): GameState {
       // action is Primitive[] already deemed legal, e.g.
       //   play_active | play_bench | attach_energy
       //   trainer: [select, move_card, …]
-      //   attack:  [apply_damage slot amount]
+      //   attack:  [attack base from→to bind $dmg, apply_damage $dmg]
       //            | [flip_coin bind $c, if $c heads then apply_damage …]
       //   retreat: [move_slot_to_slot active ↔ bench]
       //   end_turn → phase = checkup

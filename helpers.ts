@@ -3,7 +3,7 @@ import { moveZoneToSlot, moveZoneToZone } from "./ops.js"
 
 // these are extra helpers and not at this point used in ops
 
-export function draw(playerId: 1 | 2, gamestate: GameState, count: number) {
+export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
   for (let i = 0; i < count; i++) {
     const cardId = gamestate.players[playerId].deck[0]
     if (!cardId) break
@@ -17,7 +17,7 @@ export function draw(playerId: 1 | 2, gamestate: GameState, count: number) {
   return gamestate
 }
 
-export function discard(playerId: 1 | 2, gamestate: GameState, cardId: string) {
+export function discard(gamestate: GameState, playerId: 1 | 2, cardId: string) {
   return moveZoneToZone(
     gamestate,
     cardId,
@@ -26,7 +26,7 @@ export function discard(playerId: 1 | 2, gamestate: GameState, cardId: string) {
   )
 }
 
-export function playActive(playerId: 1 | 2, gamestate: GameState, cardId: string) {
+export function playActive(gamestate: GameState, playerId: 1 | 2, cardId: string) {
   return moveZoneToSlot(
     gamestate,
     cardId,
@@ -36,8 +36,8 @@ export function playActive(playerId: 1 | 2, gamestate: GameState, cardId: string
 }
 
 export function playBench(
-  playerId: 1 | 2,
   gamestate: GameState,
+  playerId: 1 | 2,
   cardId: string,
   index: 0 | 1 | 2 | 3 | 4
 ) {
@@ -50,8 +50,8 @@ export function playBench(
 }
 
 export function attachEnergy(
-  playerId: 1 | 2,
   gamestate: GameState,
+  playerId: 1 | 2,
   cardId: string,
   to: { slot: "active" } | { slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
 ) {
