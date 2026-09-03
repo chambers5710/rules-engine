@@ -1,4 +1,5 @@
-import { flipCoin } from "./ops.js"
+import { draw } from "./helpers.js"
+import { flipCoin, moveZoneToZone, shuffle } from "./ops.js"
 import type {
   Card,
   CardInstance,
@@ -12,7 +13,9 @@ import type {
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
 
-// Game — coin flip, hydrate both decks, assemble the snapshot
+const OPENING_HAND = 7
+
+// Game — coin flip, hydrate decks, opening hands + mulligans, assemble snapshot
 export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): GameState {
   const firstPlayer: 1 | 2 = flipCoin(1)[0] === "heads" ? 1 : 2
   const deckData = { 1: p1DeckData, 2: p2DeckData }
@@ -27,7 +30,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     }
   }
 
-  return {
+  const gamestate: GameState = {
     id: "game-1",
     phase: Phase.Init,
     players: {
@@ -38,9 +41,62 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     firstPlayer,
     activePlayer: firstPlayer,
     cardRegistry,
+    mulligans: { 1: 0, 2: 0 },
     actionStack: [],
     actionHistory: [],
   }
+
+  return dealOpeningHands(gamestate)
+}
+
+// Opening hands — shuffle, draw 7, mulligan until Basic (or none left in library)
+function dealOpeningHands(gamestate: GameState): GameState {
+  const mulligans: { 1: number; 2: number } = { 1: 0, 2: 0 }
+
+  for (const player of [1, 2] as const) {
+    gamestate = shuffle(gamestate, player, "deck")
+    gamestate = draw(gamestate, player, OPENING_HAND)
+
+    while (!handHasBasic(gamestate, player)) {
+      if (!libraryHasBasic(gamestate, player)) break
+      gamestate = returnHandToDeck(gamestate, player)
+      gamestate = shuffle(gamestate, player, "deck")
+      gamestate = draw(gamestate, player, OPENING_HAND)
+      mulligans[player]++
+    }
+  }
+
+  // Opponent draws one per mulligan you took
+  gamestate = draw(gamestate, 1, mulligans[2])
+  gamestate = draw(gamestate, 2, mulligans[1])
+  return { ...gamestate, mulligans }
+}
+
+function isBasic(gamestate: GameState, cardId: string): boolean {
+  const printed = gamestate.cardRegistry[cardId]
+  return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Basic") === true
+}
+
+function handHasBasic(gamestate: GameState, player: 1 | 2): boolean {
+  return gamestate.players[player].hand.some((id) => isBasic(gamestate, id))
+}
+
+// Basic still available in hand or deck (can a mulligan help?)
+function libraryHasBasic(gamestate: GameState, player: 1 | 2): boolean {
+  const p = gamestate.players[player]
+  return [...p.hand, ...p.deck].some((id) => isBasic(gamestate, id))
+}
+
+function returnHandToDeck(gamestate: GameState, player: 1 | 2): GameState {
+  for (const card of [...gamestate.players[player].hand]) {
+    gamestate = moveZoneToZone(
+      gamestate,
+      card,
+      { player, zone: "hand" },
+      { player, zone: "deck", position: "bottom" }
+    )
+  }
+  return gamestate
 }
 
 // Player — empty board, deck already minted as instance ids

@@ -3,24 +3,20 @@ import { stdin as input, stdout as output } from "node:process"
 import { writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import cards from "../data/cards/base1.json" with { type: "json" }
 import { Action, computeAvailableActions, type AvailableAction } from "../compute.js"
 import { initializeGameState } from "../initialize.js"
 import { stateMachine } from "../machine.js"
 import type { Card, GameState } from "../types.js"
 
-function printedCard(id: string): Card {
-  const card = (cards as Card[]).find((row) => row.id === id)
-  if (!card) throw new Error(`missing card ${id}`)
-  return card
+const decks = {
+  1: "d-base1-1",
+  2: "d-base1-2",
+  3: "d-base1-3",
 }
 
-// Two Basics in p1 deck; p2 empty so Init offers two play_active choices
-function boardTwoBasics(): GameState {
-  return initializeGameState(
-    [printedCard("base1-52"), printedCard("base1-53")],
-    []
-  )
+async function fetchDeckData(deckId: string) {
+  const response = await fetch(`http://localhost:8787/api/decks/${deckId}`)
+  return await response.json() as Card[]
 }
 
 type Case = { name: string; expected: unknown; realized: unknown; pass: boolean }
@@ -35,6 +31,14 @@ function check(name: string, expected: unknown, realized: unknown) {
   })
 }
 
+function cardName(gamestate: GameState, id: string): string {
+  return gamestate.cardRegistry[id]?.name ?? id
+}
+
+function names(gamestate: GameState, ids: string[]): string[] {
+  return ids.map((id) => cardName(gamestate, id))
+}
+
 async function chooseAction(
   gamestate: GameState,
   actions: AvailableAction[]
@@ -43,8 +47,7 @@ async function chooseAction(
   console.log("\nAvailable actions:")
   for (let i = 0; i < actions.length; i++) {
     const a = actions[i]
-    const name = gamestate.cardRegistry[a.card]?.name ?? a.card
-    console.log(`  [${i}] ${a.kind}  player=${a.player}  ${name} (${a.card})`)
+    console.log(`  [${i}] ${a.kind}  player=${a.player}  ${cardName(gamestate, a.card)} (${a.card})`)
   }
   const answer = await rl.question("\nChoose action index: ")
   rl.close()
@@ -55,19 +58,30 @@ async function chooseAction(
   return chosen
 }
 
-let gamestate = boardTwoBasics()
-const actions = computeAvailableActions(gamestate)
+const p1Deck = await fetchDeckData(decks[2])
+const p2Deck = await fetchDeckData(decks[3])
 
-check("init: two play_active", 2, actions.length)
+let gamestate = initializeGameState(p1Deck, p2Deck)
+const handBefore = [...gamestate.players[1].hand]
+const handSize = handBefore.length
+const actions = computeAvailableActions(gamestate).filter((a) => a.player === 1)
+
+console.log(`p1 hand (${handSize}): ${names(gamestate, handBefore).join(", ")}`)
+console.log(`mulligans: p1=${gamestate.mulligans[1]}  p2=${gamestate.mulligans[2]}`)
+console.log(`p1 Basics in hand: ${actions.length}`)
+
+check("init: full deck loaded", 60, p1Deck.length)
+check("init: opening hand at least 7", true, handSize >= 7)
+check("init: has play_active", true, actions.length >= 1)
 check("init: action kind", Action.PlayActive, actions[0]?.kind)
-check("init: action player", 1, actions[0]?.player)
 
 const chosen = await chooseAction(gamestate, actions)
+const chosenName = cardName(gamestate, chosen.card)
 gamestate = stateMachine(gamestate, chosen)
 
 check("after play_active: p1 active filled", 1, gamestate.players[1].active.evolution.length)
 check("after play_active: chosen card is active", chosen.card, gamestate.players[1].active.evolution[0])
-check("after play_active: one card left in deck", 1, gamestate.players[1].deck.length)
+check("after play_active: hand down by one", handSize - 1, gamestate.players[1].hand.length)
 check("after play_active: still init", "init", gamestate.phase)
 
 const failed = cases.filter((c) => !c.pass)
@@ -75,6 +89,14 @@ const lines = [
   "# Init play active",
   "",
   `Passed: ${cases.filter((c) => c.pass).length}/${cases.length}`,
+  "",
+  "## Setup",
+  "",
+  `- Mulligans: p1=${gamestate.mulligans[1]}, p2=${gamestate.mulligans[2]}`,
+  `- p1 opening hand (${handSize}): ${names(gamestate, handBefore).join(", ")}`,
+  `- p1 PlayActive options: ${actions.map((a) => cardName(gamestate, a.card)).join(", ")}`,
+  `- Chosen Active: ${chosenName} (${chosen.card})`,
+  `- p1 hand after: ${names(gamestate, gamestate.players[1].hand).join(", ")}`,
   "",
 ]
 

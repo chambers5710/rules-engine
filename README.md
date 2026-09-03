@@ -1,99 +1,65 @@
-# Notes
+# Rules Engine
 
-Captured from earlier engine notes so the ideas stay around while the code moves.
+Pokémon TCG rules as a small instruction set over an immutable-style game snapshot.
 
-## Engine
+## Core idea
 
-Action needs no "check" string key because gamestate is omnipotent.
+| Layer | Speaks | Job |
+|---|---|---|
+| **Action** | `Action.PlayActive`, … | What the player means to do |
+| **Op** | `Op.MoveZoneToSlot`, … | Atomic board change |
+| **compute** | `AvailableAction[]` | Legal choices from pure `GameState` |
+| **machine** | phase + action → state | When things run; phase transitions |
+| **interpret** | `Expr` + bindings | Execute ops; write bindings |
+| **ops** | copy → mutate → return | Never write the snapshot you were given |
 
-Central engine is a state machine.
+`Action` is the game-level vocabulary. `Op` moves the data. Compute offers actions; the client picks one; the machine runs its `expr` through interpret.
 
-State is captured by GameState including all game and player values as well as rules resolution stack.
+## Board model
 
-Drive stack frame interpretation.
+- **Zones** — ordered piles: deck, hand, discard, prize
+- **Slots** — Active / Bench seats: evolution stack, energy, tools, damage, status
+- **Card instances** — physical copies in `cardRegistry`; zones/slots hold instance ids
 
-Game state is base state. Each action calculation combines various conditions into resulting values inside gamestate variables, replaces them, and returns new gamestate.
+## Bindings
 
-Stack frames are expressions of an alteration to the game state provided by an effect, or game action.
+Names are the API between dispatcher and expr.
 
-The engine interprets the resulting gamestate by evaluating one stack at a time.
+- **Seeded** — set before interpret (`$self_slot`, `$defending` for attacks)
+- **Written** — primitives with `bind` store results (`$damage`, `$coin`); later steps only read
 
-Some interrupts may pause the stack execution, for example K.O.
-
-The position of stack frames in the stack may be altered by an effect.
-
-Expressions are built on primitive operations defined in a DSL.
-
-Game action intent is interpreted and an expression with proper gamestate variables is produced.
-
-The expression is pushed onto the stack.
+`attack` computes through a damage pipeline and binds a number. `apply_damage` only mutates counters (poison, etc. skip the pipeline).
 
 ## Loop
 
-1. Compute legal actions based on game state current
-2. Provide action options to active player
-3. Player selects an action already deemed legal
-4. Interpreter decodes primitive operations
-5. Delta gamestate computed and returned
+```
+initialize → opening hands + mulligans (Init)
+while not Ended:
+  actions = compute(gamestate)
+  action  = await client choice   // or null for auto phases
+  gamestate = machine(gamestate, action)
+```
 
-## UI
+## Status today
 
-Outcomes may potentially be pre-computed by available choice calculator.
+- Init: shuffle, draw 7, mulligan until Basic Pokémon (Energy’s `"Basic"` subtype does not count)
+- `PlayActive` from hand Basics
+- Confuse Ray: `attack` → `apply_damage` → `flip_coin` → `if` → `apply_status`
+- Ops copy-then-mutate; interpret returns honest new snapshots
 
-Allows for optimistic UI.
+## Roadmap
 
-## Instantiation
+- Init: Bench, prizes, both players ready → `Turn`
+- Turn: draw, attach energy, evolve, retreat, attack, end turn
+- Checkup: status, KO, prizes, promote
+- `Select` — mid-expr pause for a target (shared choice protocol with compute)
+- Filters — reusable card/slot predicates (Basic Pokémon, Energy type, …) shared by compute, mulligan, and card text
+- Stronger `If` predicates over state; slot-level ops (retreat / clear seat)
+- History log for replay
 
-Deck cards should be constructed as a set of classes from data at game start.
+## Tests
 
-## Deck API types
-
-IDK I THINK THESE TYPES MIGHT NEED WORK.
-
-Interface representing a Deck as defined in the schema.
-
-Interface representing a card within a deck, including quantity.
-
-Interface representing a complete deck with its cards.
-
-## Effects
-
-Card action (move, draw, discard, shuffle).
-
-Apply status (+ / -).
-
-Apply damage (+ / -).
-
-## Messages
-
-Messages come from "event listener" system; centralized message definition.
-
-## Moves
-
-Throw error if invalid action should never make it here.
-
-## Damage
-
-Can be negative.
-
-## Stack
-
-Stack is for async actions that need to occur in order.
-
-Gamestate in suspended "awaiting" resolution.
-
-## Evaluate action
-
-Reads primitive expression and returns delta gamestate.
-
-Business logical difference between gameplay and atomic action.
-
-Log action history.
-
-Action already determined legal before getting here.
-
-Should be purely updating values to gamestate directly.
-
-Effects are always sourced by some card whether environmental or active play.
-
-MOVE_CARD: remove from subject zone, place in target zone.
+```bash
+npx tsx ./tests/confuse-ray.ts        # scripted attack
+npx tsx ./tests/init-play-active.ts   # full decks via localhost:8787, interactive Active pick
+```

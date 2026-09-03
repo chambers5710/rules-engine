@@ -31,14 +31,18 @@ export function computeAvailableActions(gamestate: GameState): AvailableAction[]
   }
 }
 
-// Init — Active empty → each card in deck is a PlayActive choice
+// Init — Active empty → each Basic in hand is a PlayActive choice
 function computeInit(gamestate: GameState): AvailableAction[] {
   const actions: AvailableAction[] = []
 
   for (const player of [1, 2] as const) {
     if (gamestate.players[player].active.evolution.length > 0) continue
 
-    for (const card of gamestate.players[player].deck) {
+    for (const card of gamestate.players[player].hand) {
+      const printed = gamestate.cardRegistry[card]
+      if (printed?.supertype !== "Pokémon") continue
+      if (!printed.subtypes?.includes("Basic")) continue
+
       actions.push({
         kind: Action.PlayActive,
         player,
@@ -48,7 +52,7 @@ function computeInit(gamestate: GameState): AvailableAction[] {
           {
             op: Op.MoveZoneToSlot,
             card,
-            from: { player, zone: "deck" },
+            from: { player, zone: "hand" },
             to: { player, slot: "active", attachment: "evolution" },
           },
         ],

@@ -20,20 +20,23 @@ function boardAlakazamVsMachop(): GameState {
     [printedCard("base1-52")]
   )
 
-  const p1 = gamestate.players[1].deck[0]
-  const p2 = gamestate.players[2].deck[0]
-  if (!p1 || !p2) throw new Error("expected one card per deck")
+  const p1 = gamestate.players[1].hand[0] ?? gamestate.players[1].deck[0]
+  const p2 = gamestate.players[2].hand[0] ?? gamestate.players[2].deck[0]
+  if (!p1 || !p2) throw new Error("expected one card per player")
+
+  const p1From = gamestate.players[1].hand.includes(p1) ? "hand" as const : "deck" as const
+  const p2From = gamestate.players[2].hand.includes(p2) ? "hand" as const : "deck" as const
 
   gamestate = moveZoneToSlot(
     gamestate,
     p1,
-    { player: 1, zone: "deck" },
+    { player: 1, zone: p1From },
     { player: 1, slot: "active", attachment: "evolution" }
   )
   gamestate = moveZoneToSlot(
     gamestate,
     p2,
-    { player: 2, zone: "deck" },
+    { player: 2, zone: p2From },
     { player: 2, slot: "active", attachment: "evolution" }
   )
 

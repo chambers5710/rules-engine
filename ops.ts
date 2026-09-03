@@ -7,6 +7,7 @@ import type {
   Status,
   Zone,
   ZoneDest,
+  ZoneName,
   ZonePosition,
   ZoneRef,
 } from "./types.js"
@@ -150,6 +151,17 @@ export const removeStatus = (
 ) => {
   const next = copy(gamestate)
   getSlot(next, from).status[status] = false
+  return next
+}
+
+// Shuffle — copy, then Fisher–Yates one of a player's piles
+export const shuffle = (
+  gamestate: GameState,
+  player: 1 | 2,
+  zone: ZoneName
+) => {
+  const next = copy(gamestate)
+  shuffleZone(next.players[player][zone])
   return next
 }
 
