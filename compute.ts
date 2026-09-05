@@ -1,5 +1,6 @@
 import { Op, type Expr } from "./dsl.js"
-import { isBasicPokemon, isEnergy } from "./helpers.js"
+import { cardEffect } from "./effects.js"
+import { canPayEnergyCost, surveyCards } from "./survey.js"
 import type { GameState } from "./types.js"
 import { Phase } from "./types.js"
 
@@ -25,6 +26,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.PlayBench; player: 1 | 2; card: string; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
   | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; to: AttachTo })
+  | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.EndTurn; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
 
@@ -42,11 +44,11 @@ export function computeAvailableActions(gamestate: GameState): AvailableAction[]
 }
 
 function basicsInHand(gamestate: GameState, player: 1 | 2): string[] {
-  return gamestate.players[player].hand.filter((card) => isBasicPokemon(gamestate, card))
+  return surveyCards(gamestate, { player, zone: "hand" }, { kind: "basic_pokemon" })
 }
 
 function energyInHand(gamestate: GameState, player: 1 | 2): string[] {
-  return gamestate.players[player].hand.filter((card) => isEnergy(gamestate, card))
+  return surveyCards(gamestate, { player, zone: "hand" }, { kind: "energy" })
 }
 
 function hasActive(gamestate: GameState, player: 1 | 2): boolean {
@@ -146,6 +148,26 @@ function pokemonInPlay(
   return dests
 }
 
+function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  const id = gamestate.players[player].active.evolution.at(-1)
+  if (!id) return []
+  const printed = gamestate.cardRegistry[id]
+  const slot = { player, slot: "active" } as const
+  const defending = player === 1 ? 2 : 1
+  return (printed.attacks ?? [])
+    .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost))
+    .map((attack) => ({
+      kind: Action.Attack,
+      player,
+      name: attack.name,
+      expr: cardEffect(printed.sourceId, "attacks", attack.name),
+      seed: {
+        $self_slot: slot,
+        $defending: { player: defending, slot: "active" },
+      },
+    }))
+}
+
 function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   if (gamestate.energyAttachedThisTurn) return []
   const dests = pokemonInPlay(gamestate, player)
@@ -177,6 +199,7 @@ function computeTurn(gamestate: GameState): AvailableAction[] {
   return [
     ...placeBench(gamestate, player),
     ...placeEnergy(gamestate, player),
+    ...attacksFromActive(gamestate, player),
     { kind: Action.EndTurn, player, expr: [] },
   ]
 }

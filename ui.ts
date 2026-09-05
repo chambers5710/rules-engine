@@ -8,18 +8,47 @@ function cardName(gamestate: GameState, id: string): string {
   return gamestate.cardRegistry[id]?.name ?? id
 }
 
-function names(gamestate: GameState, ids: string[]): string {
-  return ids.length ? ids.map((id) => cardName(gamestate, id)).join(", ") : "(empty)"
+function grouped(gamestate: GameState, ids: string[]): string {
+  const tally = new Map<string, number>()
+  for (const id of ids) {
+    const name = cardName(gamestate, id)
+    tally.set(name, (tally.get(name) ?? 0) + 1)
+  }
+  return [...tally].map(([name, n]) => (n > 1 ? `${name} x${n}` : name)).join(", ") || "-"
+}
+
+function field(key: string, value: string): string {
+  return `  ${key.padEnd(8)} ${value}`
 }
 
 function slotLine(gamestate: GameState, slot: GameState["players"][1]["active"]): string {
-  if (!slot.evolution.length) return "(empty)"
+  if (!slot.evolution.length) return "-"
+  const form = slot.evolution.map((id) => cardName(gamestate, id)).join(" > ")
   const status = Object.entries(slot.status)
     .filter(([, on]) => on)
     .map(([flag]) => flag)
     .join(",")
-  const energy = names(gamestate, slot.energy)
-  return `${names(gamestate, slot.evolution)}  dmg=${slot.damage}${status ? `  ${status}` : ""}${slot.energy.length ? `  energy: ${energy}` : ""}`
+  const parts = [form, `dmg ${slot.damage}`]
+  if (status) parts.push(status)
+  if (slot.energy.length) parts.push(grouped(gamestate, slot.energy))
+  return parts.join("  |  ")
+}
+
+function side(gamestate: GameState, player: 1 | 2, face: "away" | "home"): string[] {
+  const p = gamestate.players[player]
+  const mark = gamestate.activePlayer === player ? ">" : " "
+  const piles = [
+    field("prize", String(p.prize.length)),
+    field("hand", `${p.hand.length}  ${grouped(gamestate, p.hand)}`),
+    field("deck", String(p.deck.length)),
+    field("discard", `${p.discard.length}${p.discard.length ? `  ${grouped(gamestate, p.discard)}` : ""}`),
+  ]
+  const board = [
+    field("active", slotLine(gamestate, p.active)),
+    ...p.bench.map((seat, i) => field(`bench[${i}]`, slotLine(gamestate, seat))),
+  ]
+  const body = face === "away" ? [...piles, ...board] : [...board, ...piles]
+  return [`${mark} p${player}`, ...body]
 }
  
 function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
@@ -43,32 +72,30 @@ function formatEndgame(gamestate: GameState): string {
 }
 
 export function formatGamestate(gamestate: GameState): string {
-  const lines = [
-    `phase: ${gamestate.phase}`,
-    `turn: ${gamestate.turnCount}`,
-    `first player: ${gamestate.firstPlayer}`,
-    `active player: ${gamestate.activePlayer}`,
-    `mulligans: p1=${gamestate.mulligans[1]}  p2=${gamestate.mulligans[2]}`,
-    `setup ready: p1=${gamestate.setupReady[1]}  p2=${gamestate.setupReady[2]}`,
+  const meta = [
+    `# gamestate`,
+    ``,
+    "```",
+    field("phase", gamestate.phase),
+    field("turn", String(gamestate.turnCount)),
+    field("first", `p${gamestate.firstPlayer}`),
+    field("active", `p${gamestate.activePlayer}`),
+    field("mulligan", `p1=${gamestate.mulligans[1]}  p2=${gamestate.mulligans[2]}`),
+    field("ready", `p1=${gamestate.setupReady[1]}  p2=${gamestate.setupReady[2]}`),
   ]
-  if (gamestate.phase === Phase.Ended) lines.push(formatEndgame(gamestate))
-  lines.push("")
+  if (gamestate.phase === Phase.Ended) meta.push(field("end", formatEndgame(gamestate)))
 
-  for (const player of [1, 2] as const) {
-    const p = gamestate.players[player]
-    lines.push(`player ${player}`)
-    lines.push(`  hand (${p.hand.length}): ${names(gamestate, p.hand)}`)
-    lines.push(`  deck (${p.deck.length}): ${names(gamestate, p.deck)}`)
-    lines.push(`  prize (${p.prize.length}): ${names(gamestate, p.prize)}`)
-    lines.push(`  discard (${p.discard.length}): ${names(gamestate, p.discard)}`)
-    lines.push(`  active: ${slotLine(gamestate, p.active)}`)
-    p.bench.forEach((seat, i) => {
-      lines.push(`  bench[${i}]: ${slotLine(gamestate, seat)}`)
-    })
-    lines.push("")
-  }
+  const body = [
+    ...meta,
+    "",
+    ...side(gamestate, 2, "away"),
+    "",
+    ...side(gamestate, 1, "home"),
+    "```",
+    "",
+  ]
 
-  return lines.join("\n")
+  return body.join("\n")
 }
 
 function formatAction(gamestate: GameState, a: AvailableAction): string {
@@ -81,6 +108,7 @@ function formatAction(gamestate: GameState, a: AvailableAction): string {
     const dest = a.to.slot === "active" ? "Active" : `bench[${a.to.index}]`
     return `${a.kind}  ${cardName(gamestate, a.card)} → ${dest}`
   }
+  if (a.kind === Action.Attack) return `${a.kind}  ${a.name}`
   return `${a.kind}  ${cardName(gamestate, a.card)}`
 }
 

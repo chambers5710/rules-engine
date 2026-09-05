@@ -26,13 +26,16 @@ const p2Deck = await fetchDeckData(decks[3])
 
 let gamestate = initializeGameState(p1Deck, p2Deck)
 
+const out = join(dirname(fileURLToPath(import.meta.url)), "gamestate.md")
+const frame = (next: typeof gamestate) => writeFileSync(out, formatGamestate(next))
+
+frame(gamestate)
 while (gamestate.phase !== Phase.Ended) {
   const actions = computeAvailableActions(gamestate)
   if (actions.length === 0) break
   const action = await chooseAction(gamestate, actions)
   gamestate = stateMachine(gamestate, action)
+  frame(gamestate)
 }
 
-const out = join(dirname(fileURLToPath(import.meta.url)), "gamestate.txt")
-writeFileSync(out, formatGamestate(gamestate))
 console.log(`Wrote ${out}`)

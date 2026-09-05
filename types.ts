@@ -95,11 +95,18 @@ export type CardInstance = {
   evolvesFrom?: string | null
   evolvesTo?: string | null
   retreatCost?: EnergyType[]
+  attacks?: PrintedAttack[]
   weaknesses?: { type: EnergyType; modifier: DamageModifier }
   resistances?: { type: EnergyType; modifier: DamageModifier }
   energyType?: EnergyType
   energyValue?: number
   fieldOverrides: []
+}
+
+// Printed attack — cost normalized to EnergyType for the survey
+export type PrintedAttack = {
+  name: string
+  cost: EnergyType[]
 }
 
 // Card instance id — unique per copy; also the registry key

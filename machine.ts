@@ -24,6 +24,9 @@ export function stateMachine(
 
     case Phase.Turn:
       if (action?.kind === Action.EndTurn) return enterCheckup(gamestate)
+      if (action?.kind === Action.Attack) {
+        return enterCheckup(runAction(gamestate, action))
+      }
       if (action?.kind === Action.Promote) {
         gamestate = promote(gamestate, action.player, action.index)
         return drawOrLose(gamestate)

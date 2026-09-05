@@ -158,6 +158,10 @@ function instantiateCard(cardData: Card): CardInstance {
     evolvesFrom: cardData.evolvesFrom,
     evolvesTo: cardData.evolvesTo?.[0] ?? null,
     retreatCost: retreatCost,
+    attacks: cardData.attacks?.map((attack) => ({
+      name: attack.name,
+      cost: attack.cost.map(asEnergyType),
+    })),
     weaknesses: weaknesses,
     resistances: resistances,
     energyType: energyType,

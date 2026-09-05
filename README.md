@@ -12,6 +12,7 @@ Pokémon TCG rules as a small instruction set over an immutable-style game snaps
 | **machine** | phase + action → state | When things run; phase transitions |
 | **interpret** | `Expr` + bindings | Execute ops; write bindings |
 | **ops** | copy → mutate → return | Never write the snapshot you were given |
+| **survey** | scope + filter → cards / number | Read-only board calculator |
 
 `Action` is the game-level vocabulary. `Op` moves the data. Compute offers actions; the client picks one; the machine runs its `expr` through interpret.
 
@@ -36,6 +37,26 @@ Names are the API between dispatcher and expr.
 
 `attack` computes through a damage pipeline and binds a number. `apply_damage` only mutates counters (poison, etc. skip the pipeline).
 
+## Survey
+
+Read-only. Compute and card text ask the same questions; neither walks piles by hand.
+
+- **From** — a `ZoneRef` or `SlotRef` (hand, prize, Active energy, …)
+- **Filter** — data (`energy`, `energy_type`, `basic_pokemon`) so a later `count` op can reuse the spec
+- **Reduce** — card list, count, or sum of `energyValue` (Double Colorless is 2)
+
+`canPayEnergyCost` spends typed units first; leftovers pay Colorless. “Water Energy attached” is a type filter, not the same as paying a Water cost. Rainbow / any-type Energy is a later modifier on what a card provides.
+
+Expr riders (“+$10 per extra Energy, max +30”) call the calculator, then do arithmetic — not a special case in the damage pipeline.
+
+## Effects
+
+Card text is a pure `Expr`, keyed by **printed card id** (`sourceId`, never instance id) then name. Same lookup for attacks, abilities, and anything else a card can do to the board.
+
+Compute fetches the expr onto the action (cost stays on the card; it is not inside the expr). Interpret runs it. Missing names are `[]`.
+
+Attack is the last thing on a turn: run the effect, then Checkup.
+
 ## Loop
 
 ```
@@ -58,7 +79,8 @@ while not Ended:
 - Turn: attach energy, evolve, retreat, attack, end turn
 - Checkup: status, KO, prizes, promote
 - `Select` — mid-expr pause for a target (shared choice protocol with compute)
-- Filters — reusable card/slot predicates (Basic Pokémon, Energy type, …) shared by compute, mulligan, and card text
+- Survey — more scopes (in-play seats, both players); `count` primitive that binds a number
+- Filters — more predicates on the same survey spec (HP remaining, name, …)
 - Stronger `If` predicates over state; slot-level ops (retreat / clear seat)
 - History log for replay
 
