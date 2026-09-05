@@ -1,14 +1,27 @@
-# Init play active
+# Init setup
 
 Passed: 8/8
 
 ## Setup
 
 - Mulligans: p1=0, p2=0
-- p1 opening hand (7): Water Energy, Potion, Bill, Weedle, Magikarp, Staryu, Grass Energy
-- p1 PlayActive options: Weedle, Magikarp, Staryu
-- Chosen Active: Magikarp (1-18-base1-35)
-- p1 hand after: Water Energy, Potion, Bill, Weedle, Staryu, Grass Energy
+- p1 opening hand (7): Grass Energy, Water Energy, Grass Energy, Staryu, Staryu, Water Energy, Weedle
+- Chosen Active (p1): Staryu
+- First player: 1
+- p1 Active: Staryu
+- p1 Bench: Weedle, Staryu
+- p2 Active: Pikachu
+- Prizes: p1=6, p2=6
+- Phase: turn
+
+## Action log
+
+- p1: play_active  player=1  Staryu
+- p1: play_bench  player=1  bench[0]  Weedle
+- p1: play_bench  player=1  bench[2]  Staryu
+- p1: ready  player=1
+- p2: play_active  player=2  Pikachu
+- p2: ready  player=2
 
 ## PASS: init: full deck loaded
 
@@ -20,32 +33,32 @@ Realized: `60`
 Expected: `true`
 Realized: `true`
 
-## PASS: init: has play_active
+## PASS: after init: phase is turn
 
-Expected: `true`
-Realized: `true`
+Expected: `"turn"`
+Realized: `"turn"`
 
-## PASS: init: action kind
-
-Expected: `"play_active"`
-Realized: `"play_active"`
-
-## PASS: after play_active: p1 active filled
+## PASS: after init: turnCount
 
 Expected: `1`
 Realized: `1`
 
-## PASS: after play_active: chosen card is active
+## PASS: after init: p1 active filled
 
-Expected: `"1-18-base1-35"`
-Realized: `"1-18-base1-35"`
+Expected: `1`
+Realized: `1`
 
-## PASS: after play_active: hand down by one
+## PASS: after init: p2 active filled
+
+Expected: `1`
+Realized: `1`
+
+## PASS: after init: p1 prizes
 
 Expected: `6`
 Realized: `6`
 
-## PASS: after play_active: still init
+## PASS: after init: p2 prizes
 
-Expected: `"init"`
-Realized: `"init"`
+Expected: `6`
+Realized: `6`

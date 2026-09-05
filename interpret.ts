@@ -70,14 +70,14 @@ export function interpret(
       return applyDamage(
         gamestate,
         resolveAmount(primitive.amount, ctx),
-        resolveSlot(primitive.to, ctx)
+        resolveSlot(primitive.slot, ctx)
       )
 
     case Op.ApplyStatus:
-      return applyStatus(gamestate, primitive.status, resolveSlot(primitive.to, ctx))
+      return applyStatus(gamestate, primitive.status, resolveSlot(primitive.slot, ctx))
 
     case Op.RemoveStatus:
-      return removeStatus(gamestate, primitive.status, resolveSlot(primitive.from, ctx))
+      return removeStatus(gamestate, primitive.status, resolveSlot(primitive.slot, ctx))
 
     case Op.FlipCoin: {
       const scripted = ctx.script?.coins?.shift()

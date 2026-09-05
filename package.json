@@ -2,7 +2,7 @@
   "name": "rules-engine",
   "type": "module",
   "scripts": {
-    "dev": "tsx ./tests/confuse-ray.ts"
+    "dev": "tsx ./"
   },
   "dependencies": {
     "tsx": "^4.23.13",

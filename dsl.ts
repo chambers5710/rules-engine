@@ -24,9 +24,9 @@ export type Primitive =
   | { op: Op.MoveSlotToZone; card: string; from: SlotRef; to: ZoneDest }
   | { op: Op.MoveSlotToSlot; card: string; from: SlotRef; to: SlotRef }
   | { op: Op.Attack; base: number; from: SlotTarget; to: SlotTarget; bind: BindingName }
-  | { op: Op.ApplyDamage; amount: number | BindingName; to: SlotTarget }
-  | { op: Op.ApplyStatus; status: Status; to: SlotTarget }
-  | { op: Op.RemoveStatus; status: Status; from: SlotTarget }
+  | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotTarget }
+  | { op: Op.ApplyStatus; status: Status; slot: SlotTarget }
+  | { op: Op.RemoveStatus; status: Status; slot: SlotTarget }
   | { op: Op.FlipCoin; bind: BindingName }
   | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }

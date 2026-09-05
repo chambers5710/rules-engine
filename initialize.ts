@@ -42,6 +42,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     activePlayer: firstPlayer,
     cardRegistry,
     mulligans: { 1: 0, 2: 0 },
+    setupReady: { 1: false, 2: false },
     actionStack: [],
     actionHistory: [],
   }

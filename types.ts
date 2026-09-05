@@ -8,6 +8,7 @@ export type GameState = {
   activePlayer: 1 | 2
   cardRegistry: CardRegistry
   mulligans: { 1: number; 2: number }
+  setupReady: { 1: boolean; 2: boolean }
   actionStack: []
   actionHistory: []
 }

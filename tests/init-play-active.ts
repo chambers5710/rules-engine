@@ -7,6 +7,7 @@ import { Action, computeAvailableActions, type AvailableAction } from "../comput
 import { initializeGameState } from "../initialize.js"
 import { stateMachine } from "../machine.js"
 import type { Card, GameState } from "../types.js"
+import { Phase } from "../types.js"
 
 const decks = {
   1: "d-base1-1",
@@ -39,6 +40,14 @@ function names(gamestate: GameState, ids: string[]): string[] {
   return ids.map((id) => cardName(gamestate, id))
 }
 
+function formatAction(gamestate: GameState, a: AvailableAction): string {
+  if (a.kind === Action.Ready) return `${a.kind}  player=${a.player}`
+  if (a.kind === Action.PlayBench) {
+    return `${a.kind}  player=${a.player}  bench[${a.index}]  ${cardName(gamestate, a.card)}`
+  }
+  return `${a.kind}  player=${a.player}  ${cardName(gamestate, a.card)}`
+}
+
 async function chooseAction(
   gamestate: GameState,
   actions: AvailableAction[]
@@ -46,8 +55,7 @@ async function chooseAction(
   const rl = createInterface({ input, output })
   console.log("\nAvailable actions:")
   for (let i = 0; i < actions.length; i++) {
-    const a = actions[i]
-    console.log(`  [${i}] ${a.kind}  player=${a.player}  ${cardName(gamestate, a.card)} (${a.card})`)
+    console.log(`  [${i}] ${formatAction(gamestate, actions[i])}`)
   }
   const answer = await rl.question("\nChoose action index: ")
   rl.close()
@@ -58,45 +66,85 @@ async function chooseAction(
   return chosen
 }
 
+// p2 auto: Active if needed, else Ready (no bench)
+function autoP2(actions: AvailableAction[]): AvailableAction {
+  return (
+    actions.find((a) => a.kind === Action.PlayActive) ??
+    actions.find((a) => a.kind === Action.Ready) ??
+    actions[0]
+  )
+}
+
 const p1Deck = await fetchDeckData(decks[2])
 const p2Deck = await fetchDeckData(decks[3])
 
 let gamestate = initializeGameState(p1Deck, p2Deck)
 const handBefore = [...gamestate.players[1].hand]
 const handSize = handBefore.length
-const actions = computeAvailableActions(gamestate).filter((a) => a.player === 1)
+const mulligans = { ...gamestate.mulligans }
 
 console.log(`p1 hand (${handSize}): ${names(gamestate, handBefore).join(", ")}`)
-console.log(`mulligans: p1=${gamestate.mulligans[1]}  p2=${gamestate.mulligans[2]}`)
-console.log(`p1 Basics in hand: ${actions.length}`)
+console.log(`mulligans: p1=${mulligans[1]}  p2=${mulligans[2]}`)
 
 check("init: full deck loaded", 60, p1Deck.length)
 check("init: opening hand at least 7", true, handSize >= 7)
-check("init: has play_active", true, actions.length >= 1)
-check("init: action kind", Action.PlayActive, actions[0]?.kind)
 
-const chosen = await chooseAction(gamestate, actions)
-const chosenName = cardName(gamestate, chosen.card)
-gamestate = stateMachine(gamestate, chosen)
+const log: string[] = []
+let chosenActive = ""
 
-check("after play_active: p1 active filled", 1, gamestate.players[1].active.evolution.length)
-check("after play_active: chosen card is active", chosen.card, gamestate.players[1].active.evolution[0])
-check("after play_active: hand down by one", handSize - 1, gamestate.players[1].hand.length)
-check("after play_active: still init", "init", gamestate.phase)
+while (gamestate.phase === Phase.Init) {
+  const actions = computeAvailableActions(gamestate)
+  const p1 = actions.filter((a) => a.player === 1)
+  const p2 = actions.filter((a) => a.player === 2)
+
+  let chosen: AvailableAction
+  if (p1.length > 0) {
+    chosen = await chooseAction(gamestate, p1)
+  } else if (p2.length > 0) {
+    chosen = autoP2(p2)
+    console.log(`\np2 auto: ${formatAction(gamestate, chosen)}`)
+  } else {
+    break
+  }
+
+  if (chosen.kind === Action.PlayActive && chosen.player === 1) {
+    chosenActive = cardName(gamestate, chosen.card)
+  }
+  log.push(`p${chosen.player}: ${formatAction(gamestate, chosen)}`)
+  gamestate = stateMachine(gamestate, chosen)
+}
+
+check("after init: phase is turn", Phase.Turn, gamestate.phase)
+check("after init: turnCount", 1, gamestate.turnCount)
+check("after init: p1 active filled", 1, gamestate.players[1].active.evolution.length)
+check("after init: p2 active filled", 1, gamestate.players[2].active.evolution.length)
+check("after init: p1 prizes", 6, gamestate.players[1].prize.length)
+check("after init: p2 prizes", 6, gamestate.players[2].prize.length)
 
 const failed = cases.filter((c) => !c.pass)
 const lines = [
-  "# Init play active",
+  "# Init setup",
   "",
   `Passed: ${cases.filter((c) => c.pass).length}/${cases.length}`,
   "",
   "## Setup",
   "",
-  `- Mulligans: p1=${gamestate.mulligans[1]}, p2=${gamestate.mulligans[2]}`,
+  `- Mulligans: p1=${mulligans[1]}, p2=${mulligans[2]}`,
   `- p1 opening hand (${handSize}): ${names(gamestate, handBefore).join(", ")}`,
-  `- p1 PlayActive options: ${actions.map((a) => cardName(gamestate, a.card)).join(", ")}`,
-  `- Chosen Active: ${chosenName} (${chosen.card})`,
-  `- p1 hand after: ${names(gamestate, gamestate.players[1].hand).join(", ")}`,
+  `- Chosen Active (p1): ${chosenActive || "(none)"}`,
+  `- First player: ${gamestate.firstPlayer}`,
+  `- p1 Active: ${names(gamestate, gamestate.players[1].active.evolution).join(", ")}`,
+  `- p1 Bench: ${gamestate.players[1].bench
+      .filter((s) => s.evolution.length)
+      .map((s) => names(gamestate, s.evolution).join(">"))
+      .join(", ") || "(empty)"}`,
+  `- p2 Active: ${names(gamestate, gamestate.players[2].active.evolution).join(", ")}`,
+  `- Prizes: p1=${gamestate.players[1].prize.length}, p2=${gamestate.players[2].prize.length}`,
+  `- Phase: ${gamestate.phase}`,
+  "",
+  "## Action log",
+  "",
+  ...log.map((line) => `- ${line}`),
   "",
 ]
 

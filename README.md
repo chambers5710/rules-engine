@@ -43,14 +43,13 @@ while not Ended:
 ## Status today
 
 - Init: shuffle, draw 7, mulligan until Basic Pokémon (Energy’s `"Basic"` subtype does not count)
-- `PlayActive` from hand Basics
+- `PlayActive` / `PlayBench` / `Ready` → both ready → 6 prizes, shuffle, `Turn`, first-player draw
 - Confuse Ray: `attack` → `apply_damage` → `flip_coin` → `if` → `apply_status`
 - Ops copy-then-mutate; interpret returns honest new snapshots
 
 ## Roadmap
 
-- Init: Bench, prizes, both players ready → `Turn`
-- Turn: draw, attach energy, evolve, retreat, attack, end turn
+- Turn: attach energy, evolve, retreat, attack, end turn
 - Checkup: status, KO, prizes, promote
 - `Select` — mid-expr pause for a target (shared choice protocol with compute)
 - Filters — reusable card/slot predicates (Basic Pokémon, Energy type, …) shared by compute, mulligan, and card text
@@ -61,5 +60,5 @@ while not Ended:
 
 ```bash
 npx tsx ./tests/confuse-ray.ts        # scripted attack
-npx tsx ./tests/init-play-active.ts   # full decks via localhost:8787, interactive Active pick
+npx tsx ./tests/init-play-active.ts   # full decks via localhost:8787; Active/Bench/Ready → Turn
 ```

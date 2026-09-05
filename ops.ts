@@ -125,10 +125,10 @@ export const moveSlotToSlot = (
 export const applyDamage = (
   gamestate: GameState,
   value: number,
-  to: SlotId
+  slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, to).damage += value
+  getSlot(next, slot).damage += value
   return next
 }
 
@@ -136,10 +136,10 @@ export const applyDamage = (
 export const applyStatus = (
   gamestate: GameState,
   status: Status,
-  to: SlotId
+  slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, to).status[status] = true
+  getSlot(next, slot).status[status] = true
   return next
 }
 
@@ -147,10 +147,10 @@ export const applyStatus = (
 export const removeStatus = (
   gamestate: GameState,
   status: Status,
-  from: SlotId
+  slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, from).status[status] = false
+  getSlot(next, slot).status[status] = false
   return next
 }
 

@@ -51,13 +51,13 @@ const confuseRay: Expr = [
     to: "$defending",
     bind: "$damage",
   },
-  { op: Op.ApplyDamage, amount: "$damage", to: "$defending" },
+  { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
   { op: Op.FlipCoin, bind: "$coin" },
   {
     op: Op.If,
     bind: "$coin",
     equals: "heads",
-    then: [{ op: Op.ApplyStatus, status: "cnf", to: "$defending" }],
+    then: [{ op: Op.ApplyStatus, status: "cnf", slot: "$defending" }],
   },
 ]
 

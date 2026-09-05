@@ -4,17 +4,12 @@ import { moveZoneToSlot, moveZoneToZone } from "./ops.js"
 // these are extra helpers and not at this point used in ops
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
-  for (let i = 0; i < count; i++) {
-    const cardId = gamestate.players[playerId].deck[0]
-    if (!cardId) break
-    gamestate = moveZoneToZone(
-      gamestate,
-      cardId,
-      { player: playerId, zone: "deck" },
-      { player: playerId, zone: "hand", position: "bottom" }
-    )
-  }
-  return gamestate
+  const next = structuredClone(gamestate)
+  const deck = next.players[playerId].deck
+  const hand = next.players[playerId].hand
+  const taken = deck.splice(0, Math.min(count, deck.length))
+  hand.push(...taken)
+  return next
 }
 
 export function discard(gamestate: GameState, playerId: 1 | 2, cardId: string) {
@@ -24,6 +19,15 @@ export function discard(gamestate: GameState, playerId: 1 | 2, cardId: string) {
     { player: playerId, zone: "hand" },
     { player: playerId, zone: "discard", position: "bottom" }
   )
+}
+
+export function placePrize(gamestate: GameState, playerId: 1 | 2, cardId: string) {
+return moveZoneToZone(
+  gamestate,
+  cardId,
+  { player: playerId, zone: "deck" },
+  { player: playerId, zone: "prize", position: "bottom" }
+)
 }
 
 export function playActive(gamestate: GameState, playerId: 1 | 2, cardId: string) {

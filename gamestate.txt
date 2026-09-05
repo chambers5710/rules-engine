@@ -1,0 +1,30 @@
+phase: turn
+turn: 1
+first player: 1
+active player: 1
+mulligans: p1=0  p2=2
+setup ready: p1=true  p2=true
+
+player 1
+  hand (7): Water Energy, Grass Energy, Switch, Grass Energy, Water Energy, Kakuna, Ivysaur
+  deck (44): Grass Energy, Gust of Wind, Grass Energy, Grass Energy, Magikarp, Grass Energy, Grass Energy, Bulbasaur, Starmie, Water Energy, Water Energy, Bill, Ivysaur, Water Energy, Kakuna, Staryu, Starmie, Water Energy, Grass Energy, Grass Energy, Gyarados, Weedle, Water Energy, Switch, Potion, Grass Energy, Staryu, Weedle, Gust of Wind, Bill, Grass Energy, Staryu, Beedrill, Grass Energy, Weedle, Grass Energy, Grass Energy, Water Energy, Staryu, Water Energy, Weedle, Water Energy, Super Potion, Water Energy
+  prize (6): Starmie, Super Potion, Magikarp, Grass Energy, Water Energy, Grass Energy
+  discard (0): (empty)
+  active: Bulbasaur  dmg=0
+  bench[0]: Bulbasaur  dmg=0
+  bench[1]: Bulbasaur  dmg=0
+  bench[2]: (empty)
+  bench[3]: (empty)
+  bench[4]: (empty)
+
+player 2
+  hand (3): Psychic Energy, Psychic Energy, Lightning Energy
+  deck (47): Super Potion, Gastly, Lightning Energy, Psychic Energy, Gust of Wind, Psychic Energy, Computer Search, Gastly, Psychic Energy, Lightning Energy, Lightning Energy, Pikachu, Drowzee, Pikachu, Gust of Wind, Psychic Energy, Magnemite, Lightning Energy, Drowzee, Haunter, Switch, Haunter, Psychic Energy, Kadabra, Abra, Psychic Energy, Switch, Bill, Pikachu, Lightning Energy, Lightning Energy, Psychic Energy, Potion, Professor Oak, Pikachu, Psychic Energy, Jynx, Bill, Defender, Psychic Energy, Lightning Energy, Psychic Energy, Abra, Magnemite, Lightning Energy, Lightning Energy, Psychic Energy
+  prize (6): Psychic Energy, Magnemite, Lightning Energy, Lightning Energy, Psychic Energy, Psychic Energy
+  discard (0): (empty)
+  active: Gastly  dmg=0
+  bench[0]: Jynx  dmg=0
+  bench[1]: Mewtwo  dmg=0
+  bench[2]: Abra  dmg=0
+  bench[3]: (empty)
+  bench[4]: (empty)
