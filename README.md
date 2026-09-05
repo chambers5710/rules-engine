@@ -15,6 +15,12 @@ Pokémon TCG rules as a small instruction set over an immutable-style game snaps
 
 `Action` is the game-level vocabulary. `Op` moves the data. Compute offers actions; the client picks one; the machine runs its `expr` through interpret.
 
+## Extracted rule values
+
+Any quantity a rule reads — prizes on KO, prize count, opening-hand size, and the like — lives as a named value, not a literal at the call site.
+
+Card text and other temporary modifiers will later rewrite those values **before** the rule body runs (a “take 2 prizes” attack, a “draw 8” setup, etc.). The rule always consumes the current value. Defaults stay in one place (`PRIZES_ON_KO = 1`); extra-prize / extra-draw effects are modifiers on that value, not a second code path.
+
 ## Board model
 
 - **Zones** — ordered piles: deck, hand, discard, prize

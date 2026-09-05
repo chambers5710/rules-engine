@@ -1,10 +1,11 @@
 import { Action, type AvailableAction } from "./compute.js"
-import { draw, placePrize } from "./helpers.js"
+import { discardActive, draw, isKnockedOut, placePrize, promote, takePrize } from "./helpers.js"
 import { interpret } from "./interpret.js"
 import type { GameState } from "./types.js"
 import { Phase } from "./types.js"
 
 const PRIZE_COUNT = 6
+const PRIZES_ON_KO = 1
 const PLAYERS = [1, 2] as const
 
 // Apply one client-chosen action (or null when the phase runs with no input).
@@ -23,6 +24,10 @@ export function stateMachine(
 
     case Phase.Turn:
       if (action?.kind === Action.EndTurn) return enterCheckup(gamestate)
+      if (action?.kind === Action.Promote) {
+        gamestate = promote(gamestate, action.player, action.index)
+        return drawOrLose(gamestate)
+      }
       return turnPhase(gamestate, action)
 
     case Phase.Checkup:
@@ -57,22 +62,40 @@ function setPrizes(gamestate: GameState): GameState {
   return gamestate
 }
 
-// Turn — no action: draw; else run the expr
+// Turn — no action: draw (empty deck loses); else run the expr
 function turnPhase(
   gamestate: GameState,
   action: AvailableAction | null = null
 ): GameState {
-  if (action) return runAction(gamestate, action)
-  return draw(gamestate, gamestate.activePlayer, 1)
+  if (!action) return drawOrLose(gamestate)
+  if (action.kind === Action.AttachEnergy) {
+    return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
+  }
+  return runAction(gamestate, action)
 }
 
-// Enter Turn and take the opening draw
+// Draw 1 — cannot draw, that player loses
+function drawOrLose(gamestate: GameState): GameState {
+  const player = gamestate.activePlayer
+  if (gamestate.players[player].deck.length === 0) return endGame(gamestate)
+  return draw(gamestate, player, 1)
+}
+
+// Enter Turn — draw only if Active is already filled
 function enterTurn(
   gamestate: GameState,
   activePlayer: 1 | 2,
   turnCount: number
 ): GameState {
-  return turnPhase({ ...gamestate, phase: Phase.Turn, activePlayer, turnCount })
+  gamestate = {
+    ...gamestate,
+    phase: Phase.Turn,
+    activePlayer,
+    turnCount,
+    energyAttachedThisTurn: false,
+  }
+  if (!hasActive(gamestate, activePlayer)) return gamestate
+  return turnPhase(gamestate)
 }
 
 // Enter Checkup from the end of a turn
@@ -80,8 +103,9 @@ function enterCheckup(gamestate: GameState): GameState {
   return checkupPhase({ ...gamestate, phase: Phase.Checkup })
 }
 
-// Checkup — win/lose only; statuses and KO resolution later
+// Checkup — KO Active, then win/lose; statuses later
 function checkupPhase(gamestate: GameState): GameState {
+  gamestate = resolveKnockouts(gamestate)
   for (const player of PLAYERS) {
     if (gamestate.players[player].prize.length === 0) return endGame(gamestate)
     if (!hasPokemonInPlay(gamestate, player)) return endGame(gamestate)
@@ -93,6 +117,18 @@ function checkupPhase(gamestate: GameState): GameState {
   )
 }
 
+// KO — discard the Active; opponent takes the default prize count
+function resolveKnockouts(gamestate: GameState): GameState {
+  for (const player of PLAYERS) {
+    if (!isKnockedOut(gamestate, gamestate.players[player].active)) continue
+    gamestate = discardActive(gamestate, player)
+    for (let i = 0; i < PRIZES_ON_KO; i++) {
+      gamestate = takePrize(gamestate, opponent(player))
+    }
+  }
+  return gamestate
+}
+
 function endGame(gamestate: GameState): GameState {
   return { ...gamestate, phase: Phase.Ended }
 }
@@ -101,9 +137,13 @@ function bothReady(gamestate: GameState): boolean {
   return gamestate.setupReady[1] && gamestate.setupReady[2]
 }
 
+function hasActive(gamestate: GameState, player: 1 | 2): boolean {
+  return gamestate.players[player].active.evolution.length > 0
+}
+
 function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
   const p = gamestate.players[player]
-  return p.active.evolution.length > 0 || p.bench.some((seat) => seat.evolution.length > 0)
+  return hasActive(gamestate, player) || p.bench.some((seat) => seat.evolution.length > 0)
 }
 
 function opponent(player: 1 | 2): 1 | 2 {

@@ -9,6 +9,7 @@ export type GameState = {
   cardRegistry: CardRegistry
   mulligans: { 1: number; 2: number }
   setupReady: { 1: boolean; 2: boolean }
+  energyAttachedThisTurn: boolean
   actionStack: []
   actionHistory: []
 }

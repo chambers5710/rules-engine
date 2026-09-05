@@ -1,4 +1,4 @@
-import { draw } from "./helpers.js"
+import { draw, emptySlot, isBasicPokemon } from "./helpers.js"
 import { flipCoin, moveZoneToZone, shuffle } from "./ops.js"
 import type {
   Card,
@@ -8,8 +8,6 @@ import type {
   EnergyType,
   GameState,
   Player,
-  Slot,
-  StatusFlags,
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
 
@@ -43,6 +41,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     cardRegistry,
     mulligans: { 1: 0, 2: 0 },
     setupReady: { 1: false, 2: false },
+    energyAttachedThisTurn: false,
     actionStack: [],
     actionHistory: [],
   }
@@ -73,19 +72,14 @@ function dealOpeningHands(gamestate: GameState): GameState {
   return { ...gamestate, mulligans }
 }
 
-function isBasic(gamestate: GameState, cardId: string): boolean {
-  const printed = gamestate.cardRegistry[cardId]
-  return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Basic") === true
-}
-
 function handHasBasic(gamestate: GameState, player: 1 | 2): boolean {
-  return gamestate.players[player].hand.some((id) => isBasic(gamestate, id))
+  return gamestate.players[player].hand.some((id) => isBasicPokemon(gamestate, id))
 }
 
 // Basic still available in hand or deck (can a mulligan help?)
 function libraryHasBasic(gamestate: GameState, player: 1 | 2): boolean {
   const p = gamestate.players[player]
-  return [...p.hand, ...p.deck].some((id) => isBasic(gamestate, id))
+  return [...p.hand, ...p.deck].some((id) => isBasicPokemon(gamestate, id))
 }
 
 function returnHandToDeck(gamestate: GameState, player: 1 | 2): GameState {
@@ -112,25 +106,6 @@ function instantiatePlayer(id: 1 | 2, deck: string[]): Player {
     bench: [emptySlot(), emptySlot(), emptySlot(), emptySlot(), emptySlot()],
   }
 }
-
-// Empty slot — one vacant Pokémon seat
-const emptySlot = (): Slot => ({
-  evolution: [],
-  damage: 0,
-  status: emptyStatus(),
-  energy: [],
-  tools: [],
-  modifiers: [],
-})
-
-// Empty status — no special conditions
-const emptyStatus = (): StatusFlags => ({
-  psn: false,
-  brn: false,
-  par: false,
-  slp: false,
-  cnf: false,
-})
 
 // Deck — one CardInstance per printed row, ids minted as player-index-source
 function initializeDeck(playerId: 1 | 2, deckData: Card[]): CardInstance[] {
