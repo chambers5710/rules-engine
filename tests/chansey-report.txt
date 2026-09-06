@@ -1,0 +1,34 @@
+# gamestate
+
+```
+  phase    init
+  turn     0
+  first    p1
+  active   p1
+  mulligan p1=4  p2=1
+  ready    p1=false  p2=false
+
+  p2
+  prize    0
+  hand     4  Fighting Energy x3, Clefairy
+  deck     27
+  discard  0
+  active   -
+  bench[0] -
+  bench[1] -
+  bench[2] -
+  bench[3] -
+  bench[4] -
+
+> p1
+  active   Chansey  |  dmg 0
+  bench[0] -
+  bench[1] -
+  bench[2] -
+  bench[3] -
+  bench[4] -
+  prize    0
+  hand     3  Fighting Energy x3
+  deck     27
+  discard  0
+```

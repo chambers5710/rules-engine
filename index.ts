@@ -8,6 +8,11 @@ import type { Card } from "./types.js"
 import { Phase } from "./types.js"
 import { chooseAction, formatGamestate } from "./ui.js"
 
+const out = join(dirname(fileURLToPath(import.meta.url)), "gamestate.md")
+const frame = (body: string) => writeFileSync(out, body)
+
+frame("# gamestate\n\n```\n  initializing...\n```\n")
+
 console.log("Initializing...")
 
 async function fetchDeckData(deckId: string) {
@@ -21,21 +26,20 @@ const decks = {
   3: "d-base1-3",
 }
 
-const p1Deck = await fetchDeckData(decks[2])
-const p2Deck = await fetchDeckData(decks[3])
+const p1Deck = await fetchDeckData(decks[1])
+const p2Deck = await fetchDeckData(decks[1])
 
 let gamestate = initializeGameState(p1Deck, p2Deck)
 
-const out = join(dirname(fileURLToPath(import.meta.url)), "gamestate.md")
-const frame = (next: typeof gamestate) => writeFileSync(out, formatGamestate(next))
+const writeGamestate = (next: typeof gamestate) => frame(formatGamestate(next))
 
-frame(gamestate)
+writeGamestate(gamestate)
 while (gamestate.phase !== Phase.Ended) {
   const actions = computeAvailableActions(gamestate)
   if (actions.length === 0) break
   const action = await chooseAction(gamestate, actions)
   gamestate = stateMachine(gamestate, action)
-  frame(gamestate)
+  writeGamestate(gamestate)
 }
 
 console.log(`Wrote ${out}`)

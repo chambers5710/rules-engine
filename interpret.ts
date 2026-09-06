@@ -1,4 +1,5 @@
 import { Op, type BindingName, type Primitive, type SlotTarget } from "./dsl.js"
+import { applyModifier, readModifier } from "./modifiers.js"
 import {
   applyDamage,
   applyStatus,
@@ -20,14 +21,14 @@ export type InterpretCtx = {
   script?: InterpretScript
 }
 
-// Attack damage pipeline — stub: returns base; weakness / resistance / other modifiers later
+// Attack damage pipeline — active attack_damage rewrite; weakness later
 export function pipelineAttackDamage(
-  _gamestate: GameState,
+  gamestate: GameState,
   base: number,
   _from: SlotId,
-  _to: SlotId
+  to: SlotId
 ): number {
-  return base
+  return readModifier(gamestate, to, "attack_damage", base)
 }
 
 function resolveSlot(target: SlotTarget, ctx: InterpretCtx): SlotId {
@@ -84,6 +85,16 @@ export function interpret(
       const result = scripted ?? flipCoin(1)[0]
       ctx.bindings[primitive.bind] = result
       return gamestate
+    }
+
+    case Op.ApplyModifier: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      const player = primitive.until.who === "owner" ? slot.player : slot.player === 1 ? 2 : 1
+      return applyModifier(gamestate, slot, {
+        field: primitive.field,
+        set: primitive.set,
+        until: { beat: primitive.until.beat, player },
+      })
     }
 
     case Op.If: {

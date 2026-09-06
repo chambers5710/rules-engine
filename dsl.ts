@@ -12,11 +12,15 @@ export enum Op {
   FlipCoin = "flip_coin",
   Select = "select",
   If = "if",
+  ApplyModifier = "apply_modifier",
 }
 
 export type BindingName = `$${string}`
 
 export type SlotTarget = SlotId | BindingName
+
+// Select pick — what the paused menu lists from `from`
+export type SelectPick = "cards" | "attacks"
 
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; from: ZoneRef; to: ZoneDest }
@@ -28,7 +32,18 @@ export type Primitive =
   | { op: Op.ApplyStatus; status: Status; slot: SlotTarget }
   | { op: Op.RemoveStatus; status: Status; slot: SlotTarget }
   | { op: Op.FlipCoin; bind: BindingName }
-  | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef }
+  | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef | SlotTarget; pick: SelectPick }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }
+  | { op: Op.ApplyModifier; slot: SlotTarget; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
 
 export type Expr = Primitive[]
+
+// Paused expr — Select stopped here; remaining runs after the bind is written
+export type ActionFrame = {
+  remaining: Expr
+  bindings: Record<string, unknown>
+  player: 1 | 2
+  bind: BindingName
+  from: ZoneRef | SlotRef | SlotTarget
+  pick: SelectPick
+}

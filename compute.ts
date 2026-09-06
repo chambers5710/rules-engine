@@ -160,12 +160,23 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
       kind: Action.Attack,
       player,
       name: attack.name,
-      expr: cardEffect(printed.sourceId, "attacks", attack.name),
+      expr: attackExpr(printed.sourceId, attack),
       seed: {
         $self_slot: slot,
         $defending: { player: defending, slot: "active" },
       },
     }))
+}
+
+function attackExpr(sourceId: string, attack: { name: string; damage: string }): Expr {
+  const written = cardEffect(sourceId, "attacks", attack.name)
+  if (written.length > 0) return written
+  const base = Number(attack.damage)
+  if (!Number.isFinite(base) || attack.damage.trim() === "") return []
+  return [
+    { op: Op.Attack, base, from: "$self_slot", to: "$defending", bind: "$damage" },
+    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+  ]
 }
 
 function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {

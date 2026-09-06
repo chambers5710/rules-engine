@@ -31,6 +31,9 @@ function slotLine(gamestate: GameState, slot: GameState["players"][1]["active"])
   const parts = [form, `dmg ${slot.damage}`]
   if (status) parts.push(status)
   if (slot.energy.length) parts.push(grouped(gamestate, slot.energy))
+  if (slot.modifiers.length) {
+    parts.push(slot.modifiers.map((m) => `${m.field}=${m.set}:${m.phase}`).join(" "))
+  }
   return parts.join("  |  ")
 }
 
@@ -108,7 +111,14 @@ function formatAction(gamestate: GameState, a: AvailableAction): string {
     const dest = a.to.slot === "active" ? "Active" : `bench[${a.to.index}]`
     return `${a.kind}  ${cardName(gamestate, a.card)} → ${dest}`
   }
-  if (a.kind === Action.Attack) return `${a.kind}  ${a.name}`
+  if (a.kind === Action.Attack) {
+    const id = gamestate.players[a.player].active.evolution.at(-1)
+    const printed = id
+      ? gamestate.cardRegistry[id].attacks?.find((attack) => attack.name === a.name)
+      : undefined
+    const text = printed?.text?.trim()
+    return text ? `${a.kind}  ${a.name}\n         ${text}` : `${a.kind}  ${a.name}`
+  }
   return `${a.kind}  ${cardName(gamestate, a.card)}`
 }
 

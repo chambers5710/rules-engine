@@ -86,7 +86,11 @@ gamestate = { ...gamestate, firstPlayer: 1, activePlayer: 1 }
 gamestate = seedHandEnergy(gamestate, 1, 3)
 gamestate = seedHandEnergy(gamestate, 2, 3)
 
+const out = join(dirname(fileURLToPath(import.meta.url)), "chansey-report.txt")
+const frame = (next: typeof gamestate) => writeFileSync(out, formatGamestate(next))
+
 const log: string[] = []
+frame(gamestate)
 while (gamestate.phase !== Phase.Ended) {
   const actions = computeAvailableActions(gamestate)
   if (actions.length === 0) break
@@ -99,6 +103,7 @@ while (gamestate.phase !== Phase.Ended) {
         : action.kind
   log.push(`p${action.player}: ${label}`)
   gamestate = stateMachine(gamestate, action)
+  frame(gamestate)
   if (action.kind === Action.Attack && action.name === "Double-edge") break
 }
 
@@ -110,27 +115,4 @@ check("phase ended", Phase.Ended, gamestate.phase)
 check("attacked Double-edge", true, log.some((line) => line.includes("Double-edge")))
 
 const failed = cases.filter((c) => !c.pass)
-const lines = [
-  "# Chansey",
-  "",
-  `Passed: ${cases.filter((c) => c.pass).length}/${cases.length}`,
-  "",
-  "## Action log",
-  "",
-  ...log.map((line) => `- ${line}`),
-  "",
-]
-
-for (const c of cases) {
-  lines.push(`## ${c.pass ? "PASS" : "FAIL"}: ${c.name}`)
-  lines.push("")
-  lines.push("Expected: `" + JSON.stringify(c.expected) + "`")
-  lines.push("Realized: `" + JSON.stringify(c.realized) + "`")
-  lines.push("")
-}
-
-lines.push("## Board", "", formatGamestate(gamestate))
-
-const out = join(dirname(fileURLToPath(import.meta.url)), "chansey-report.md")
-writeFileSync(out, lines.join("\n"))
-console.log(`Wrote ${out} (${failed.length} failed)`)
+console.log(`Wrote ${out} (${cases.filter((c) => c.pass).length}/${cases.length} passed, ${failed.length} failed)`)

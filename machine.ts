@@ -1,5 +1,7 @@
 import { Action, type AvailableAction } from "./compute.js"
+import { Op } from "./dsl.js"
 import { discardActive, draw, isKnockedOut, placePrize, promote, takePrize } from "./helpers.js"
+import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret } from "./interpret.js"
 import type { GameState } from "./types.js"
 import { Phase } from "./types.js"
@@ -25,7 +27,9 @@ export function stateMachine(
     case Phase.Turn:
       if (action?.kind === Action.EndTurn) return enterCheckup(gamestate)
       if (action?.kind === Action.Attack) {
-        return enterCheckup(runAction(gamestate, action))
+        gamestate = runAction(gamestate, action)
+        if (gamestate.actionStack.length > 0) return gamestate
+        return enterCheckup(gamestate)
       }
       if (action?.kind === Action.Promote) {
         gamestate = promote(gamestate, action.player, action.index)
@@ -97,12 +101,14 @@ function enterTurn(
     turnCount,
     energyAttachedThisTurn: false,
   }
+  gamestate = tickModifiersEnter(gamestate, activePlayer)
   if (!hasActive(gamestate, activePlayer)) return gamestate
   return turnPhase(gamestate)
 }
 
 // Enter Checkup from the end of a turn
 function enterCheckup(gamestate: GameState): GameState {
+  gamestate = tickModifiersEnd(gamestate, gamestate.activePlayer)
   return checkupPhase({ ...gamestate, phase: Phase.Checkup })
 }
 
@@ -153,10 +159,27 @@ function opponent(player: 1 | 2): 1 | 2 {
   return player === 1 ? 2 : 1
 }
 
-// Run an action's expr through interpret
+// Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
   const ctx = { bindings: { ...(action.seed ?? {}) } }
-  for (const step of action.expr) {
+  for (let i = 0; i < action.expr.length; i++) {
+    const step = action.expr[i]
+    if (step.op === Op.Select) {
+      return {
+        ...gamestate,
+        actionStack: [
+          ...gamestate.actionStack,
+          {
+            remaining: action.expr.slice(i + 1),
+            bindings: ctx.bindings,
+            player: action.player,
+            bind: step.bind,
+            from: step.from,
+            pick: step.pick,
+          },
+        ],
+      }
+    }
     gamestate = interpret(gamestate, step, ctx)
   }
   return gamestate

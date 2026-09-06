@@ -13,7 +13,7 @@ import type {
 } from "./types.js"
 
 // Copy — snapshot we can mutate; never write the object we were given
-const copy = (gamestate: GameState): GameState => structuredClone(gamestate)
+export const copy = (gamestate: GameState): GameState => structuredClone(gamestate)
 
 // Shuffle — Fisher–Yates in place; used by placeInZone("shuffle")
 const shuffleZone = (zone: Zone) => {
@@ -56,7 +56,7 @@ export const moveZoneToZone = (
 }
 
 // Slot — resolve active or bench seat
-const getSlot = (gamestate: GameState, ref: SlotId): Slot => {
+export const getSlot = (gamestate: GameState, ref: SlotId): Slot => {
   const player = gamestate.players[ref.player]
   return ref.slot === "active" ? player.active : player.bench[ref.index]
 }

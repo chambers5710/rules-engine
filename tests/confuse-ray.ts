@@ -57,7 +57,7 @@ const confuseRay: Expr = [
     op: Op.If,
     bind: "$coin",
     equals: "heads",
-    then: [{ op: Op.ApplyStatus, status: "cnf", slot: "$defending" }],
+    then: [{ op: Op.ApplyStatus, status: "confused", slot: "$defending" }],
   },
 ]
 
@@ -81,7 +81,7 @@ function run(gamestate: GameState, expr: Expr, ctx: InterpretCtx): GameState {
 function snapshot(gamestate: GameState) {
   return {
     p2Damage: gamestate.players[2].active.damage,
-    p2Cnf: gamestate.players[2].active.status.cnf,
+    p2Cnf: gamestate.players[2].active.status.confused,
     p1Damage: gamestate.players[1].active.damage,
   }
 }

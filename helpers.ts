@@ -1,10 +1,10 @@
 import type { GameState, Slot, StatusFlags } from "./types.js"
-import { moveZoneToSlot, moveZoneToZone } from "./ops.js"
+import { copy, moveZoneToSlot, moveZoneToZone } from "./ops.js"
 
 // these are extra helpers and not at this point used in ops
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
-  const next = structuredClone(gamestate)
+  const next = copy(gamestate)
   const deck = next.players[playerId].deck
   const hand = next.players[playerId].hand
   const taken = deck.splice(0, Math.min(count, deck.length))
@@ -59,7 +59,7 @@ export function promote(
   player: 1 | 2,
   index: 0 | 1 | 2 | 3 | 4
 ): GameState {
-  const next = structuredClone(gamestate)
+  const next = copy(gamestate)
   const p = next.players[player]
   const from = p.bench[index]
   p.active = {
@@ -86,11 +86,11 @@ export const emptySlot = (): Slot => ({
 
 // Empty status — no special conditions
 export const emptyStatus = (): StatusFlags => ({
-  psn: false,
-  brn: false,
-  par: false,
-  slp: false,
-  cnf: false,
+  poison: false,
+  burn: false,
+  paralyzed: false,
+  sleep: false,
+  confused: false,
 })
 
 // Basic Pokémon — Energy's printed "Basic" subtype does not count
@@ -113,7 +113,7 @@ export function isKnockedOut(gamestate: GameState, slot: Slot): boolean {
 
 // Discard Active — Pokémon, energy, and tools to discard; seat cleared
 export function discardActive(gamestate: GameState, player: 1 | 2): GameState {
-  const next = structuredClone(gamestate)
+  const next = copy(gamestate)
   const slot = next.players[player].active
   next.players[player].discard.push(...slot.evolution, ...slot.energy, ...slot.tools)
   next.players[player].active = emptySlot()

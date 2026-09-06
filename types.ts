@@ -1,3 +1,5 @@
+import type { ActionFrame } from "./dsl.js"
+
 // Game — the full snapshot the engine reads and writes
 export type GameState = {
   id: string
@@ -10,7 +12,7 @@ export type GameState = {
   mulligans: { 1: number; 2: number }
   setupReady: { 1: boolean; 2: boolean }
   energyAttachedThisTurn: boolean
-  actionStack: []
+  actionStack: ActionFrame[]
   actionHistory: []
 }
 
@@ -46,7 +48,15 @@ export type Slot = {
   status: StatusFlags
   energy: CardInstanceId[]
   tools: CardInstanceId[]
-  modifiers: []
+  modifiers: Modifier[]
+}
+
+// Modifier — on a slot; until.player is set when interpret applies the op
+export type Modifier = {
+  field: "attack_damage"
+  set: number
+  until: { beat: "end_of_turn"; player: 1 | 2 }
+  phase: "pending" | "active"
 }
 
 // Zone name — keys on Player that hold a Zone
@@ -78,7 +88,7 @@ export type Attachment = "evolution" | "energy" | "tools"
 export type SlotRef = SlotId & { attachment: Attachment }
 
 // Status — special conditions; more than one flag may be on
-export type Status = "psn" | "brn" | "par" | "slp" | "cnf"
+export type Status = "poison" | "burn" | "paralyzed" | "sleep" | "confused"
 
 // Status flags — healthy is all false
 export type StatusFlags = Record<Status, boolean>
@@ -107,6 +117,8 @@ export type CardInstance = {
 export type PrintedAttack = {
   name: string
   cost: EnergyType[]
+  text: string
+  damage: string
 }
 
 // Card instance id — unique per copy; also the registry key

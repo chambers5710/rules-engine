@@ -161,6 +161,8 @@ function instantiateCard(cardData: Card): CardInstance {
     attacks: cardData.attacks?.map((attack) => ({
       name: attack.name,
       cost: attack.cost.map(asEnergyType),
+      text: attack.text,
+      damage: attack.damage,
     })),
     weaknesses: weaknesses,
     resistances: resistances,
