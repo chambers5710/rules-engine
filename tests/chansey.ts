@@ -32,7 +32,8 @@ function seedHandEnergy(gamestate: GameState, player: 1 | 2, n: number): GameSta
       gamestate,
       card,
       { player, zone: "deck" },
-      { player, zone: "hand", position: "bottom" }
+      { player, zone: "hand" },
+      "bottom"
     )
     energy = surveyCards(gamestate, { player, zone: "hand" }, { kind: "energy" })
   }
@@ -42,7 +43,8 @@ function seedHandEnergy(gamestate: GameState, player: 1 | 2, n: number): GameSta
       gamestate,
       card,
       { player, zone: "hand" },
-      { player, zone: "deck", position: "bottom" }
+      { player, zone: "deck" },
+      "bottom"
     )
     energy = surveyCards(gamestate, { player, zone: "hand" }, { kind: "energy" })
   }

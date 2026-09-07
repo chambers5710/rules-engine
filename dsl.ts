@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, SlotId, SlotRef, Status, ZoneDest, ZoneRef } from "./types.js"
+import type { Attachment, SlotId, SlotRef, Status, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -18,39 +18,64 @@ export enum Op {
   Calc = "calc",
 }
 
+// Action — every top-level choice the client can make
+export enum Action {
+  PlayActive = "play_active",
+  PlayBench = "play_bench",
+  AttachEnergy = "attach_energy",
+  Evolve = "evolve",
+  Attack = "attack",
+  Ability = "ability",
+  Choose = "choose",
+  Retreat = "retreat",
+  Promote = "promote",
+  Ready = "ready",
+  EndTurn = "end_turn",
+}
+
 export type BindingName = `$${string}`
 
-export type SlotTarget = SlotId | BindingName
+// Select pick — what the paused menu lists
+export type SelectPick = "cards" | "attacks" | "slots"
 
-// Select pick — what the paused menu lists from `from`
-export type SelectPick = "cards" | "attacks"
+export type SelectFilter =
+  | { kind: "has_counters"; counters: number }
+  | { kind: "survives_counters"; counters: number }
+  | { kind: "other_than"; bind: BindingName }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 
 export type Primitive =
-  | { op: Op.MoveZoneToZone; card: string; from: ZoneRef; to: ZoneDest }
-  | { op: Op.MoveZoneToSlot; card: string; from: ZoneRef; to: SlotRef }
-  | { op: Op.MoveSlotToZone; card: string; from: SlotRef; to: ZoneDest }
-  | { op: Op.MoveSlotToSlot; card: string; from: SlotRef; to: SlotRef }
-  | { op: Op.Attack; base: number | BindingName; from: SlotTarget; to: SlotTarget; bind: BindingName }
-  | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotTarget }
-  | { op: Op.ApplyStatus; status: Status; slot: SlotTarget }
-  | { op: Op.RemoveStatus; status: Status; slot: SlotTarget }
+  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
+  | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
+  | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
+  | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
+  | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName }
+  | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName }
-  | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef | SlotTarget; pick: SelectPick }
+  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[] }
+  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; filter?: SelectFilter | SelectFilter[] }
+  | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }
-  | { op: Op.ApplyModifier; slot: SlotTarget; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
-  | { op: Op.Count; from: ZoneRef | SlotRef | SlotTarget; attachment?: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
+  | { op: Op.Count; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
 
 export type Expr = Primitive[]
 
-// Paused expr — Select stopped here; remaining runs after the bind is written
-export type ActionFrame = {
+type ActionFrameBase = {
+  player: 1 | 2
+  kind: Action
   remaining: Expr
   bindings: Record<string, unknown>
-  player: 1 | 2
   bind: BindingName
-  from: ZoneRef | SlotRef | SlotTarget
-  pick: SelectPick
+  filter?: SelectFilter | SelectFilter[]
 }
+
+// Paused expr — Select stopped here; remaining runs after the bind is written
+export type ActionFrame =
+  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent" })
+  | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef })
+  | (ActionFrameBase & { pick: "attacks"; slot: SlotId })

@@ -41,6 +41,18 @@ export type CardRegistry = Record<string, CardInstance>
 // Zone — an ordered pile of instance ids (index 0 is top)
 export type Zone = CardInstanceId[]
 
+// Zone name — keys on Player that hold a Zone
+export type ZoneName = "deck" | "hand" | "discard" | "prize"
+
+// Zone position — where a card lands on a write; not part of a zone's identity
+export type ZonePosition = "top" | "bottom" | "shuffle"
+
+// Zone ref — which player's zone
+export type ZoneRef = {
+  player: 1 | 2
+  zone: ZoneName
+}
+
 // Slot — one Pokémon in play (Active or a bench slot)
 export type Slot = {
   evolution: CardInstanceId[] // last entry is the current form
@@ -52,6 +64,17 @@ export type Slot = {
   evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet
 }
 
+// Slot id — which Pokémon in play
+export type SlotId =
+  | { player: 1 | 2; slot: "active" }
+  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
+
+// Attachment — which card list on a slot
+export type Attachment = "evolution" | "energy" | "tools"
+
+// Slot ref — a slot plus which attachment
+export type SlotRef = SlotId & { attachment: Attachment }
+
 // Modifier — on a slot; until.player is set when interpret applies the op
 export type Modifier = {
   field: "attack_damage"
@@ -59,34 +82,6 @@ export type Modifier = {
   until: { beat: "end_of_turn"; player: 1 | 2 }
   phase: "pending" | "active"
 }
-
-// Zone name — keys on Player that hold a Zone
-export type ZoneName = "deck" | "hand" | "discard" | "prize"
-
-// Zone position — where a card lands in a pile
-export type ZonePosition = "top" | "bottom" | "shuffle"
-
-// Zone ref — which player's pile
-export type ZoneRef = {
-  player: 1 | 2
-  zone: ZoneName
-}
-
-// Zone dest — a pile plus where to insert
-export type ZoneDest = ZoneRef & {
-  position: ZonePosition
-}
-
-// Slot id — which Pokémon in play, with no pile on it
-export type SlotId =
-  | { player: 1 | 2; slot: "active" }
-  | { player: 1 | 2; slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
-
-// Attachment — a pile that lives on a slot
-export type Attachment = "evolution" | "energy" | "tools"
-
-// Slot ref — a Pokémon in play plus which attachment pile
-export type SlotRef = SlotId & { attachment: Attachment }
 
 // Status — special conditions; more than one flag may be on
 export type Status = "poison" | "burn" | "paralyzed" | "sleep" | "confused"
@@ -134,6 +129,9 @@ type CardSupertype = "Pokémon" | "Trainer" | "Energy"
 export type DamageModifier =
   | { operation: "multiply"; value: number }
   | { operation: "add"; value: number }
+
+// Damage counter — printed "damage counter" language is this many damage
+export const DAMAGE_COUNTER = 10
 
 // Energy types — Title Case, matches printed card JSON
 export const EnergyTypes = [

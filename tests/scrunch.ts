@@ -40,7 +40,7 @@ function board(): GameState {
 }
 
 const jab: Expr = [
-  { op: Op.Attack, base: 30, from: "$self_slot", to: "$defending", bind: "$damage" },
+  { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
 ]
 

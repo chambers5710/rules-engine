@@ -6,7 +6,6 @@ import type {
   SlotRef,
   Status,
   Zone,
-  ZoneDest,
   ZoneName,
   ZonePosition,
   ZoneRef,
@@ -39,19 +38,20 @@ const placeInZone = (zone: Zone, position: ZonePosition, cardId: CardInstanceId)
 export const moveZoneToZone = (
   gamestate: GameState,
   cardId: CardInstanceId,
-  from: ZoneRef,
-  to: ZoneDest
+  source: ZoneRef,
+  dest: ZoneRef,
+  position: ZonePosition
 ) => {
-  const location = gamestate.players[from.player][from.zone]
+  const location = gamestate.players[source.player][source.zone]
   if (location.indexOf(cardId) === -1) {
     return gamestate
   }
 
   const next = copy(gamestate)
-  const fromZone = next.players[from.player][from.zone]
-  const toZone = next.players[to.player][to.zone]
-  fromZone.splice(fromZone.indexOf(cardId), 1)
-  placeInZone(toZone, to.position, cardId)
+  const sourceZone = next.players[source.player][source.zone]
+  const destZone = next.players[dest.player][dest.zone]
+  sourceZone.splice(sourceZone.indexOf(cardId), 1)
+  placeInZone(destZone, position, cardId)
   return next
 }
 
@@ -64,18 +64,18 @@ const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[]
 export const moveZoneToSlot = (
   gamestate: GameState,
   cardId: CardInstanceId,
-  from: ZoneRef,
-  to: SlotRef
+  source: ZoneRef,
+  dest: SlotRef
 ) => {
-  const location = gamestate.players[from.player][from.zone]
+  const location = gamestate.players[source.player][source.zone]
   if (location.indexOf(cardId) === -1) {
     return gamestate
   }
 
   const next = copy(gamestate)
-  const fromZone = next.players[from.player][from.zone]
-  fromZone.splice(fromZone.indexOf(cardId), 1)
-  getSlotAttachment(next, to).push(cardId)
+  const sourceZone = next.players[source.player][source.zone]
+  sourceZone.splice(sourceZone.indexOf(cardId), 1)
+  getSlotAttachment(next, dest).push(cardId)
   return next
 }
 
@@ -83,17 +83,18 @@ export const moveZoneToSlot = (
 export const moveSlotToZone = (
   gamestate: GameState,
   cardId: CardInstanceId,
-  from: SlotRef,
-  to: ZoneDest
+  source: SlotRef,
+  dest: ZoneRef,
+  position: ZonePosition
 ) => {
-  if (getSlotAttachment(gamestate, from).indexOf(cardId) === -1) {
+  if (getSlotAttachment(gamestate, source).indexOf(cardId) === -1) {
     return gamestate
   }
 
   const next = copy(gamestate)
-  const fromPile = getSlotAttachment(next, from)
-  fromPile.splice(fromPile.indexOf(cardId), 1)
-  placeInZone(next.players[to.player][to.zone], to.position, cardId)
+  const sourceCards = getSlotAttachment(next, source)
+  sourceCards.splice(sourceCards.indexOf(cardId), 1)
+  placeInZone(next.players[dest.player][dest.zone], position, cardId)
   return next
 }
 
@@ -101,17 +102,17 @@ export const moveSlotToZone = (
 export const moveSlotToSlot = (
   gamestate: GameState,
   cardId: CardInstanceId,
-  from: SlotRef,
-  to: SlotRef
+  source: SlotRef,
+  dest: SlotRef
 ) => {
-  if (getSlotAttachment(gamestate, from).indexOf(cardId) === -1) {
+  if (getSlotAttachment(gamestate, source).indexOf(cardId) === -1) {
     return gamestate
   }
 
   const next = copy(gamestate)
-  const fromPile = getSlotAttachment(next, from)
-  fromPile.splice(fromPile.indexOf(cardId), 1)
-  getSlotAttachment(next, to).push(cardId)
+  const sourceCards = getSlotAttachment(next, source)
+  sourceCards.splice(sourceCards.indexOf(cardId), 1)
+  getSlotAttachment(next, dest).push(cardId)
   return next
 }
 

@@ -1,6 +1,6 @@
-import { opponent } from "./board.js"
-import { Op, type BindingName, type CalcFn, type Primitive, type SlotTarget } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type Primitive } from "./dsl.js"
 import { applyModifier, readModifier } from "./modifiers.js"
+import { opponent } from "./board.js"
 import {
   applyDamage,
   applyStatus,
@@ -11,8 +11,8 @@ import {
   moveZoneToZone,
   removeStatus,
 } from "./ops.js"
-import { surveyCount, surveyEnergyValue, type SurveyFrom } from "./survey.js"
-import type { Attachment, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
+import { surveyCount, surveyEnergyValue } from "./survey.js"
+import type { GameState, SlotId, SlotRef } from "./types.js"
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -27,16 +27,15 @@ export type InterpretCtx = {
 export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
-  _from: SlotId,
-  to: SlotId
+  _attacker: SlotId,
+  defender: SlotId
 ): number {
-  return readModifier(gamestate, to, "attack_damage", base)
+  return readModifier(gamestate, defender, "attack_damage", base)
 }
 
-function resolveSlot(target: SlotTarget, ctx: InterpretCtx): SlotId {
+export function resolveSlot(target: SlotId | BindingName, ctx: InterpretCtx): SlotId {
   if (typeof target !== "string") return target
-  const bound = ctx.bindings[target]
-  return bound as SlotId
+  return ctx.bindings[target] as SlotId
 }
 
 function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number {
@@ -44,16 +43,12 @@ function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number 
   return ctx.bindings[amount] as number
 }
 
-function resolveSurveyFrom(
-  from: ZoneRef | SlotRef | SlotTarget,
-  attachment: Attachment | undefined,
+function resolveSlotRef(
+  slot: SlotId | BindingName,
+  attachment: SlotRef["attachment"],
   ctx: InterpretCtx
-): SurveyFrom {
-  if (typeof from !== "string" && ("zone" in from || "attachment" in from)) {
-    return from
-  }
-  const slot: SlotId = typeof from === "string" ? resolveSlot(from, ctx) : from
-  return { ...slot, attachment: attachment ?? "energy" }
+): SlotRef {
+  return { ...resolveSlot(slot, ctx), attachment }
 }
 
 function calcFn(fn: CalcFn, a: number, b: number): number {
@@ -78,25 +73,25 @@ export function interpret(
 ): GameState {
   switch (primitive.op) {
     case Op.MoveZoneToZone:
-      return moveZoneToZone(gamestate, primitive.card, primitive.from, primitive.to)
+      return moveZoneToZone(gamestate, primitive.card, primitive.source, primitive.dest, primitive.position)
 
     case Op.MoveZoneToSlot:
-      return moveZoneToSlot(gamestate, primitive.card, primitive.from, primitive.to)
+      return moveZoneToSlot(gamestate, primitive.card, primitive.source, primitive.dest)
 
     case Op.MoveSlotToZone:
-      return moveSlotToZone(gamestate, primitive.card, primitive.from, primitive.to)
+      return moveSlotToZone(gamestate, primitive.card, primitive.source, primitive.dest, primitive.position)
 
     case Op.MoveSlotToSlot:
-      return moveSlotToSlot(gamestate, primitive.card, primitive.from, primitive.to)
+      return moveSlotToSlot(gamestate, primitive.card, primitive.source, primitive.dest)
 
     case Op.Attack: {
-      const from = resolveSlot(primitive.from, ctx)
-      const to = resolveSlot(primitive.to, ctx)
+      const attacker = resolveSlot(primitive.attacker, ctx)
+      const defender = resolveSlot(primitive.defender, ctx)
       ctx.bindings[primitive.bind] = pipelineAttackDamage(
         gamestate,
         resolveAmount(primitive.base, ctx),
-        from,
-        to
+        attacker,
+        defender
       )
       return gamestate
     }
@@ -132,11 +127,11 @@ export function interpret(
     }
 
     case Op.Count: {
-      const from = resolveSurveyFrom(primitive.from, primitive.attachment, ctx)
+      const source = resolveSlotRef(primitive.slot, primitive.attachment, ctx)
       ctx.bindings[primitive.bind] =
         primitive.as === "energy_value"
-          ? surveyEnergyValue(gamestate, from, primitive.filter)
-          : surveyCount(gamestate, from, primitive.filter)
+          ? surveyEnergyValue(gamestate, source, primitive.filter)
+          : surveyCount(gamestate, source, primitive.filter)
       return gamestate
     }
 

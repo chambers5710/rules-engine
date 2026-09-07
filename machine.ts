@@ -7,13 +7,13 @@ import {
   occupiedBench,
   opponent,
 } from "./board.js"
-import { Action, type AvailableAction } from "./compute.js"
-import { Op } from "./dsl.js"
+import { type AvailableAction } from "./compute.js"
+import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
-import { interpret } from "./interpret.js"
+import { interpret, resolveSlot, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
-import type { GameState, SlotId } from "./types.js"
+import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 import { Phase } from "./types.js"
 
 const PRIZE_COUNT = 6
@@ -25,6 +25,11 @@ export function stateMachine(
   gamestate: GameState,
   action: AvailableAction | null
 ): GameState {
+  // If action stack has any length, this was a paused state for selection
+  if (gamestate.actionStack.length > 0) {
+    if (action?.kind === Action.Choose) return resumeSelect(gamestate, action)
+    return gamestate
+  }
   switch (gamestate.phase) {
     case Phase.Init:
       return initPhase(gamestate, action)
@@ -77,11 +82,9 @@ function turnPhase(
   if (!action) return drawOrLose(gamestate)
   switch (action.kind) {
     case Action.EndTurn:
-      return enterCheckup(gamestate)
+      return onComplete(gamestate, action.kind)
     case Action.Attack:
-      gamestate = runAction(gamestate, action)
-      if (gamestate.actionStack.length > 0) return gamestate
-      return enterCheckup(gamestate)
+      return runAction(gamestate, action)
     case Action.Promote:
       gamestate = promote(gamestate, action.player, action.index)
       return drawOrLose(gamestate)
@@ -92,12 +95,8 @@ function turnPhase(
         runAction(gamestate, action),
         { player: action.player, slot: "bench", index: action.index }
       )
-    case Action.Evolve: {
-      const dest: SlotId = action.to.slot === "active"
-        ? { player: action.player, slot: "active" }
-        : { player: action.player, slot: "bench", index: action.to.index }
-      return markEvolvedThisTurn(runAction(gamestate, action), dest)
-    }
+    case Action.Evolve:
+      return markEvolvedThisTurn(runAction(gamestate, action), action.slot)
     case Action.Ability:
       return runAction(gamestate, action)
     default:
@@ -177,24 +176,46 @@ function endGame(gamestate: GameState): GameState {
   return { ...gamestate, phase: Phase.Ended }
 }
 
+function resumeSelect(
+  gamestate: GameState,
+  action: Extract<AvailableAction, { kind: Action.Choose }>
+): GameState {
+  const frame = gamestate.actionStack.at(-1)
+  if (!frame) return gamestate
+  const ctx: InterpretCtx = {
+    bindings: { ...frame.bindings, [frame.bind]: chooseBinding(action) },
+  }
+  gamestate = { ...gamestate, actionStack: gamestate.actionStack.slice(0, -1) }
+  return onComplete(runExpr(gamestate, frame.remaining, ctx, frame.player, frame.kind), frame.kind)
+}
+
+function chooseBinding(
+  action: Extract<AvailableAction, { kind: Action.Choose }>
+): SlotId {
+  return action.slot
+}
+
 // Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
-  const ctx = { bindings: { ...(action.seed ?? {}) } }
-  for (let i = 0; i < action.expr.length; i++) {
-    const step = action.expr[i]
+  const ctx: InterpretCtx = { bindings: { ...(action.seed ?? {}) } }
+  return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
+}
+
+function runExpr(
+  gamestate: GameState,
+  expr: Expr,
+  ctx: InterpretCtx,
+  player: 1 | 2,
+  kind: Action
+): GameState {
+  for (let i = 0; i < expr.length; i++) {
+    const step = expr[i]
     if (step.op === Op.Select) {
       return {
         ...gamestate,
         actionStack: [
           ...gamestate.actionStack,
-          {
-            remaining: action.expr.slice(i + 1),
-            bindings: ctx.bindings,
-            player: action.player,
-            bind: step.bind,
-            from: step.from,
-            pick: step.pick,
-          },
+          pauseSelect(step, ctx, player, kind, expr.slice(i + 1)),
         ],
       }
     }
@@ -203,9 +224,44 @@ function runAction(gamestate: GameState, action: AvailableAction): GameState {
   return gamestate
 }
 
-function markEvolvedThisTurn(gamestate: GameState, ref: SlotId): GameState {
+function pauseSelect(
+  step: Extract<Primitive, { op: Op.Select }>,
+  ctx: InterpretCtx,
+  player: 1 | 2,
+  kind: Action,
+  remaining: Expr
+): ActionFrame {
+  const base = {
+    remaining,
+    bindings: ctx.bindings,
+    player,
+    bind: step.bind,
+    filter: step.filter,
+    kind,
+  }
+  switch (step.pick) {
+    case "slots":
+      return { ...base, pick: "slots", who: step.who }
+    case "cards": {
+      const source: ZoneRef | SlotRef =
+        typeof step.source === "string" ? ctx.bindings[step.source] as ZoneRef | SlotRef : step.source
+      return { ...base, pick: "cards", source }
+    }
+    case "attacks":
+      return { ...base, pick: "attacks", slot: resolveSlot(step.slot, ctx) }
+  }
+}
+
+// Action finished — paused Select is not done; Attack / EndTurn then Checkup
+function onComplete(gamestate: GameState, kind: Action): GameState {
+  if (gamestate.actionStack.length > 0) return gamestate
+  if (kind === Action.Attack || kind === Action.EndTurn) return enterCheckup(gamestate)
+  return gamestate
+}
+
+function markEvolvedThisTurn(gamestate: GameState, slotId: SlotId): GameState {
   const next = copy(gamestate)
-  getSlot(next, ref).evolvedThisTurn = true
+  getSlot(next, slotId).evolvedThisTurn = true
   return next
 }
 

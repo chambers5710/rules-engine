@@ -92,7 +92,8 @@ function toHand(gamestate: GameState, player: 1 | 2, sourceId: string, n: number
       gamestate,
       found.card,
       { player, zone: found.zone },
-      { player, zone: "hand", position: "bottom" }
+      { player, zone: "hand" },
+      "bottom"
     )
   }
   return gamestate
@@ -106,7 +107,8 @@ function toPrize(gamestate: GameState, player: 1 | 2, sourceId: string, n: numbe
       gamestate,
       found.card,
       { player, zone: found.zone },
-      { player, zone: "prize", position: "bottom" }
+      { player, zone: "prize" },
+      "bottom"
     )
   }
   return gamestate

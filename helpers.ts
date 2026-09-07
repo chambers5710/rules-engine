@@ -16,7 +16,8 @@ export function placePrize(gamestate: GameState, playerId: 1 | 2, cardId: string
     gamestate,
     cardId,
     { player: playerId, zone: "deck" },
-    { player: playerId, zone: "prize", position: "bottom" }
+    { player: playerId, zone: "prize" },
+    "bottom"
   )
 }
 
@@ -81,7 +82,8 @@ export function returnHandToDeck(gamestate: GameState, player: 1 | 2): GameState
       gamestate,
       card,
       { player, zone: "hand" },
-      { player, zone: "deck", position: "bottom" }
+      { player, zone: "deck" },
+      "bottom"
     )
   }
   return gamestate
@@ -95,6 +97,7 @@ export function takePrize(gamestate: GameState, player: 1 | 2): GameState {
     gamestate,
     card,
     { player, zone: "prize" },
-    { player, zone: "hand", position: "bottom" }
+    { player, zone: "hand" },
+    "bottom"
   )
 }

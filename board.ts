@@ -2,8 +2,6 @@ import type { CardInstance, GameState, Slot, SlotId } from "./types.js"
 
 const BENCH = [0, 1, 2, 3, 4] as const
 
-export type InPlaySlot = { slot: "active" } | { slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
-
 export function opponent(player: 1 | 2): 1 | 2 {
   return player === 1 ? 2 : 1
 }
@@ -35,27 +33,30 @@ export function occupiedBench(
   )
 }
 
-// Lists all Pokemon in play for which player might attach a card during a turn
-export function pokemonInPlay(
-  gamestate: GameState,
-  player: 1 | 2
-): InPlaySlot[] {
-  const dests: InPlaySlot[] = []
-  if (hasActive(gamestate, player)) dests.push({ slot: "active" })
+// Pokémon in play — Returns in-play SlotIds
+export function pokemonInPlay(gamestate: GameState, player: 1 | 2): SlotId[] {
+  const slots: SlotId[] = []
+  if (hasActive(gamestate, player)) slots.push({ player, slot: "active" })
   for (const index of occupiedBench(gamestate, player)) {
-    dests.push({ slot: "bench", index })
+    slots.push({ player, slot: "bench", index })
   }
-  return dests
+  return slots
+}
+
+export function sameSlot(a: SlotId, b: SlotId): boolean {
+  if (a.player !== b.player || a.slot !== b.slot) return false
+  if (a.slot === "bench" && b.slot === "bench") return a.index === b.index
+  return true
 }
 
 export function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
   return hasActive(gamestate, player) || occupiedBench(gamestate, player).length > 0
 }
 
-// Slot — resolve Active or a bench slot
-export function getSlot(gamestate: GameState, ref: SlotId): Slot {
-  const player = gamestate.players[ref.player]
-  return ref.slot === "active" ? player.active : player.bench[ref.index]
+// Slot — resolve Active or a bench slot by id, with data
+export function getSlot(gamestate: GameState, slotId: SlotId): Slot {
+  const player = gamestate.players[slotId.player]
+  return slotId.slot === "active" ? player.active : player.bench[slotId.index]
 }
 
 // Current form — top of the evolution stack

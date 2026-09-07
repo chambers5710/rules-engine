@@ -47,8 +47,8 @@ const confuseRay: Expr = [
   {
     op: Op.Attack,
     base: 30,
-    from: "$self_slot",
-    to: "$defending",
+    attacker: "$self_slot",
+    defender: "$defending",
     bind: "$damage",
   },
   { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },

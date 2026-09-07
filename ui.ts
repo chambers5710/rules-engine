@@ -121,7 +121,7 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     return `${a.kind}  ${form ? form.name : `bench[${a.index}]`}`
   }
   if (a.kind === Action.AttachEnergy || a.kind === Action.Evolve) {
-    const dest = a.to.slot === "active" ? "Active" : `bench[${a.to.index}]`
+    const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`
     return `${a.kind}  ${cardName(gamestate, a.card)} → ${dest}`
   }
   if (a.kind === Action.Attack) {
@@ -132,16 +132,18 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     return [`${a.kind}  ${a.name}`, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
   if (a.kind === Action.Ability) {
-    const ref = a.from.slot === "active"
-      ? { player: a.player, slot: "active" as const }
-      : { player: a.player, slot: "bench" as const, index: a.from.index }
-    const form = currentForm(gamestate, getSlot(gamestate, ref))
+    const form = currentForm(gamestate, getSlot(gamestate, a.slot))
     const printed = form?.abilities?.find((ability) => ability.name === a.name)
-    const dest = a.from.slot === "active" ? "Active" : `bench[${a.from.index}]`
+    const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`
     const text = String(printed?.text ?? "").trim()
     const head = `${a.kind}  ${a.name}  ${dest}`
     if (!text) return head
     return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
+  }
+  if (a.kind === Action.Choose) {
+    const form = currentForm(gamestate, getSlot(gamestate, a.slot))
+    const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`
+    return `select  ${form?.name ?? dest}  ${dest}`
   }
   return `${a.kind}  ${cardName(gamestate, a.card)}`
 }

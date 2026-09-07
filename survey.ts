@@ -7,49 +7,47 @@ import type {
   ZoneRef,
 } from "./types.js"
 
-// From — a pile the calculator can read (zone or one slot attachment)
-export type SurveyFrom = ZoneRef | SlotRef
-
 // Filter — data so compute and (later) expr ask the same question
+// this seems painfully arbitrary
 export type SurveyFilter =
   | { kind: "energy" }
   | { kind: "energy_type"; type: EnergyType }
   | { kind: "basic_pokemon" }
   | { kind: "evolves_from"; name: string }
 
-// Cards at — ids in that pile, top-first
-export function cardsAt(gamestate: GameState, from: SurveyFrom): CardInstanceId[] {
-  if ("zone" in from) {
-    return [...gamestate.players[from.player][from.zone]]
+// Cards at — ids in that zone or slot attachment, top-first
+export function cardsAt(gamestate: GameState, source: ZoneRef | SlotRef): CardInstanceId[] {
+  if ("zone" in source) {
+    return [...gamestate.players[source.player][source.zone]]
   }
-  const player = gamestate.players[from.player]
-  const slot = from.slot === "active" ? player.active : player.bench[from.index]
-  return [...slot[from.attachment]]
+  const player = gamestate.players[source.player]
+  const slot = source.slot === "active" ? player.active : player.bench[source.index]
+  return [...slot[source.attachment]]
 }
 
 export function surveyCards(
   gamestate: GameState,
-  from: SurveyFrom,
+  source: ZoneRef | SlotRef,
   filter?: SurveyFilter
 ): CardInstanceId[] {
-  return cardsAt(gamestate, from).filter((card) => cardMatches(gamestate, card, filter))
+  return cardsAt(gamestate, source).filter((card) => cardMatches(gamestate, card, filter))
 }
 
 export function surveyCount(
   gamestate: GameState,
-  from: SurveyFrom,
+  source: ZoneRef | SlotRef,
   filter?: SurveyFilter
 ): number {
-  return surveyCards(gamestate, from, filter).length
+  return surveyCards(gamestate, source, filter).length
 }
 
 // Energy value — sum of printed units (Double Colorless = 2)
 export function surveyEnergyValue(
   gamestate: GameState,
-  from: SurveyFrom,
+  source: ZoneRef | SlotRef,
   filter?: SurveyFilter
 ): number {
-  return surveyCards(gamestate, from, filter).reduce((sum, card) => {
+  return surveyCards(gamestate, source, filter).reduce((sum, card) => {
     return sum + (gamestate.cardRegistry[card]?.energyValue ?? 0)
   }, 0)
 }

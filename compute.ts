@@ -6,27 +6,15 @@ import {
   occupiedBench,
   opponent,
   pokemonInPlay,
-  type InPlaySlot,
+  sameSlot,
 } from "./board.js"
-import { Op, type Expr } from "./dsl.js"
+import { Action, Op, type ActionFrame, type Expr, type SelectFilter, type SelectPick } from "./dsl.js"
 import { cardEffect } from "./effects.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
+import { DAMAGE_COUNTER, Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
-import { Phase } from "./types.js"
 
-// Action — every top-level choice the client can make
-export enum Action {
-  PlayActive = "play_active",
-  PlayBench = "play_bench",
-  AttachEnergy = "attach_energy",
-  Evolve = "evolve",
-  Attack = "attack",
-  Ability = "ability",
-  Retreat = "retreat",
-  Promote = "promote",
-  Ready = "ready",
-  EndTurn = "end_turn"
-}
+export { Action } from "./dsl.js"
 
 // Shared by every listed choice: expr is what interpret runs; seed fills $binds first (attacker, defending, …)
 type ActionBase = {
@@ -37,16 +25,19 @@ type ActionBase = {
 export type AvailableAction =
   | (ActionBase & { kind: Action.PlayActive; player: 1 | 2; card: string })
   | (ActionBase & { kind: Action.PlayBench; player: 1 | 2; card: string; index: 0 | 1 | 2 | 3 | 4 })
-  | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; to: InPlaySlot })
-  | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; to: InPlaySlot })
+  | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; slot: SlotId })
+  | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; slot: SlotId })
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
-  | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; from: InPlaySlot })
+  | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: SelectPick; slot: SlotId })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
   | (ActionBase & { kind: Action.EndTurn; player: 1 | 2 })
 
 
 export function computeAvailableActions(gamestate: GameState): AvailableAction[] {
+  // If action stack has any length, this was a paused state for selection
+  if (gamestate.actionStack.length > 0) return computeSelect(gamestate)
   switch (gamestate.phase) {
     case Phase.Init:
       return computeInit(gamestate)
@@ -55,6 +46,66 @@ export function computeAvailableActions(gamestate: GameState): AvailableAction[]
     default:
       return []
   }
+}
+
+// Select — only answers for the paused frame
+function computeSelect(gamestate: GameState): AvailableAction[] {
+  const frame = gamestate.actionStack.at(-1)
+  if (!frame) return []
+  switch (frame.pick) {
+    case "slots":
+      return selectSlots(gamestate, frame)
+    case "cards":
+      return []
+    case "attacks":
+      return []
+  }
+}
+
+function selectSlots(
+  gamestate: GameState,
+  frame: Extract<ActionFrame, { pick: "slots" }>
+): AvailableAction[] {
+  const player = frame.who === "self" ? frame.player : opponent(frame.player)
+  const filters = [frame.filter ?? []].flat()
+  const actions: AvailableAction[] = []
+  for (const slotId of pokemonInPlay(gamestate, player)) {
+    if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
+    actions.push({ kind: Action.Choose, player: frame.player, pick: frame.pick, slot: slotId, expr: [] })
+  }
+  return actions
+}
+
+// May this SlotId appear as Action.Choose for a paused pick:"slots" Select?
+// Survey filters cards in a zone / slot attachment. This filters in-play slots:
+// read the Slot via getSlot, then each SelectFilter (damage counters, would-KO,
+// other_than a bound SlotId). Compute only; not a board helper.
+function slotMatches(
+  gamestate: GameState,
+  slotId: SlotId,
+  filters: SelectFilter[],
+  bindings: Record<string, unknown>
+): boolean {
+  const slot = getSlot(gamestate, slotId)
+  for (const filter of filters) {
+    switch (filter.kind) {
+      case "has_counters":
+        if (slot.damage < filter.counters * DAMAGE_COUNTER) return false
+        break
+      case "survives_counters": {
+        const hp = Number(currentForm(gamestate, slot)?.hp)
+        const extra = filter.counters * DAMAGE_COUNTER
+        if (!Number.isFinite(hp) || slot.damage + extra >= hp) return false
+        break
+      }
+      case "other_than": {
+        const bound = bindings[filter.bind]
+        if (bound && sameSlot(slotId, bound as SlotId)) return false
+        break
+      }
+    }
+  }
+  return true
 }
 
 // Init — Active first; then optional bench Basics plus Ready
@@ -103,8 +154,8 @@ function placeActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       {
         op: Op.MoveZoneToSlot,
         card,
-        from: { player, zone: "hand" },
-        to: { player, slot: "active", attachment: "evolution" },
+        source: { player, zone: "hand" },
+        dest: { player, slot: "active", attachment: "evolution" },
       },
     ],
   }))
@@ -122,8 +173,8 @@ function placeBench(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       {
         op: Op.MoveZoneToSlot,
         card,
-        from: { player, zone: "hand" },
-        to: { player, slot: "bench", index, attachment: "evolution" },
+        source: { player, zone: "hand" },
+        dest: { player, slot: "bench", index, attachment: "evolution" },
       },
     ],
   }))
@@ -132,19 +183,18 @@ function placeBench(gamestate: GameState, player: 1 | 2): AvailableAction[] {
 // Energy — one attach per turn, each energy in hand × each Pokémon in play
 function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   if (gamestate.energyAttachedThisTurn) return []
-  const dests = pokemonInPlay(gamestate, player)
   return energyInHand(gamestate, player).flatMap((card) =>
-    dests.map((to) => ({
+    pokemonInPlay(gamestate, player).map((slot) => ({
       kind: Action.AttachEnergy,
       player,
       card,
-      to,
+      slot,
       expr: [
         {
           op: Op.MoveZoneToSlot,
           card,
-          from: { player, zone: "hand" },
-          to: { player, ...to, attachment: "energy" },
+          source: { player, zone: "hand" },
+          dest: { ...slot, attachment: "energy" },
         },
       ],
     }))
@@ -154,10 +204,8 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
 // Evolve — hand card whose evolvesFrom matches the current form; skip slots that evolved this turn
 function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
-  for (const to of pokemonInPlay(gamestate, player)) {
-    const slot = to.slot === "active"
-      ? gamestate.players[player].active
-      : gamestate.players[player].bench[to.index]
+  for (const slotId of pokemonInPlay(gamestate, player)) {
+    const slot = getSlot(gamestate, slotId)
     if (slot.evolvedThisTurn) continue
     const form = currentForm(gamestate, slot)
     const name = form?.name
@@ -167,13 +215,13 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
         kind: Action.Evolve,
         player,
         card,
-        to,
+        slot: slotId,
         expr: [
           {
             op: Op.MoveZoneToSlot,
             card,
-            from: { player, zone: "hand" },
-            to: { player, ...to, attachment: "evolution" },
+            source: { player, zone: "hand" },
+            dest: { ...slotId, attachment: "evolution" },
           },
         ],
       })
@@ -185,11 +233,8 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
 // Ability — each in-play Pokémon's printed powers; $self_slot is that copy
 function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
-  for (const from of pokemonInPlay(gamestate, player)) {
-    const ref: SlotId = from.slot === "active"
-      ? { player, slot: "active" }
-      : { player, slot: "bench", index: from.index }
-    const slot = getSlot(gamestate, ref)
+  for (const slotId of pokemonInPlay(gamestate, player)) {
+    const slot = getSlot(gamestate, slotId)
     const form = currentForm(gamestate, slot)
     if (!form) continue
     for (const ability of form.abilities ?? []) {
@@ -198,9 +243,9 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
         kind: Action.Ability,
         player,
         name: ability.name,
-        from,
+        slot: slotId,
         expr: cardEffect(form.sourceId, "abilities", ability.name),
-        seed: { $self_slot: ref },
+        seed: { $self_slot: slotId },
       })
     }
   }
@@ -244,7 +289,7 @@ function attackExpr(sourceId: string, attack: { name: string; damage?: string | 
   const base = Number(raw.replace(/[^0-9.-]/g, ""))
   if (!raw || !Number.isFinite(base) || base <= 0) return []
   return [
-    { op: Op.Attack, base, from: "$self_slot", to: "$defending", bind: "$damage" },
+    { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
     { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
   ]
 }
