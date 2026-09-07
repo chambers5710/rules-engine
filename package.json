@@ -2,7 +2,8 @@
   "name": "rules-engine",
   "type": "module",
   "scripts": {
-    "dev": "tsx ./"
+    "dev": "tsx ./",
+    "serve": "tsx ./serve.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

@@ -4,6 +4,23 @@ import { Action, type AvailableAction } from "./compute.js"
 import type { GameState } from "./types.js"
 import { Phase } from "./types.js"
 
+function wrapText(text: string, width: number): string[] {
+  const words = text.split(/\s+/)
+  const lines: string[] = []
+  let line = ""
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word
+    if (next.length > width && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = next
+    }
+  }
+  if (line) lines.push(line)
+  return lines
+}
+
 function cardName(gamestate: GameState, id: string): string {
   return gamestate.cardRegistry[id]?.name ?? id
 }
@@ -101,7 +118,7 @@ export function formatGamestate(gamestate: GameState): string {
   return body.join("\n")
 }
 
-function formatAction(gamestate: GameState, a: AvailableAction): string {
+export function formatAction(gamestate: GameState, a: AvailableAction): string {
   if (a.kind === Action.Ready || a.kind === Action.EndTurn) return `${a.kind}`
   if (a.kind === Action.Promote) {
     const id = gamestate.players[a.player].bench[a.index].evolution.at(-1)
@@ -116,10 +133,35 @@ function formatAction(gamestate: GameState, a: AvailableAction): string {
     const printed = id
       ? gamestate.cardRegistry[id].attacks?.find((attack) => attack.name === a.name)
       : undefined
-    const text = printed?.text?.trim()
-    return text ? `${a.kind}  ${a.name}\n         ${text}` : `${a.kind}  ${a.name}`
+    const text = String(printed?.text ?? "").trim()
+    if (!text) return `${a.kind}  ${a.name}`
+    return [`${a.kind}  ${a.name}`, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
   return `${a.kind}  ${cardName(gamestate, a.card)}`
+}
+
+export async function chooseIndex(
+  choices: { index: number; label: string; player: 1 | 2 }[]
+): Promise<number> {
+  const rl = createInterface({ input, output })
+  console.log("\nAvailable actions:")
+  let lastPlayer: 1 | 2 | undefined
+  for (const choice of choices) {
+    if (lastPlayer !== undefined && choice.player !== lastPlayer) {
+      console.log("\n\n")
+    }
+    lastPlayer = choice.player
+    console.log(`  [${choice.index}] p${choice.player}  ${choice.label}`)
+  }
+  let chosen: number | undefined
+  while (chosen === undefined) {
+    const answer = await rl.question("\nChoose action index: ")
+    const index = Number(answer.trim())
+    if (choices.some((choice) => choice.index === index)) chosen = index
+    else console.log("not a listed choice")
+  }
+  rl.close()
+  return chosen
 }
 
 export async function chooseAction(

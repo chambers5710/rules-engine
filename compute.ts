@@ -154,8 +154,8 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   const printed = gamestate.cardRegistry[id]
   const slot = { player, slot: "active" } as const
   const defending = player === 1 ? 2 : 1
-  return (printed.attacks ?? [])
-    .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost))
+  return (printed?.attacks ?? [])
+    .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []))
     .map((attack) => ({
       kind: Action.Attack,
       player,
@@ -168,11 +168,12 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
     }))
 }
 
-function attackExpr(sourceId: string, attack: { name: string; damage: string }): Expr {
+function attackExpr(sourceId: string, attack: { name: string; damage?: string | number | null }): Expr {
   const written = cardEffect(sourceId, "attacks", attack.name)
   if (written.length > 0) return written
-  const base = Number(attack.damage)
-  if (!Number.isFinite(base) || attack.damage.trim() === "") return []
+  const raw = attack.damage == null ? "" : String(attack.damage).trim()
+  const base = Number(raw.replace(/[^0-9.-]/g, ""))
+  if (!raw || !Number.isFinite(base) || base <= 0) return []
   return [
     { op: Op.Attack, base, from: "$self_slot", to: "$defending", bind: "$damage" },
     { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
