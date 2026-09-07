@@ -1,4 +1,5 @@
-import type { GameState, Slot, StatusFlags } from "./types.js"
+import { getSlot } from "./board.js"
+import type { GameState, Slot, SlotId, StatusFlags } from "./types.js"
 import { copy, moveZoneToZone } from "./ops.js"
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
@@ -61,12 +62,16 @@ export const emptyStatus = (): StatusFlags => ({
   confused: false,
 })
 
-// Discard Active — Pokémon, energy, and tools to discard; slot cleared
-export function discardActive(gamestate: GameState, player: 1 | 2): GameState {
+// Discard slot — Pokémon, energy, and tools to discard; slot cleared
+export function discardSlot(gamestate: GameState, ref: SlotId): GameState {
   const next = copy(gamestate)
-  const slot = next.players[player].active
-  next.players[player].discard.push(...slot.evolution, ...slot.energy, ...slot.tools)
-  next.players[player].active = emptySlot()
+  const slot = getSlot(next, ref)
+  next.players[ref.player].discard.push(...slot.evolution, ...slot.energy, ...slot.tools)
+  if (ref.slot === "active") {
+    next.players[ref.player].active = emptySlot()
+  } else {
+    next.players[ref.player].bench[ref.index] = emptySlot()
+  }
   return next
 }
 

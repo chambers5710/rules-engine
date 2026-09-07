@@ -4,11 +4,12 @@ import {
   hasActive,
   hasPokemonInPlay,
   isKnockedOut,
+  occupiedBench,
   opponent,
 } from "./board.js"
 import { Action, type AvailableAction } from "./compute.js"
 import { Op } from "./dsl.js"
-import { discardActive, draw, placePrize, promote, takePrize } from "./helpers.js"
+import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret } from "./interpret.js"
 import { copy } from "./ops.js"
@@ -134,7 +135,7 @@ function enterCheckup(gamestate: GameState): GameState {
   return checkupPhase({ ...gamestate, phase: Phase.Checkup })
 }
 
-// Checkup — KO Active, then win/lose; statuses later
+// Checkup — KO every slot, then win/lose; statuses later
 function checkupPhase(gamestate: GameState): GameState {
   gamestate = resolveKnockouts(gamestate)
   for (const player of PLAYERS) {
@@ -148,13 +149,23 @@ function checkupPhase(gamestate: GameState): GameState {
   )
 }
 
-// KO — discard the Active; opponent takes the default prize count
+// KO — discard that slot; opponent takes the default prize count
 function resolveKnockouts(gamestate: GameState): GameState {
   for (const player of PLAYERS) {
-    if (!isKnockedOut(gamestate, gamestate.players[player].active)) continue
-    gamestate = discardActive(gamestate, player)
-    for (let i = 0; i < PRIZES_ON_KO; i++) {
-      gamestate = takePrize(gamestate, opponent(player))
+    const refs: SlotId[] = [
+      { player, slot: "active" },
+      ...occupiedBench(gamestate, player).map((index) => ({
+        player,
+        slot: "bench" as const,
+        index,
+      })),
+    ]
+    for (const ref of refs) {
+      if (!isKnockedOut(gamestate, getSlot(gamestate, ref))) continue
+      gamestate = discardSlot(gamestate, ref)
+      for (let i = 0; i < PRIZES_ON_KO; i++) {
+        gamestate = takePrize(gamestate, opponent(player))
+      }
     }
   }
   return gamestate
