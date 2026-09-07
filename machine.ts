@@ -3,7 +3,8 @@ import { Op } from "./dsl.js"
 import { discardActive, draw, isKnockedOut, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret } from "./interpret.js"
-import type { GameState } from "./types.js"
+import { copy } from "./ops.js"
+import type { GameState, SlotId } from "./types.js"
 import { Phase } from "./types.js"
 
 const PRIZE_COUNT = 6
@@ -16,30 +17,12 @@ export function stateMachine(
   action: AvailableAction | null
 ): GameState {
   switch (gamestate.phase) {
-    case Phase.Init: {
-      if (!action) return gamestate
-      gamestate = initPhase(gamestate, action)
-      if (!bothReady(gamestate)) return gamestate
-      gamestate = setPrizes(gamestate)
-      return enterTurn(gamestate, gamestate.activePlayer, 1)
-    }
-
+    case Phase.Init:
+      return initPhase(gamestate, action)
     case Phase.Turn:
-      if (action?.kind === Action.EndTurn) return enterCheckup(gamestate)
-      if (action?.kind === Action.Attack) {
-        gamestate = runAction(gamestate, action)
-        if (gamestate.actionStack.length > 0) return gamestate
-        return enterCheckup(gamestate)
-      }
-      if (action?.kind === Action.Promote) {
-        gamestate = promote(gamestate, action.player, action.index)
-        return drawOrLose(gamestate)
-      }
       return turnPhase(gamestate, action)
-
     case Phase.Checkup:
       return checkupPhase(gamestate)
-
     case Phase.Ended:
     default:
       return gamestate
@@ -47,14 +30,22 @@ export function stateMachine(
 }
 
 // Init — apply one setup action (place or Ready)
-function initPhase(gamestate: GameState, action: AvailableAction): GameState {
+function initPhase(
+  gamestate: GameState,
+  action: AvailableAction | null
+): GameState {
+  if (!action) return gamestate
   if (action.kind === Action.Ready) {
-    return {
+    gamestate = {
       ...gamestate,
       setupReady: { ...gamestate.setupReady, [action.player]: true },
     }
+  } else {
+    gamestate = runAction(gamestate, action)
   }
-  return runAction(gamestate, action)
+  if (!bothReady(gamestate)) return gamestate
+  gamestate = setPrizes(gamestate)
+  return enterTurn(gamestate, gamestate.activePlayer, 1)
 }
 
 // Both ready — 6 prizes each from the top of the deck
@@ -75,17 +66,32 @@ function turnPhase(
   action: AvailableAction | null = null
 ): GameState {
   if (!action) return drawOrLose(gamestate)
-  if (action.kind === Action.AttachEnergy) {
-    return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
+  switch (action.kind) {
+    case Action.EndTurn:
+      return enterCheckup(gamestate)
+    case Action.Attack:
+      gamestate = runAction(gamestate, action)
+      if (gamestate.actionStack.length > 0) return gamestate
+      return enterCheckup(gamestate)
+    case Action.Promote:
+      gamestate = promote(gamestate, action.player, action.index)
+      return drawOrLose(gamestate)
+    case Action.AttachEnergy:
+      return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
+    case Action.PlayBench:
+      return markEvolvedThisTurn(
+        runAction(gamestate, action),
+        { player: action.player, slot: "bench", index: action.index }
+      )
+    case Action.Evolve: {
+      const dest: SlotId = action.to.slot === "active"
+        ? { player: action.player, slot: "active" }
+        : { player: action.player, slot: "bench", index: action.to.index }
+      return markEvolvedThisTurn(runAction(gamestate, action), dest)
+    }
+    default:
+      return runAction(gamestate, action)
   }
-  return runAction(gamestate, action)
-}
-
-// Draw 1 — cannot draw, that player loses
-function drawOrLose(gamestate: GameState): GameState {
-  const player = gamestate.activePlayer
-  if (gamestate.players[player].deck.length === 0) return endGame(gamestate)
-  return draw(gamestate, player, 1)
 }
 
 // Enter Turn — draw only if Active is already filled
@@ -101,9 +107,17 @@ function enterTurn(
     turnCount,
     energyAttachedThisTurn: false,
   }
+  gamestate = clearEvolvedThisTurn(gamestate, activePlayer)
   gamestate = tickModifiersEnter(gamestate, activePlayer)
   if (!hasActive(gamestate, activePlayer)) return gamestate
   return turnPhase(gamestate)
+}
+
+// Draw 1 — cannot draw, that player loses
+function drawOrLose(gamestate: GameState): GameState {
+  const player = gamestate.activePlayer
+  if (gamestate.players[player].deck.length === 0) return endGame(gamestate)
+  return draw(gamestate, player, 1)
 }
 
 // Enter Checkup from the end of a turn
@@ -142,23 +156,6 @@ function endGame(gamestate: GameState): GameState {
   return { ...gamestate, phase: Phase.Ended }
 }
 
-function bothReady(gamestate: GameState): boolean {
-  return gamestate.setupReady[1] && gamestate.setupReady[2]
-}
-
-function hasActive(gamestate: GameState, player: 1 | 2): boolean {
-  return gamestate.players[player].active.evolution.length > 0
-}
-
-function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
-  const p = gamestate.players[player]
-  return hasActive(gamestate, player) || p.bench.some((seat) => seat.evolution.length > 0)
-}
-
-function opponent(player: 1 | 2): 1 | 2 {
-  return player === 1 ? 2 : 1
-}
-
 // Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
   const ctx = { bindings: { ...(action.seed ?? {}) } }
@@ -183,4 +180,37 @@ function runAction(gamestate: GameState, action: AvailableAction): GameState {
     gamestate = interpret(gamestate, step, ctx)
   }
   return gamestate
+}
+
+function markEvolvedThisTurn(gamestate: GameState, ref: SlotId): GameState {
+  const next = copy(gamestate)
+  const slot = ref.slot === "active"
+    ? next.players[ref.player].active
+    : next.players[ref.player].bench[ref.index]
+  slot.evolvedThisTurn = true
+  return next
+}
+
+function clearEvolvedThisTurn(gamestate: GameState, player: 1 | 2): GameState {
+  const next = copy(gamestate)
+  next.players[player].active.evolvedThisTurn = false
+  for (const seat of next.players[player].bench) seat.evolvedThisTurn = false
+  return next
+}
+
+function bothReady(gamestate: GameState): boolean {
+  return gamestate.setupReady[1] && gamestate.setupReady[2]
+}
+
+function hasActive(gamestate: GameState, player: 1 | 2): boolean {
+  return gamestate.players[player].active.evolution.length > 0
+}
+
+function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
+  const p = gamestate.players[player]
+  return hasActive(gamestate, player) || p.bench.some((seat) => seat.evolution.length > 0)
+}
+
+function opponent(player: 1 | 2): 1 | 2 {
+  return player === 1 ? 2 : 1
 }

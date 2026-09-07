@@ -8,6 +8,34 @@ export type CardEffects = {
 
 export const effects: Record<string, CardEffects> = {
   // Chansey — first Basic Pokémon in base1
+  "base1-1": {
+    attacks: {
+      "Confuse Ray": [
+        { op: Op.Attack, base: 30, from: "$self_slot", to: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            { op: Op.ApplyStatus, status: "confused", slot: "$defending" }
+          ]
+        },
+      ]
+    }
+  },
+  "base1-2": {
+    attacks: {
+      "Hydro Pump": [
+        { op: Op.Count, from: "$self_slot", attachment: "energy", filter: { kind: "energy_type", type: "Water" }, as: "energy_value", bind: "$water" },
+        { op: Op.Calc, fn: "sub", a: "$water", b: 3, bind: "$extra" },
+        { op: Op.Calc, fn: "max", a: "$extra", b: 0, bind: "$extra" },
+        { op: Op.Calc, fn: "min", a: "$extra", b: 2, bind: "$extra" },
+        { op: Op.Calc, fn: "mul", a: "$extra", b: 10, bind: "$bonus" },
+        { op: Op.Calc, fn: "add", a: 40, b: "$bonus", bind: "$base" },
+        { op: Op.Attack, base: "$base", from: "$self_slot", to: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
   "base1-3": {
     attacks: {
       "Scrunch": [

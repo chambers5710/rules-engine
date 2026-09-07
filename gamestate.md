@@ -2,33 +2,33 @@
 
 ```
   phase    turn
-  turn     45
+  turn     4
   first    p1
-  active   p1
+  active   p2
   mulligan p1=0  p2=0
   ready    p1=true  p2=true
 
-  p2
-  prize    3
-  hand     14  PokéNav x2, Energy Search, Potion x2, Manectric x2, Combusken, Fire Energy x2, Blaziken, Wally's Training, Camerupt, Numel
-  deck     25
-  discard  9  Torchic, Fire Energy x2, Numel, Pikachu, Lightning Energy x3, Electrike
-  active   Electrike  |  dmg 10  |  Fire Energy
-  bench[0] Pikachu  |  dmg 0  |  Lightning Energy
-  bench[1] Vulpix  |  dmg 0
-  bench[2] Torchic  |  dmg 0
-  bench[3] Vulpix  |  dmg 0
-  bench[4] Vulpix  |  dmg 0  |  Fire Energy
+> p2
+  prize    6
+  hand     4  Water Energy x4
+  deck     2
+  discard  0
+  active   Blastoise  |  dmg 60  |  confused  |  Water Energy x4
+  bench[0] Blastoise  |  dmg 0
+  bench[1] -
+  bench[2] -
+  bench[3] -
+  bench[4] -
 
-> p1
-  active   Treecko  |  dmg 10  |  Grass Energy
-  bench[0] Mudkip  |  dmg 0
-  bench[1] Treecko  |  dmg 0
-  bench[2] Feebas  |  dmg 0
-  bench[3] Feebas  |  dmg 0
-  bench[4] Feebas  |  dmg 0
-  prize    2
-  hand     19  Oran Berry, Switch, Wally's Training x2, Energy Search x2, Professor Birch x2, Water Energy x7, Grovyle, Grass Energy x2, Milotic
-  deck     24
-  discard  8  Mudkip x2, Water Energy x3, Gulpin, Grass Energy x2
+  p1
+  active   Alakazam  |  dmg 70  |  Psychic Energy x3
+  bench[0] Alakazam  |  dmg 0
+  bench[1] -
+  bench[2] -
+  bench[3] -
+  bench[4] -
+  prize    6
+  hand     5  Psychic Energy x5
+  deck     2
+  discard  0
 ```

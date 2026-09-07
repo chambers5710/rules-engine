@@ -1,4 +1,4 @@
-import { Op, type BindingName, type Primitive, type SlotTarget } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type Primitive, type SlotTarget } from "./dsl.js"
 import { applyModifier, readModifier } from "./modifiers.js"
 import {
   applyDamage,
@@ -10,7 +10,8 @@ import {
   moveZoneToZone,
   removeStatus,
 } from "./ops.js"
-import type { GameState, SlotId } from "./types.js"
+import { surveyCount, surveyEnergyValue, type SurveyFrom } from "./survey.js"
+import type { Attachment, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -42,6 +43,31 @@ function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number 
   return ctx.bindings[amount] as number
 }
 
+function resolveSurveyFrom(
+  from: ZoneRef | SlotRef | SlotTarget,
+  attachment: Attachment | undefined,
+  ctx: InterpretCtx
+): SurveyFrom {
+  const resolved = typeof from === "string" ? resolveSlot(from, ctx) : from
+  if ("zone" in resolved || "attachment" in resolved) return resolved
+  return { ...resolved, attachment: attachment ?? "energy" }
+}
+
+function calcFn(fn: CalcFn, a: number, b: number): number {
+  switch (fn) {
+    case "add":
+      return a + b
+    case "sub":
+      return a - b
+    case "mul":
+      return a * b
+    case "min":
+      return Math.min(a, b)
+    case "max":
+      return Math.max(a, b)
+  }
+}
+
 export function interpret(
   gamestate: GameState,
   primitive: Primitive,
@@ -63,7 +89,12 @@ export function interpret(
     case Op.Attack: {
       const from = resolveSlot(primitive.from, ctx)
       const to = resolveSlot(primitive.to, ctx)
-      ctx.bindings[primitive.bind] = pipelineAttackDamage(gamestate, primitive.base, from, to)
+      ctx.bindings[primitive.bind] = pipelineAttackDamage(
+        gamestate,
+        resolveAmount(primitive.base, ctx),
+        from,
+        to
+      )
       return gamestate
     }
 
@@ -95,6 +126,22 @@ export function interpret(
         set: primitive.set,
         until: { beat: primitive.until.beat, player },
       })
+    }
+
+    case Op.Count: {
+      const from = resolveSurveyFrom(primitive.from, primitive.attachment, ctx)
+      ctx.bindings[primitive.bind] =
+        primitive.as === "energy_value"
+          ? surveyEnergyValue(gamestate, from, primitive.filter)
+          : surveyCount(gamestate, from, primitive.filter)
+      return gamestate
+    }
+
+    case Op.Calc: {
+      const a = resolveAmount(primitive.a, ctx)
+      const b = resolveAmount(primitive.b, ctx)
+      ctx.bindings[primitive.bind] = calcFn(primitive.fn, a, b)
+      return gamestate
     }
 
     case Op.If: {

@@ -16,6 +16,7 @@ export type SurveyFilter =
   | { kind: "energy" }
   | { kind: "energy_type"; type: EnergyType }
   | { kind: "basic_pokemon" }
+  | { kind: "evolves_from"; name: string }
 
 // Cards at — ids in that pile, top-first
 export function cardsAt(gamestate: GameState, from: SurveyFrom): CardInstanceId[] {
@@ -99,5 +100,7 @@ function cardMatches(
       )
     case "basic_pokemon":
       return isBasicPokemon(gamestate, cardId)
+    case "evolves_from":
+      return gamestate.cardRegistry[cardId]?.evolvesFrom === filter.name
   }
 }

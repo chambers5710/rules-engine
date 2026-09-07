@@ -31,9 +31,11 @@ Any quantity a rule reads — prizes on KO, prize count, opening-hand size — i
 
 ## Bindings
 
-- **Seeded** — set before interpret (`$self_slot`, `$defending`)
-- **Written** — `bind` stores results (`$damage`, `$coin`); later steps only read
-- **Chosen** — (planned) `Select` pauses and the player writes the bind
+Names on the interpret context. Every real attack uses them, not just tests.
+
+- **Seeded** — compute puts `$self_slot` and `$defending` on the action before the client picks it. `runAction` copies `action.seed` into `ctx.bindings`. Interpret only reads those names.
+- **Written** — primitives with `bind` store results (`$damage`, `$coin`); later steps only read
+- **Chosen** — (planned) `Select` pauses; the player’s pick writes the bind
 
 `attack` runs the damage pipeline and binds a number. `apply_damage` only mutates counters.
 
@@ -53,7 +55,7 @@ Pure `Expr`, keyed by printed card id then name (`attacks` / `abilities`). Compu
 
 Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`.
 
-Today: Chansey Scrunch / Double-edge, Clefairy Sing. Metronome waits on Select.
+Today: Alakazam Confuse Ray, Chansey Scrunch / Double-edge, Clefairy Sing. Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not. Metronome waits on Select. Hydro Pump waits on count + math.
 
 ## Modifiers
 
@@ -91,7 +93,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- Live board: `gamestate.md`; Chansey script: `tests/chansey-report.txt`
+- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixture: `pnpm serve:alakazam`
 
 ## Select → bind → run
 
@@ -111,20 +113,45 @@ run_effect  $copy
 5. **Metronome** — Select defending attacks, bind, run. No special case in `attacksFromActive`.
 6. **Later** — strip “requirements to use” on the copy (discard Energy, etc.). Weakness uses Clefairy because `$self_slot` is still Clefairy.
 
+**Done:** (1) and (2). **Not done:** (3)–(6).
+
 `actionStack` is in-flight only. Lasting shields stay on `slot.modifiers`. Phase beats (poison, “at end of turn”) are a later queue — not this stack.
+
+## Math (tentative)
+
+Hydro Pump is 40 + 10 per Water on `$self_slot` not spent on the WWW cost, extra after the 2nd ignored (cap +20). Survey can already produce that count. The expr cannot read it or do `min` / `+`. Do not precompute 40/50/60 in compute.
+
+1. **`count`** — `from` (slot/pile, may be a binding) + survey filter, `bind` a number (`surveyEnergyValue` for Energy).
+2. **`calc`** — one step: `add` | `sub` | `mul` | `min` | `max`. Inputs are numbers or `$names`. `bind` the result. No nested expressions; chain primitives.
+3. **`attack.base`** — allow a binding (same as `apply_damage` already does).
+
+Hydro Pump:
+
+```
+count  from $self_slot energy  filter Water  bind $water
+calc   sub  $water  3  bind $extra
+calc   min  $extra  2  bind $extra
+calc   mul  $extra  10 bind $bonus
+calc   add  40  $bonus bind $base
+attack base $base  …  bind $damage
+apply_damage $damage  $defending
+```
+
+The 3 and the cap 2 are authored in the effect (printed cost / printed cap), not inferred.
 
 ## Roadmap
 
-- Select → bind → run (above)
+- Select → bind → run (finish 3–5)
+- Math (`count` + `calc` + bound `attack.base`)
 - Retreat, evolve
-- Checkup statuses
-- Survey: more scopes; `count` primitive
+- Checkup statuses (confused actually matters)
 - History log for replay
 
 ## Tests
 
 ```bash
-npx tsx ./tests/confuse-ray.ts        # scripted attack
-npx tsx ./tests/init-play-active.ts   # full decks via localhost:8787
-npx tsx ./tests/chansey.ts            # Chansey vs Clefairy; AUTO in the file
+pnpm serve                 # HTTP session, default decks
+pnpm serve:alakazam        # Alakazam vs Blastoise fixture
+npx tsx ./tests/scrunch.ts
+npx tsx ./tests/confuse-ray.ts
 ```

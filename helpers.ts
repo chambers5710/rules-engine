@@ -69,6 +69,7 @@ export function promote(
     energy: [...from.energy],
     tools: [...from.tools],
     modifiers: [...from.modifiers],
+    evolvedThisTurn: from.evolvedThisTurn,
   }
   p.bench[index] = emptySlot()
   return next
@@ -82,6 +83,7 @@ export const emptySlot = (): Slot => ({
   energy: [],
   tools: [],
   modifiers: [],
+  evolvedThisTurn: false,
 })
 
 // Empty status — no special conditions

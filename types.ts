@@ -49,6 +49,7 @@ export type Slot = {
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: Modifier[]
+  evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet
 }
 
 // Modifier — on a slot; until.player is set when interpret applies the op

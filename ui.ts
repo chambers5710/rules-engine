@@ -124,7 +124,7 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     const id = gamestate.players[a.player].bench[a.index].evolution.at(-1)
     return `${a.kind}  ${id ? cardName(gamestate, id) : `bench[${a.index}]`}`
   }
-  if (a.kind === Action.AttachEnergy) {
+  if (a.kind === Action.AttachEnergy || a.kind === Action.Evolve) {
     const dest = a.to.slot === "active" ? "Active" : `bench[${a.to.index}]`
     return `${a.kind}  ${cardName(gamestate, a.card)} → ${dest}`
   }

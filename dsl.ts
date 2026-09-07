@@ -1,4 +1,5 @@
-import type { SlotId, SlotRef, Status, ZoneDest, ZoneRef } from "./types.js"
+import type { SurveyFilter } from "./survey.js"
+import type { Attachment, SlotId, SlotRef, Status, ZoneDest, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -13,6 +14,8 @@ export enum Op {
   Select = "select",
   If = "if",
   ApplyModifier = "apply_modifier",
+  Count = "count",
+  Calc = "calc",
 }
 
 export type BindingName = `$${string}`
@@ -22,12 +25,14 @@ export type SlotTarget = SlotId | BindingName
 // Select pick — what the paused menu lists from `from`
 export type SelectPick = "cards" | "attacks"
 
+export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
+
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; from: ZoneRef; to: ZoneDest }
   | { op: Op.MoveZoneToSlot; card: string; from: ZoneRef; to: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; from: SlotRef; to: ZoneDest }
   | { op: Op.MoveSlotToSlot; card: string; from: SlotRef; to: SlotRef }
-  | { op: Op.Attack; base: number; from: SlotTarget; to: SlotTarget; bind: BindingName }
+  | { op: Op.Attack; base: number | BindingName; from: SlotTarget; to: SlotTarget; bind: BindingName }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotTarget }
   | { op: Op.ApplyStatus; status: Status; slot: SlotTarget }
   | { op: Op.RemoveStatus; status: Status; slot: SlotTarget }
@@ -35,6 +40,8 @@ export type Primitive =
   | { op: Op.Select; bind: BindingName; from: ZoneRef | SlotRef | SlotTarget; pick: SelectPick }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }
   | { op: Op.ApplyModifier; slot: SlotTarget; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
+  | { op: Op.Count; from: ZoneRef | SlotRef | SlotTarget; attachment?: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
+  | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
 
 export type Expr = Primitive[]
 

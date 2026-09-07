@@ -48,7 +48,11 @@ export async function openDefaultSession(): Promise<Session> {
 }
 
 export function createSession(p1Deck: Card[], p2Deck: Card[]): Session {
-  let gamestate = initializeGameState(p1Deck, p2Deck)
+  return createSessionFromState(initializeGameState(p1Deck, p2Deck))
+}
+
+export function createSessionFromState(initial: GameState): Session {
+  let gamestate = initial
   let actions = computeAvailableActions(gamestate)
   persist(gamestate)
 
