@@ -145,6 +145,7 @@ function board(): GameState {
     activePlayer: 1,
     setupReady: { 1: true, 2: true },
     energyAttachedThisTurn: false,
+    retreatedThisTurn: false,
   }
 }
 

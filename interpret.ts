@@ -11,6 +11,7 @@ import {
   moveZoneToZone,
   removeStatus,
 } from "./ops.js"
+import { swapActive } from "./helpers.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
 import type { GameState, SlotId, SlotRef } from "./types.js"
 
@@ -43,6 +44,11 @@ function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number 
   return ctx.bindings[amount] as number
 }
 
+function resolveCard(card: string, ctx: InterpretCtx): string {
+  if (card.startsWith("$")) return ctx.bindings[card] as string
+  return card
+}
+
 function resolveSlotRef(
   slot: SlotId | BindingName,
   attachment: SlotRef["attachment"],
@@ -73,16 +79,16 @@ export function interpret(
 ): GameState {
   switch (primitive.op) {
     case Op.MoveZoneToZone:
-      return moveZoneToZone(gamestate, primitive.card, primitive.source, primitive.dest, primitive.position)
+      return moveZoneToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)
 
     case Op.MoveZoneToSlot:
-      return moveZoneToSlot(gamestate, primitive.card, primitive.source, primitive.dest)
+      return moveZoneToSlot(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest)
 
     case Op.MoveSlotToZone:
-      return moveSlotToZone(gamestate, primitive.card, primitive.source, primitive.dest, primitive.position)
+      return moveSlotToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)
 
     case Op.MoveSlotToSlot:
-      return moveSlotToSlot(gamestate, primitive.card, primitive.source, primitive.dest)
+      return moveSlotToSlot(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest)
 
     case Op.Attack: {
       const attacker = resolveSlot(primitive.attacker, ctx)
@@ -140,6 +146,12 @@ export function interpret(
       const b = resolveAmount(primitive.b, ctx)
       ctx.bindings[primitive.bind] = calcFn(primitive.fn, a, b)
       return gamestate
+    }
+
+    case Op.SwapActive: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      if (slot.slot !== "bench") return gamestate
+      return swapActive(gamestate, slot.player, slot.index)
     }
 
     case Op.If: {

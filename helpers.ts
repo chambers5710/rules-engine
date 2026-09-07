@@ -43,6 +43,38 @@ export function promote(
   return next
 }
 
+// Retreat — Active and that bench Pokémon switch places
+export function swapActive(
+  gamestate: GameState,
+  player: 1 | 2,
+  index: 0 | 1 | 2 | 3 | 4
+): GameState {
+  const next = copy(gamestate)
+  const p = next.players[player]
+  const bench = p.bench[index]
+  if (bench.evolution.length === 0) return gamestate
+  const active = p.active
+  p.active = {
+    evolution: [...bench.evolution],
+    damage: bench.damage,
+    status: { ...bench.status },
+    energy: [...bench.energy],
+    tools: [...bench.tools],
+    modifiers: [...bench.modifiers],
+    evolvedThisTurn: bench.evolvedThisTurn,
+  }
+  p.bench[index] = {
+    evolution: [...active.evolution],
+    damage: active.damage,
+    status: { ...active.status },
+    energy: [...active.energy],
+    tools: [...active.tools],
+    modifiers: [...active.modifiers],
+    evolvedThisTurn: active.evolvedThisTurn,
+  }
+  return next
+}
+
 // Empty slot — one vacant Pokémon slot
 export const emptySlot = (): Slot => ({
   evolution: [],

@@ -8,7 +8,7 @@ import {
   pokemonInPlay,
   sameSlot,
 } from "./board.js"
-import { Action, Op, type ActionFrame, type Expr, type SelectFilter, type SelectPick } from "./dsl.js"
+import { Action, Op, type ActionFrame, type Expr, type SelectFilter } from "./dsl.js"
 import { cardEffect } from "./effects.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { DAMAGE_COUNTER, Phase } from "./types.js"
@@ -29,7 +29,9 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; slot: SlotId })
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
-  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: SelectPick; slot: SlotId })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string })
+  | (ActionBase & { kind: Action.Retreat; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
   | (ActionBase & { kind: Action.EndTurn; player: 1 | 2 })
@@ -56,7 +58,7 @@ function computeSelect(gamestate: GameState): AvailableAction[] {
     case "slots":
       return selectSlots(gamestate, frame)
     case "cards":
-      return []
+      return selectCards(gamestate, frame)
     case "attacks":
       return []
   }
@@ -71,7 +73,7 @@ function selectSlots(
   const actions: AvailableAction[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
     if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
-    actions.push({ kind: Action.Choose, player: frame.player, pick: frame.pick, slot: slotId, expr: [] })
+    actions.push({ kind: Action.Choose, player: frame.player, pick: "slots", slot: slotId, expr: [] })
   }
   return actions
 }
@@ -103,9 +105,44 @@ function slotMatches(
         if (bound && sameSlot(slotId, bound as SlotId)) return false
         break
       }
+      case "pays":
+        break
     }
   }
   return true
+}
+
+function selectCards(
+  gamestate: GameState,
+  frame: Extract<ActionFrame, { pick: "cards" }>
+): AvailableAction[] {
+  const pays = [frame.filter ?? []].flat().find((filter) => filter.kind === "pays")
+  const need = pays ? frame.bindings[pays.bind] : undefined
+  const cards = surveyCards(gamestate, frame.source, { kind: "energy" }) // probably needs to not be hardcoded?
+  const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
+  const actions: AvailableAction[] = []
+  for (let i = 0; i < cards.length; i++) {
+    const value = values[i]
+    if (typeof need === "number") {
+      if (value <= 0 || value > need) continue
+      const rest = values.filter((_, j) => j !== i)
+      if (!canSum(rest, need - value)) continue
+    }
+    actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
+  }
+  return actions
+}
+
+function canSum(values: number[], target: number): boolean {
+  if (target === 0) return true
+  const ok = new Set([0])
+  for (const value of values) {
+    for (const sum of [...ok]) {
+      if (sum + value === target) return true
+      if (sum + value < target) ok.add(sum + value)
+    }
+  }
+  return ok.has(target)
 }
 
 // Init — Active first; then optional bench Basics plus Ready
@@ -140,6 +177,7 @@ function computeTurn(gamestate: GameState): AvailableAction[] {
     ...placeEvolve(gamestate, player),
     ...abilitiesInPlay(gamestate, player),
     ...attacksFromActive(gamestate, player),
+    ...retreatFromActive(gamestate, player),
     { kind: Action.EndTurn, player, expr: [] },
   ]
 }
@@ -292,6 +330,59 @@ function attackExpr(sourceId: string, attack: { name: string; damage?: string | 
     { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
     { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
   ]
+}
+
+// Retreat — pay energy value on Active, then swap with a benched Pokémon.
+// Asleep and Paralyzed block retreat; statuses later.
+function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  if (gamestate.retreatedThisTurn) return []
+  if (occupiedBench(gamestate, player).length === 0) return []
+  const slot = { player, slot: "active" } as const
+  const form = currentForm(gamestate, gamestate.players[player].active)
+  if (!form) return []
+  const cost = form.retreatCost ?? []
+  if (!canPayEnergyCost(gamestate, slot, cost)) return []
+  const need = cost.length
+  const energy = { ...slot, attachment: "energy" as const }
+  const switchIn: Expr = [
+    {
+      op: Op.Select,
+      pick: "slots",
+      who: "self",
+      bind: "$to",
+      filter: { kind: "other_than", bind: "$self_slot" },
+    },
+    { op: Op.SwapActive, slot: "$to" },
+  ]
+  const pay: Expr = [
+    { op: Op.Count, slot: "$self_slot", attachment: "energy", as: "energy_value", bind: "$before" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: energy,
+      bind: "$pay",
+      filter: { kind: "pays", bind: "$need" },
+    },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$pay",
+      source: energy,
+      dest: { player, zone: "discard" },
+      position: "bottom",
+    },
+    { op: Op.Count, slot: "$self_slot", attachment: "energy", as: "energy_value", bind: "$after" },
+    { op: Op.Calc, fn: "sub", a: "$before", b: "$after", bind: "$paid" },
+    { op: Op.Calc, fn: "sub", a: "$need", b: "$paid", bind: "$need" },
+  ]
+  const expr: Expr = need > 0
+    ? [{ op: Op.Loop, bind: "$need", until: 0, then: pay }, ...switchIn]
+    : switchIn
+  return [{
+    kind: Action.Retreat,
+    player,
+    expr,
+    seed: { $self_slot: slot, ...(need > 0 ? { $need: need } : {}) },
+  }]
 }
 
 // Promote — only listed when Active is empty (after KO)

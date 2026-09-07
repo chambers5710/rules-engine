@@ -13,9 +13,11 @@ export enum Op {
   FlipCoin = "flip_coin",
   Select = "select",
   If = "if",
+  Loop = "loop",
   ApplyModifier = "apply_modifier",
   Count = "count",
   Calc = "calc",
+  SwapActive = "swap_active",
 }
 
 // Action — every top-level choice the client can make
@@ -42,6 +44,7 @@ export type SelectFilter =
   | { kind: "has_counters"; counters: number }
   | { kind: "survives_counters"; counters: number }
   | { kind: "other_than"; bind: BindingName }
+  | { kind: "pays"; bind: BindingName }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 
@@ -58,10 +61,12 @@ export type Primitive =
   | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[] }
-  | { op: Op.If; bind: BindingName; equals: unknown; then: Primitive[] }
+  | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
+  | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
   | { op: Op.Count; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
+  | { op: Op.SwapActive; slot: SlotId | BindingName }
 
 export type Expr = Primitive[]
 

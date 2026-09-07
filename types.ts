@@ -12,6 +12,7 @@ export type GameState = {
   mulligans: { 1: number; 2: number }
   setupReady: { 1: boolean; 2: boolean }
   energyAttachedThisTurn: boolean
+  retreatedThisTurn: boolean
   actionStack: ActionFrame[]
   actionHistory: []
 }

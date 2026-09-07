@@ -99,6 +99,8 @@ function turnPhase(
       return markEvolvedThisTurn(runAction(gamestate, action), action.slot)
     case Action.Ability:
       return runAction(gamestate, action)
+    case Action.Retreat:
+      return { ...runAction(gamestate, action), retreatedThisTurn: true }
     default:
       return runAction(gamestate, action)
   }
@@ -116,6 +118,7 @@ function enterTurn(
     activePlayer,
     turnCount,
     energyAttachedThisTurn: false,
+    retreatedThisTurn: false,
   }
   gamestate = clearEvolvedThisTurn(gamestate, activePlayer)
   gamestate = tickModifiersEnter(gamestate, activePlayer)
@@ -191,8 +194,8 @@ function resumeSelect(
 
 function chooseBinding(
   action: Extract<AvailableAction, { kind: Action.Choose }>
-): SlotId {
-  return action.slot
+): SlotId | string {
+  return action.pick === "cards" ? action.card : action.slot
 }
 
 // Run an action's expr; Select pushes a frame and stops
@@ -218,6 +221,15 @@ function runExpr(
           pauseSelect(step, ctx, player, kind, expr.slice(i + 1)),
         ],
       }
+    }
+    if (step.op === Op.If) {
+      if (ctx.bindings[step.bind] !== step.equals) continue
+      return runExpr(gamestate, [...step.then, ...expr.slice(i + 1)], ctx, player, kind)
+    }
+    if (step.op === Op.Loop) {
+      const until = typeof step.until === "number" ? step.until : ctx.bindings[step.until]
+      if (ctx.bindings[step.bind] === until) continue
+      return runExpr(gamestate, [...step.then, step, ...expr.slice(i + 1)], ctx, player, kind)
     }
     gamestate = interpret(gamestate, step, ctx)
   }
