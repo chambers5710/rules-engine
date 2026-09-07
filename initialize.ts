@@ -1,5 +1,6 @@
-import { draw, emptySlot, isBasicPokemon } from "./helpers.js"
-import { flipCoin, moveZoneToZone, shuffle } from "./ops.js"
+import { draw, emptySlot, returnHandToDeck } from "./helpers.js"
+import { surveyCount } from "./survey.js"
+import { flipCoin, shuffle } from "./ops.js"
 import type {
   Card,
   CardInstance,
@@ -73,25 +74,15 @@ function dealOpeningHands(gamestate: GameState): GameState {
 }
 
 function handHasBasic(gamestate: GameState, player: 1 | 2): boolean {
-  return gamestate.players[player].hand.some((id) => isBasicPokemon(gamestate, id))
+  return surveyCount(gamestate, { player, zone: "hand" }, { kind: "basic_pokemon" }) > 0
 }
 
 // Basic still available in hand or deck (can a mulligan help?)
 function libraryHasBasic(gamestate: GameState, player: 1 | 2): boolean {
-  const p = gamestate.players[player]
-  return [...p.hand, ...p.deck].some((id) => isBasicPokemon(gamestate, id))
-}
-
-function returnHandToDeck(gamestate: GameState, player: 1 | 2): GameState {
-  for (const card of [...gamestate.players[player].hand]) {
-    gamestate = moveZoneToZone(
-      gamestate,
-      card,
-      { player, zone: "hand" },
-      { player, zone: "deck", position: "bottom" }
-    )
-  }
-  return gamestate
+  return (
+    surveyCount(gamestate, { player, zone: "hand" }, { kind: "basic_pokemon" }) > 0 ||
+    surveyCount(gamestate, { player, zone: "deck" }, { kind: "basic_pokemon" }) > 0
+  )
 }
 
 // Player — empty board, deck already minted as instance ids

@@ -1,4 +1,5 @@
-import { copy, getSlot } from "./ops.js"
+import { getSlot } from "./board.js"
+import { copy } from "./ops.js"
 import type { GameState, Modifier, Slot, SlotId } from "./types.js"
 
 const PLAYERS = [1, 2] as const
@@ -7,7 +8,7 @@ function walkSlots(gamestate: GameState, visit: (slot: Slot) => void) {
   for (const player of PLAYERS) {
     const p = gamestate.players[player]
     visit(p.active)
-    for (const seat of p.bench) visit(seat)
+    for (const slot of p.bench) visit(slot)
   }
 }
 

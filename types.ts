@@ -41,7 +41,7 @@ export type CardRegistry = Record<string, CardInstance>
 // Zone — an ordered pile of instance ids (index 0 is top)
 export type Zone = CardInstanceId[]
 
-// Slot — one Pokémon in play (the active or a bench seat)
+// Slot — one Pokémon in play (Active or a bench slot)
 export type Slot = {
   evolution: CardInstanceId[] // last entry is the current form
   damage: number

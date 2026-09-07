@@ -1,3 +1,4 @@
+import { opponent } from "./board.js"
 import { Op, type BindingName, type CalcFn, type Primitive, type SlotTarget } from "./dsl.js"
 import { applyModifier, readModifier } from "./modifiers.js"
 import {
@@ -48,9 +49,11 @@ function resolveSurveyFrom(
   attachment: Attachment | undefined,
   ctx: InterpretCtx
 ): SurveyFrom {
-  const resolved = typeof from === "string" ? resolveSlot(from, ctx) : from
-  if ("zone" in resolved || "attachment" in resolved) return resolved
-  return { ...resolved, attachment: attachment ?? "energy" }
+  if (typeof from !== "string" && ("zone" in from || "attachment" in from)) {
+    return from
+  }
+  const slot: SlotId = typeof from === "string" ? resolveSlot(from, ctx) : from
+  return { ...slot, attachment: attachment ?? "energy" }
 }
 
 function calcFn(fn: CalcFn, a: number, b: number): number {
@@ -120,7 +123,7 @@ export function interpret(
 
     case Op.ApplyModifier: {
       const slot = resolveSlot(primitive.slot, ctx)
-      const player = primitive.until.who === "owner" ? slot.player : slot.player === 1 ? 2 : 1
+      const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
       return applyModifier(gamestate, slot, {
         field: primitive.field,
         set: primitive.set,

@@ -1,3 +1,4 @@
+import { hasPokemonInPlay } from "./board.js"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
 import { Action, type AvailableAction } from "./compute.js"
@@ -65,17 +66,12 @@ function side(gamestate: GameState, player: 1 | 2, face: "away" | "home"): strin
   ]
   const board = [
     field("active", slotLine(gamestate, p.active)),
-    ...p.bench.map((seat, i) => field(`bench[${i}]`, slotLine(gamestate, seat))),
+    ...p.bench.map((slot, i) => field(`bench[${i}]`, slotLine(gamestate, slot))),
   ]
   const body = face === "away" ? [...piles, ...board] : [...board, ...piles]
   return [`${mark} p${player}`, ...body]
 }
  
-function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
-  const p = gamestate.players[player]
-  return p.active.evolution.length > 0 || p.bench.some((seat) => seat.evolution.length > 0)
-}
-
 function formatEndgame(gamestate: GameState): string {
   for (const player of [1, 2] as const) {
     if (gamestate.players[player].prize.length === 0) {

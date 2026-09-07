@@ -1,4 +1,3 @@
-import { isBasicPokemon, isEnergy } from "./helpers.js"
 import type {
   CardInstanceId,
   EnergyType,
@@ -82,6 +81,16 @@ export function canPayEnergyCost(
     pool.splice(i, 1)
   }
   return pool.length >= cost.length - typed.length
+}
+
+// Basic Pokémon — Energy's printed "Basic" subtype does not count
+export function isBasicPokemon(gamestate: GameState, cardId: string): boolean {
+  const printed = gamestate.cardRegistry[cardId]
+  return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Basic") === true
+}
+
+export function isEnergy(gamestate: GameState, cardId: string): boolean {
+  return gamestate.cardRegistry[cardId]?.supertype === "Energy"
 }
 
 function cardMatches(

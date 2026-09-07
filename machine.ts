@@ -1,6 +1,14 @@
+import {
+  bothReady,
+  getSlot,
+  hasActive,
+  hasPokemonInPlay,
+  isKnockedOut,
+  opponent,
+} from "./board.js"
 import { Action, type AvailableAction } from "./compute.js"
 import { Op } from "./dsl.js"
-import { discardActive, draw, isKnockedOut, placePrize, promote, takePrize } from "./helpers.js"
+import { discardActive, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret } from "./interpret.js"
 import { copy } from "./ops.js"
@@ -184,33 +192,13 @@ function runAction(gamestate: GameState, action: AvailableAction): GameState {
 
 function markEvolvedThisTurn(gamestate: GameState, ref: SlotId): GameState {
   const next = copy(gamestate)
-  const slot = ref.slot === "active"
-    ? next.players[ref.player].active
-    : next.players[ref.player].bench[ref.index]
-  slot.evolvedThisTurn = true
+  getSlot(next, ref).evolvedThisTurn = true
   return next
 }
 
 function clearEvolvedThisTurn(gamestate: GameState, player: 1 | 2): GameState {
   const next = copy(gamestate)
   next.players[player].active.evolvedThisTurn = false
-  for (const seat of next.players[player].bench) seat.evolvedThisTurn = false
+  for (const slot of next.players[player].bench) slot.evolvedThisTurn = false
   return next
-}
-
-function bothReady(gamestate: GameState): boolean {
-  return gamestate.setupReady[1] && gamestate.setupReady[2]
-}
-
-function hasActive(gamestate: GameState, player: 1 | 2): boolean {
-  return gamestate.players[player].active.evolution.length > 0
-}
-
-function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
-  const p = gamestate.players[player]
-  return hasActive(gamestate, player) || p.bench.some((seat) => seat.evolution.length > 0)
-}
-
-function opponent(player: 1 | 2): 1 | 2 {
-  return player === 1 ? 2 : 1
 }

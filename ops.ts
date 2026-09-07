@@ -1,7 +1,7 @@
+import { getSlot } from "./board.js"
 import type {
   CardInstanceId,
   GameState,
-  Slot,
   SlotId,
   SlotRef,
   Status,
@@ -55,13 +55,7 @@ export const moveZoneToZone = (
   return next
 }
 
-// Slot — resolve active or bench seat
-export const getSlot = (gamestate: GameState, ref: SlotId): Slot => {
-  const player = gamestate.players[ref.player]
-  return ref.slot === "active" ? player.active : player.bench[ref.index]
-}
-
-// Slot attachment — the named pile on that seat
+// Slot attachment — the named pile on that slot
 const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
   return getSlot(gamestate, ref)[ref.attachment]
 }

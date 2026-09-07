@@ -1,3 +1,11 @@
+import {
+  hasActive,
+  nextEmptyBench,
+  occupiedBench,
+  opponent,
+  pokemonInPlay,
+  type InPlaySlot,
+} from "./board.js"
 import { Op, type Expr } from "./dsl.js"
 import { cardEffect } from "./effects.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
@@ -23,13 +31,11 @@ type ActionBase = {
   seed?: Record<string, unknown>
 }
 
-type AttachTo = { slot: "active" } | { slot: "bench"; index: 0 | 1 | 2 | 3 | 4 }
-
 export type AvailableAction =
   | (ActionBase & { kind: Action.PlayActive; player: 1 | 2; card: string })
   | (ActionBase & { kind: Action.PlayBench; player: 1 | 2; card: string; index: 0 | 1 | 2 | 3 | 4 })
-  | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; to: AttachTo })
-  | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; to: AttachTo })
+  | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; to: InPlaySlot })
+  | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; to: InPlaySlot })
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
@@ -140,7 +146,7 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   )
 }
 
-// Evolve — hand card whose evolvesFrom matches the current form; skip seats that evolved this turn
+// Evolve — hand card whose evolvesFrom matches the current form; skip slots that evolved this turn
 function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const to of pokemonInPlay(gamestate, player)) {
@@ -178,7 +184,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   if (!id) return []
   const printed = gamestate.cardRegistry[id]
   const slot = { player, slot: "active" } as const
-  const defending = player === 1 ? 2 : 1
+  const defending = opponent(player)
   return (printed?.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []))
     .map((attack) => ({
@@ -223,40 +229,4 @@ function basicsInHand(gamestate: GameState, player: 1 | 2): string[] {
 
 function energyInHand(gamestate: GameState, player: 1 | 2): string[] {
   return surveyCards(gamestate, { player, zone: "hand" }, { kind: "energy" })
-}
-
-function hasActive(gamestate: GameState, player: 1 | 2): boolean {
-  return gamestate.players[player].active.evolution.length > 0
-}
-
-function nextEmptyBench(
-  gamestate: GameState,
-  player: 1 | 2
-): 0 | 1 | 2 | 3 | 4 | undefined {
-  return ([0, 1, 2, 3, 4] as const).find(
-    (seat) => gamestate.players[player].bench[seat].evolution.length === 0
-  )
-}
-
-// Check which bench slots are filled
-function occupiedBench(
-  gamestate: GameState,
-  player: 1 | 2
-): Array<0 | 1 | 2 | 3 | 4> {
-  return ([0, 1, 2, 3, 4] as const).filter(
-    (seat) => gamestate.players[player].bench[seat].evolution.length > 0
-  )
-}
-
-// Lists all Pokemon in play for which player might attach a card during a turn
-function pokemonInPlay(
-  gamestate: GameState,
-  player: 1 | 2
-): AttachTo[] {
-  const dests: AttachTo[] = []
-  if (hasActive(gamestate, player)) dests.push({ slot: "active" })
-  for (const index of occupiedBench(gamestate, player)) {
-    dests.push({ slot: "bench", index })
-  }
-  return dests
 }
