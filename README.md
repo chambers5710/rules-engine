@@ -180,7 +180,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixture: `pnpm serve:alakazam`
+- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`
 
 ## Select → bind → run
 
@@ -240,6 +240,6 @@ The 3 and the cap 2 are authored in the effect (printed cost / printed cap), not
 ```bash
 pnpm serve                 # HTTP session, default decks
 pnpm serve:alakazam        # Alakazam vs Blastoise fixture
-npx tsx ./tests/scrunch.ts
+pnpm serve:scrunch         # Chansey vs Hitmonchan fixture
 npx tsx ./tests/confuse-ray.ts
 ```

@@ -1,134 +1,155 @@
-import { writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import cards from "../data/cards/base1.json" with { type: "json" }
-import { Op, type Expr } from "../dsl.js"
-import { cardEffect } from "../effects.js"
+import { listen } from "../index.js"
 import { initializeGameState } from "../initialize.js"
-import { interpret, type InterpretCtx } from "../interpret.js"
-import { tickModifiersEnd, tickModifiersEnter } from "../modifiers.js"
-import { moveZoneToSlot } from "../ops.js"
-import type { Card, GameState } from "../types.js"
-import { formatGamestate } from "../ui.js"
+import { moveZoneToSlot, moveZoneToZone } from "../ops.js"
+import { createSessionFromState } from "../session.js"
+import type { Card, GameState, ZoneName } from "../types.js"
+import { Phase } from "../types.js"
 
-function printedCard(id: string): Card {
+function printed(id: string): Card {
   const card = (cards as Card[]).find((row) => row.id === id)
   if (!card) throw new Error(`missing card ${id}`)
   return card
 }
 
-function playActive(gamestate: GameState, player: 1 | 2): GameState {
-  const id = gamestate.players[player].hand[0] ?? gamestate.players[player].deck[0]
-  if (!id) throw new Error(`expected a card for p${player}`)
-  const from = gamestate.players[player].hand.includes(id) ? "hand" as const : "deck" as const
+function copies(card: Card, n: number): Card[] {
+  return Array.from({ length: n }, () => card)
+}
+
+function pull(
+  gamestate: GameState,
+  player: 1 | 2,
+  sourceId: string,
+  skip: ZoneName[] = []
+): { card: string; zone: ZoneName } | undefined {
+  const zones: ZoneName[] = ["hand", "deck", "prize", "discard"]
+  for (const zone of zones) {
+    if (skip.includes(zone)) continue
+    const card = gamestate.players[player][zone].find(
+      (id) => gamestate.cardRegistry[id].sourceId === sourceId
+    )
+    if (card) return { card, zone }
+  }
+}
+
+function countIn(
+  gamestate: GameState,
+  player: 1 | 2,
+  sourceId: string,
+  zone: ZoneName
+): number {
+  return gamestate.players[player][zone].filter(
+    (id) => gamestate.cardRegistry[id].sourceId === sourceId
+  ).length
+}
+
+function moveToActive(gamestate: GameState, player: 1 | 2, sourceId: string): GameState {
+  const found = pull(gamestate, player, sourceId)
+  if (!found) throw new Error(`no ${sourceId} for p${player}`)
   return moveZoneToSlot(
     gamestate,
-    id,
-    { player, zone: from },
+    found.card,
+    { player, zone: found.zone },
     { player, slot: "active", attachment: "evolution" }
   )
 }
 
-function board(): GameState {
-  let gamestate = initializeGameState(
-    [printedCard("base1-3")],
-    [printedCard("base1-5")]
+function moveToBench(
+  gamestate: GameState,
+  player: 1 | 2,
+  sourceId: string,
+  index: 0 | 1 | 2 | 3 | 4
+): GameState {
+  const found = pull(gamestate, player, sourceId)
+  if (!found) throw new Error(`no ${sourceId} for p${player} bench`)
+  return moveZoneToSlot(
+    gamestate,
+    found.card,
+    { player, zone: found.zone },
+    { player, slot: "bench", index, attachment: "evolution" }
   )
-  gamestate = playActive(gamestate, 1)
-  gamestate = playActive(gamestate, 2)
+}
+
+function attachEnergy(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
+  for (let i = 0; i < n; i++) {
+    const found = pull(gamestate, player, sourceId)
+    if (!found) throw new Error(`not enough ${sourceId} to attach for p${player}`)
+    gamestate = moveZoneToSlot(
+      gamestate,
+      found.card,
+      { player, zone: found.zone },
+      { player, slot: "active", attachment: "energy" }
+    )
+  }
   return gamestate
 }
 
-const jab: Expr = [
-  { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
-  { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
-]
+function toHand(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
+  while (countIn(gamestate, player, sourceId, "hand") < n) {
+    const found = pull(gamestate, player, sourceId, ["hand"])
+    if (!found) throw new Error(`not enough ${sourceId} for p${player} hand`)
+    gamestate = moveZoneToZone(
+      gamestate,
+      found.card,
+      { player, zone: found.zone },
+      { player, zone: "hand" },
+      "bottom"
+    )
+  }
+  return gamestate
+}
 
-function ctx(
-  from: 1 | 2,
-  to: 1 | 2,
-  script?: InterpretCtx["script"]
-): InterpretCtx {
+function toPrize(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
+  while (countIn(gamestate, player, sourceId, "prize") < n) {
+    const found = pull(gamestate, player, sourceId, ["prize", "hand"])
+    if (!found) throw new Error(`not enough ${sourceId} for p${player} prizes`)
+    gamestate = moveZoneToZone(
+      gamestate,
+      found.card,
+      { player, zone: found.zone },
+      { player, zone: "prize" },
+      "bottom"
+    )
+  }
+  return gamestate
+}
+
+function board(): GameState {
+  const chansey = printed("base1-3")
+  const hitmonchan = printed("base1-7")
+  const fighting = printed("base1-97")
+
+  let gamestate = initializeGameState(
+    [chansey, chansey, ...copies(fighting, 16)],
+    [hitmonchan, hitmonchan, ...copies(fighting, 16)]
+  )
+
+  gamestate = moveToActive(gamestate, 1, "base1-3")
+  gamestate = moveToBench(gamestate, 1, "base1-3", 0)
+  gamestate = moveToActive(gamestate, 2, "base1-7")
+  gamestate = moveToBench(gamestate, 2, "base1-7", 0)
+  gamestate = attachEnergy(gamestate, 1, "base1-97", 2)
+  gamestate = attachEnergy(gamestate, 2, "base1-97", 3)
+  gamestate = toHand(gamestate, 1, "base1-97", 3)
+  gamestate = toHand(gamestate, 2, "base1-97", 3)
+  gamestate = toPrize(gamestate, 1, "base1-97", 6)
+  gamestate = toPrize(gamestate, 2, "base1-97", 6)
+
   return {
-    bindings: {
-      $self_slot: { player: from, slot: "active" },
-      $defending: { player: to, slot: "active" },
-    },
-    script,
+    ...gamestate,
+    phase: Phase.Turn,
+    turnCount: 1,
+    firstPlayer: 1,
+    activePlayer: 1,
+    setupReady: { 1: true, 2: true },
+    energyAttachedThisTurn: false,
+    retreatedThisTurn: false,
   }
 }
 
-function run(gamestate: GameState, expr: Expr, interpretCtx: InterpretCtx): GameState {
-  for (const primitive of expr) {
-    gamestate = interpret(gamestate, primitive, interpretCtx)
-  }
-  return gamestate
+function session() {
+  return createSessionFromState(board())
 }
 
-function modifier(gamestate: GameState) {
-  return gamestate.players[1].active.modifiers[0]
-}
-
-type Case = { name: string; expected: unknown; realized: unknown; pass: boolean }
-const cases: Case[] = []
-
-function check(name: string, expected: unknown, realized: unknown) {
-  cases.push({
-    name,
-    expected,
-    realized,
-    pass: JSON.stringify(expected) === JSON.stringify(realized),
-  })
-}
-
-const scrunch = cardEffect("base1-3", "attacks", "Scrunch")
-
-let heads = board()
-heads = run(heads, scrunch, ctx(1, 2, { coins: ["heads"] }))
-check("heads: pending", "pending", modifier(heads)?.phase)
-check("heads: until p2", 2, modifier(heads)?.until.player)
-check("heads: field", "attack_damage", modifier(heads)?.field)
-
-heads = tickModifiersEnter(heads, 2)
-check("p2 turn: active", "active", modifier(heads)?.phase)
-
-heads = run(heads, jab, ctx(2, 1))
-check("p2 jab: chansey damage", 0, heads.players[1].active.damage)
-
-heads = interpret(heads, { op: Op.ApplyDamage, amount: 20, slot: { player: 1, slot: "active" } })
-check("apply_damage still lands", 20, heads.players[1].active.damage)
-
-heads = tickModifiersEnd(heads, 2)
-check("p2 checkup: modifier gone", 0, heads.players[1].active.modifiers.length)
-
-heads = run(heads, jab, ctx(2, 1))
-check("after drop: jab lands", 50, heads.players[1].active.damage)
-
-let tails = board()
-tails = run(tails, scrunch, ctx(1, 2, { coins: ["tails"] }))
-check("tails: no modifier", 0, tails.players[1].active.modifiers.length)
-tails = tickModifiersEnter(tails, 2)
-tails = run(tails, jab, ctx(2, 1))
-check("tails: jab lands", 30, tails.players[1].active.damage)
-
-const failed = cases.filter((c) => !c.pass)
-const lines = [
-  "# Scrunch",
-  "",
-  `Passed: ${cases.filter((c) => c.pass).length}/${cases.length}`,
-  "",
-]
-
-for (const c of cases) {
-  lines.push(`## ${c.pass ? "PASS" : "FAIL"}: ${c.name}`)
-  lines.push("")
-  lines.push("Expected: `" + JSON.stringify(c.expected) + "`")
-  lines.push("Realized: `" + JSON.stringify(c.realized) + "`")
-  lines.push("")
-}
-
-lines.push("## Board (heads path, after second jab)", "", formatGamestate(heads))
-
-const out = join(dirname(fileURLToPath(import.meta.url)), "scrunch-report.md")
-writeFileSync(out, lines.join("\n"))
-console.log(`Wrote ${out} (${failed.length} failed)`)
+console.log("Chansey vs Hitmonchan")
+listen(session(), () => session())

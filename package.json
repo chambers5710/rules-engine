@@ -3,7 +3,8 @@
   "type": "module",
   "scripts": {
     "serve": "tsx ./index.ts",
-    "serve:alakazam": "tsx ./tests/alakazam.ts"
+    "serve:alakazam": "tsx ./tests/alakazam.ts",
+    "serve:scrunch": "tsx ./tests/scrunch.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

@@ -104,8 +104,8 @@ export type CardInstance = {
   retreatCost?: EnergyType[]
   attacks?: PrintedAttack[]
   abilities?: Ability[]
-  weaknesses?: { type: EnergyType; modifier: DamageModifier }
-  resistances?: { type: EnergyType; modifier: DamageModifier }
+  weaknesses?: { type: EnergyType; modifier: DamageModifier }[]
+  resistances?: { type: EnergyType; modifier: DamageModifier }[]
   energyType?: EnergyType
   energyValue?: number
   images: { small: string; large: string }

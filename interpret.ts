@@ -1,6 +1,6 @@
 import { Op, type BindingName, type CalcFn, type Primitive } from "./dsl.js"
 import { applyModifier, readModifier } from "./modifiers.js"
-import { opponent } from "./board.js"
+import { currentForm, getSlot, opponent } from "./board.js"
 import {
   applyDamage,
   applyStatus,
@@ -13,7 +13,7 @@ import {
 } from "./ops.js"
 import { swapActive } from "./helpers.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
-import type { GameState, SlotId, SlotRef } from "./types.js"
+import type { DamageModifier, GameState, SlotId, SlotRef } from "./types.js"
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -24,14 +24,37 @@ export type InterpretCtx = {
   script?: InterpretScript
 }
 
-// Attack damage pipeline — active attack_damage rewrite; weakness later
+// Attack damage — attack_damage rewrite, then Weakness, then Resistance.
+// W/R only on the Defending Pokémon (opponent's Active). Attacker types are
+// the current form, not attached energy and not attack cost. Each printed
+// line whose type is among those types applies; damage floors at 0.
 export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
-  _attacker: SlotId,
+  attacker: SlotId,
   defender: SlotId
 ): number {
-  return readModifier(gamestate, defender, "attack_damage", base)
+  let damage = readModifier(gamestate, defender, "attack_damage", base)
+  if (defender.player !== attacker.player && defender.slot === "active") {
+    const types = currentForm(gamestate, getSlot(gamestate, attacker))?.types ?? []
+    const defending = currentForm(gamestate, getSlot(gamestate, defender))
+    for (const row of defending?.weaknesses ?? []) {
+      if (types.includes(row.type)) damage = applyDamageModifier(damage, row.modifier)
+    }
+    for (const row of defending?.resistances ?? []) {
+      if (types.includes(row.type)) damage = applyDamageModifier(damage, row.modifier)
+    }
+  }
+  return Math.max(0, damage)
+}
+
+function applyDamageModifier(damage: number, modifier: DamageModifier): number {
+  switch (modifier.operation) {
+    case "multiply":
+      return damage * modifier.value
+    case "add":
+      return damage + modifier.value
+  }
 }
 
 export function resolveSlot(target: SlotId | BindingName, ctx: InterpretCtx): SlotId {

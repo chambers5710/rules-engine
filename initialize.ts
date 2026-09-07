@@ -117,15 +117,14 @@ function instantiateCard(cardData: Card): CardInstance {
   const types = cardData.types?.map(asEnergyType)
   const retreatCost = cardData.retreatCost?.map(asEnergyType)
 
-  const printedWeakness = cardData.weaknesses?.[0] // multiple weaknesses? check database
-  const weaknesses = printedWeakness
-    ? { type: asEnergyType(printedWeakness.type), modifier: parseDamageModifier(printedWeakness.value) }
-    : undefined
-
-  const printedResistance = cardData.resistances?.[0]
-  const resistances = printedResistance
-    ? { type: asEnergyType(printedResistance.type), modifier: parseDamageModifier(printedResistance.value) }
-    : undefined
+  const weaknesses = cardData.weaknesses?.map((row) => ({
+    type: asEnergyType(row.type),
+    modifier: parseDamageModifier(row.value),
+  }))
+  const resistances = cardData.resistances?.map((row) => ({
+    type: asEnergyType(row.type),
+    modifier: parseDamageModifier(row.value),
+  }))
 
   let energyType: EnergyType | undefined
   let energyValue: number | undefined
@@ -183,7 +182,11 @@ function asEnergyType(value: string): EnergyType {
 // Damage modifier — "×2" → multiply, "-30" → add
 function parseDamageModifier(value: string): DamageModifier {
   if (value.startsWith("×") || value.startsWith("x") || value.startsWith("X")) {
-    return { operation: "multiply", value: Number(value.slice(1)) }
+    const n = Number(value.slice(1))
+    if (!Number.isFinite(n)) throw new Error(`Unknown damage modifier: ${value}`)
+    return { operation: "multiply", value: n }
   }
-  return { operation: "add", value: Number(value) }
+  const n = Number(value)
+  if (!Number.isFinite(n)) throw new Error(`Unknown damage modifier: ${value}`)
+  return { operation: "add", value: n }
 }
