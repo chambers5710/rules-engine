@@ -1,14 +1,20 @@
 import { getSlot } from "./board.js"
 import type { GameState, Slot, SlotId, StatusFlags } from "./types.js"
-import { copy, moveZoneToZone } from "./ops.js"
+import { copy, moveSlotToZone, moveZoneToZone } from "./ops.js"
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
-  const next = copy(gamestate)
-  const deck = next.players[playerId].deck
-  const hand = next.players[playerId].hand
-  const taken = deck.splice(0, Math.min(count, deck.length))
-  hand.push(...taken)
-  return next
+  for (let i = 0; i < count; i++) {
+    const card = gamestate.players[playerId].deck[0]
+    if (!card) break
+    gamestate = moveZoneToZone(
+      gamestate,
+      card,
+      { player: playerId, zone: "deck" },
+      { player: playerId, zone: "hand" },
+      "bottom"
+    )
+  }
+  return gamestate
 }
 
 export function placePrize(gamestate: GameState, playerId: 1 | 2, cardId: string) {
@@ -97,14 +103,23 @@ export const emptyStatus = (): StatusFlags => ({
 
 // Discard slot — Pokémon, energy, and tools to discard; slot cleared
 export function discardSlot(gamestate: GameState, ref: SlotId): GameState {
-  const next = copy(gamestate)
-  const slot = getSlot(next, ref)
-  next.players[ref.player].discard.push(...slot.evolution, ...slot.energy, ...slot.tools)
-  if (ref.slot === "active") {
-    next.players[ref.player].active = emptySlot()
-  } else {
-    next.players[ref.player].bench[ref.index] = emptySlot()
+  const dest = { player: ref.player, zone: "discard" as const }
+  const slot = getSlot(gamestate, ref)
+  const evolution = [...slot.evolution]
+  const energy = [...slot.energy]
+  const tools = [...slot.tools]
+  for (const card of evolution) {
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "evolution" }, dest, "bottom")
   }
+  for (const card of energy) {
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "energy" }, dest, "bottom")
+  }
+  for (const card of tools) {
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "tools" }, dest, "bottom")
+  }
+  const next = copy(gamestate)
+  if (ref.slot === "active") next.players[ref.player].active = emptySlot()
+  else next.players[ref.player].bench[ref.index] = emptySlot()
   return next
 }
 

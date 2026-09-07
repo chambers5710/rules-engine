@@ -12,6 +12,7 @@ import {
   removeStatus,
 } from "./ops.js"
 import { swapActive } from "./helpers.js"
+import { record } from "./history.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
 import type { DamageModifier, GameState, SlotId, SlotRef } from "./types.js"
 
@@ -33,19 +34,25 @@ export function pipelineAttackDamage(
   base: number,
   attacker: SlotId,
   defender: SlotId
-): number {
+): { damage: number; weakness: boolean; resistance: boolean } {
   let damage = readModifier(gamestate, defender, "attack_damage", base)
+  let weakness = false
+  let resistance = false
   if (defender.player !== attacker.player && defender.slot === "active") {
     const types = currentForm(gamestate, getSlot(gamestate, attacker))?.types ?? []
     const defending = currentForm(gamestate, getSlot(gamestate, defender))
     for (const row of defending?.weaknesses ?? []) {
-      if (types.includes(row.type)) damage = applyDamageModifier(damage, row.modifier)
+      if (!types.includes(row.type)) continue
+      damage = applyDamageModifier(damage, row.modifier)
+      weakness = true
     }
     for (const row of defending?.resistances ?? []) {
-      if (types.includes(row.type)) damage = applyDamageModifier(damage, row.modifier)
+      if (!types.includes(row.type)) continue
+      damage = applyDamageModifier(damage, row.modifier)
+      resistance = true
     }
   }
-  return Math.max(0, damage)
+  return { damage: Math.max(0, damage), weakness, resistance }
 }
 
 function applyDamageModifier(damage: number, modifier: DamageModifier): number {
@@ -116,13 +123,14 @@ export function interpret(
     case Op.Attack: {
       const attacker = resolveSlot(primitive.attacker, ctx)
       const defender = resolveSlot(primitive.defender, ctx)
-      ctx.bindings[primitive.bind] = pipelineAttackDamage(
+      const hit = pipelineAttackDamage(
         gamestate,
         resolveAmount(primitive.base, ctx),
         attacker,
         defender
       )
-      return gamestate
+      ctx.bindings[primitive.bind] = hit.damage
+      return record(gamestate, { op: Op.Attack, attacker, defender, ...hit })
     }
 
     case Op.ApplyDamage:
@@ -142,17 +150,21 @@ export function interpret(
       const scripted = ctx.script?.coins?.shift()
       const result = scripted ?? flipCoin(1)[0]
       ctx.bindings[primitive.bind] = result
-      return gamestate
+      return record(gamestate, { op: Op.FlipCoin, result })
     }
 
     case Op.ApplyModifier: {
       const slot = resolveSlot(primitive.slot, ctx)
       const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-      return applyModifier(gamestate, slot, {
-        field: primitive.field,
-        set: primitive.set,
-        until: { beat: primitive.until.beat, player },
-      })
+      const until = { beat: primitive.until.beat, player }
+      return record(
+        applyModifier(gamestate, slot, {
+          field: primitive.field,
+          set: primitive.set,
+          until,
+        }),
+        { op: Op.ApplyModifier, slot, field: primitive.field, set: primitive.set, until }
+      )
     }
 
     case Op.Count: {
@@ -174,7 +186,9 @@ export function interpret(
     case Op.SwapActive: {
       const slot = resolveSlot(primitive.slot, ctx)
       if (slot.slot !== "bench") return gamestate
-      return swapActive(gamestate, slot.player, slot.index)
+      const next = swapActive(gamestate, slot.player, slot.index)
+      if (next === gamestate) return gamestate
+      return record(next, { op: Op.SwapActive, slot })
     }
 
     case Op.If: {

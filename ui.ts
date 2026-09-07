@@ -2,6 +2,7 @@ import { currentForm, getSlot, hasPokemonInPlay } from "./board.js"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
 import { Action, type AvailableAction } from "./compute.js"
+import { Op, type HistoryEntry } from "./dsl.js"
 import type { GameState } from "./types.js"
 import { Phase } from "./types.js"
 
@@ -87,6 +88,19 @@ function formatEndgame(gamestate: GameState): string {
   return "end: game over"
 }
 
+function formatHistory(entry: HistoryEntry): string {
+  if (entry.op === Op.FlipCoin) return `  ${entry.op}  ${entry.result}`
+  if (entry.op === Op.Attack) {
+    const tags = [
+      entry.weakness ? "weakness" : "",
+      entry.resistance ? "resistance" : "",
+    ].filter(Boolean)
+    return `  ${entry.op}  ${entry.damage}${tags.length ? `  ${tags.join("  ")}` : ""}`
+  }
+  if (entry.op === Op.ApplyDamage) return `  ${entry.op}  ${entry.amount}`
+  return `  ${entry.op}`
+}
+
 export function formatGamestate(gamestate: GameState): string {
   const meta = [
     `# gamestate`,
@@ -107,6 +121,9 @@ export function formatGamestate(gamestate: GameState): string {
     ...side(gamestate, 2, "away"),
     "",
     ...side(gamestate, 1, "home"),
+    "",
+    "history",
+    ...(gamestate.history.length ? gamestate.history.map(formatHistory) : ["  -"]),
     "```",
     "",
   ]

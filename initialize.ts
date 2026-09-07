@@ -45,7 +45,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
     actionStack: [],
-    actionHistory: [],
+    history: [],
   }
 
   return dealOpeningHands(gamestate)

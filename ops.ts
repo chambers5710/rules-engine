@@ -1,4 +1,6 @@
 import { getSlot } from "./board.js"
+import { Op } from "./dsl.js"
+import { record } from "./history.js"
 import type {
   CardInstanceId,
   GameState,
@@ -52,7 +54,7 @@ export const moveZoneToZone = (
   const destZone = next.players[dest.player][dest.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
   placeInZone(destZone, position, cardId)
-  return next
+  return record(next, { op: Op.MoveZoneToZone, card: cardId, source, dest, position })
 }
 
 // Slot attachment — the named pile on that slot
@@ -76,7 +78,7 @@ export const moveZoneToSlot = (
   const sourceZone = next.players[source.player][source.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
   getSlotAttachment(next, dest).push(cardId)
-  return next
+  return record(next, { op: Op.MoveZoneToSlot, card: cardId, source, dest })
 }
 
 // Slot to zone — off a Pokémon back into a pile
@@ -95,7 +97,7 @@ export const moveSlotToZone = (
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   placeInZone(next.players[dest.player][dest.zone], position, cardId)
-  return next
+  return record(next, { op: Op.MoveSlotToZone, card: cardId, source, dest, position })
 }
 
 // Slot to slot — between Pokémon piles (retreat, attach, evolve)
@@ -113,7 +115,7 @@ export const moveSlotToSlot = (
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   getSlotAttachment(next, dest).push(cardId)
-  return next
+  return record(next, { op: Op.MoveSlotToSlot, card: cardId, source, dest })
 }
 
 // Damage — add to the slot; value may be negative
@@ -124,7 +126,7 @@ export const applyDamage = (
 ) => {
   const next = copy(gamestate)
   getSlot(next, slot).damage += value
-  return next
+  return record(next, { op: Op.ApplyDamage, amount: value, slot })
 }
 
 // Status — set one special-condition flag
@@ -135,7 +137,7 @@ export const applyStatus = (
 ) => {
   const next = copy(gamestate)
   getSlot(next, slot).status[status] = true
-  return next
+  return record(next, { op: Op.ApplyStatus, status, slot })
 }
 
 // Status — clear one special-condition flag
@@ -146,7 +148,7 @@ export const removeStatus = (
 ) => {
   const next = copy(gamestate)
   getSlot(next, slot).status[status] = false
-  return next
+  return record(next, { op: Op.RemoveStatus, status, slot })
 }
 
 // Shuffle — copy, then Fisher–Yates one of a player's piles
@@ -160,7 +162,7 @@ export const shuffle = (
   return next
 }
 
-// Coin — live RNG; persist results on history, do not re-roll on replay
+// Coin — live RNG
 type CoinResult = "heads" | "tails"
 export const flipCoin = (count: number): CoinResult[] => {
   const result: CoinResult[] = []

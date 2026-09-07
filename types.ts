@@ -1,4 +1,4 @@
-import type { ActionFrame } from "./dsl.js"
+import type { ActionFrame, HistoryEntry } from "./dsl.js"
 
 // Game — the full snapshot the engine reads and writes
 export type GameState = {
@@ -14,7 +14,7 @@ export type GameState = {
   energyAttachedThisTurn: boolean
   retreatedThisTurn: boolean
   actionStack: ActionFrame[]
-  actionHistory: []
+  history: HistoryEntry[]
 }
 
 // Phase — what kind of step is legal right now

@@ -70,6 +70,20 @@ export type Primitive =
 
 export type Expr = Primitive[]
 
+// Resolved execution — binds already filled; no If/Loop/Select/Count/Calc
+export type HistoryEntry =
+  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
+  | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
+  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; weakness: boolean; resistance: boolean }
+  | { op: Op.ApplyDamage; amount: number; slot: SlotId }
+  | { op: Op.ApplyStatus; status: Status; slot: SlotId }
+  | { op: Op.RemoveStatus; status: Status; slot: SlotId }
+  | { op: Op.FlipCoin; result: "heads" | "tails" }
+  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; player: 1 | 2 } }
+  | { op: Op.SwapActive; slot: SlotId }
+
 type ActionFrameBase = {
   player: 1 | 2
   kind: Action
