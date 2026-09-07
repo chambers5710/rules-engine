@@ -98,6 +98,8 @@ function turnPhase(
         : { player: action.player, slot: "bench", index: action.to.index }
       return markEvolvedThisTurn(runAction(gamestate, action), dest)
     }
+    case Action.Ability:
+      return runAction(gamestate, action)
     default:
       return runAction(gamestate, action)
   }

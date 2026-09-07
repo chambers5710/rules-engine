@@ -1,4 +1,4 @@
-import type { GameState, Slot, SlotId } from "./types.js"
+import type { CardInstance, GameState, Slot, SlotId } from "./types.js"
 
 const BENCH = [0, 1, 2, 3, 4] as const
 
@@ -58,10 +58,15 @@ export function getSlot(gamestate: GameState, ref: SlotId): Slot {
   return ref.slot === "active" ? player.active : player.bench[ref.index]
 }
 
+// Current form — top of the evolution stack
+export function currentForm(gamestate: GameState, slot: Slot): CardInstance | undefined {
+  const id = slot.evolution.at(-1)
+  if (!id) return undefined
+  return gamestate.cardRegistry[id]
+}
+
 // KO — damage has reached printed HP on the current form
 export function isKnockedOut(gamestate: GameState, slot: Slot): boolean {
-  const id = slot.evolution.at(-1)
-  if (!id) return false
-  const hp = Number(gamestate.cardRegistry[id]?.hp)
+  const hp = Number(currentForm(gamestate, slot)?.hp)
   return Number.isFinite(hp) && slot.damage >= hp
 }

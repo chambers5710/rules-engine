@@ -1,4 +1,4 @@
-import { hasPokemonInPlay } from "./board.js"
+import { currentForm, getSlot, hasPokemonInPlay } from "./board.js"
 import { createInterface } from "node:readline/promises"
 import { stdin as input, stdout as output } from "node:process"
 import { Action, type AvailableAction } from "./compute.js"
@@ -117,21 +117,31 @@ export function formatGamestate(gamestate: GameState): string {
 export function formatAction(gamestate: GameState, a: AvailableAction): string {
   if (a.kind === Action.Ready || a.kind === Action.EndTurn) return `${a.kind}`
   if (a.kind === Action.Promote) {
-    const id = gamestate.players[a.player].bench[a.index].evolution.at(-1)
-    return `${a.kind}  ${id ? cardName(gamestate, id) : `bench[${a.index}]`}`
+    const form = currentForm(gamestate, gamestate.players[a.player].bench[a.index])
+    return `${a.kind}  ${form ? form.name : `bench[${a.index}]`}`
   }
   if (a.kind === Action.AttachEnergy || a.kind === Action.Evolve) {
     const dest = a.to.slot === "active" ? "Active" : `bench[${a.to.index}]`
     return `${a.kind}  ${cardName(gamestate, a.card)} → ${dest}`
   }
   if (a.kind === Action.Attack) {
-    const id = gamestate.players[a.player].active.evolution.at(-1)
-    const printed = id
-      ? gamestate.cardRegistry[id].attacks?.find((attack) => attack.name === a.name)
-      : undefined
+    const form = currentForm(gamestate, gamestate.players[a.player].active)
+    const printed = form?.attacks?.find((attack) => attack.name === a.name)
     const text = String(printed?.text ?? "").trim()
     if (!text) return `${a.kind}  ${a.name}`
     return [`${a.kind}  ${a.name}`, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
+  }
+  if (a.kind === Action.Ability) {
+    const ref = a.from.slot === "active"
+      ? { player: a.player, slot: "active" as const }
+      : { player: a.player, slot: "bench" as const, index: a.from.index }
+    const form = currentForm(gamestate, getSlot(gamestate, ref))
+    const printed = form?.abilities?.find((ability) => ability.name === a.name)
+    const dest = a.from.slot === "active" ? "Active" : `bench[${a.from.index}]`
+    const text = String(printed?.text ?? "").trim()
+    const head = `${a.kind}  ${a.name}  ${dest}`
+    if (!text) return head
+    return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
   return `${a.kind}  ${cardName(gamestate, a.card)}`
 }

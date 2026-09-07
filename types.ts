@@ -107,6 +107,7 @@ export type CardInstance = {
   evolvesTo?: string | null
   retreatCost?: EnergyType[]
   attacks?: PrintedAttack[]
+  abilities?: Ability[]
   weaknesses?: { type: EnergyType; modifier: DamageModifier }
   resistances?: { type: EnergyType; modifier: DamageModifier }
   energyType?: EnergyType

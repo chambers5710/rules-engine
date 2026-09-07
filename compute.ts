@@ -1,4 +1,6 @@
 import {
+  currentForm,
+  getSlot,
   hasActive,
   nextEmptyBench,
   occupiedBench,
@@ -9,7 +11,7 @@ import {
 import { Op, type Expr } from "./dsl.js"
 import { cardEffect } from "./effects.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
-import type { GameState } from "./types.js"
+import type { GameState, Slot, SlotId } from "./types.js"
 import { Phase } from "./types.js"
 
 // Action — every top-level choice the client can make
@@ -19,6 +21,7 @@ export enum Action {
   AttachEnergy = "attach_energy",
   Evolve = "evolve",
   Attack = "attack",
+  Ability = "ability",
   Retreat = "retreat",
   Promote = "promote",
   Ready = "ready",
@@ -37,6 +40,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.AttachEnergy; player: 1 | 2; card: string; to: InPlaySlot })
   | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; to: InPlaySlot })
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
+  | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; from: InPlaySlot })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
   | (ActionBase & { kind: Action.EndTurn; player: 1 | 2 })
@@ -83,6 +87,7 @@ function computeTurn(gamestate: GameState): AvailableAction[] {
     ...placeBench(gamestate, player),
     ...placeEnergy(gamestate, player),
     ...placeEvolve(gamestate, player),
+    ...abilitiesInPlay(gamestate, player),
     ...attacksFromActive(gamestate, player),
     { kind: Action.EndTurn, player, expr: [] },
   ]
@@ -154,9 +159,8 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       ? gamestate.players[player].active
       : gamestate.players[player].bench[to.index]
     if (slot.evolvedThisTurn) continue
-    const top = slot.evolution.at(-1)
-    if (!top) continue
-    const name = gamestate.cardRegistry[top]?.name
+    const form = currentForm(gamestate, slot)
+    const name = form?.name
     if (!name) continue
     for (const card of surveyCards(gamestate, { player, zone: "hand" }, { kind: "evolves_from", name })) {
       actions.push({
@@ -178,20 +182,52 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
+// Ability — each in-play Pokémon's printed powers; $self_slot is that copy
+function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  const actions: AvailableAction[] = []
+  for (const from of pokemonInPlay(gamestate, player)) {
+    const ref: SlotId = from.slot === "active"
+      ? { player, slot: "active" }
+      : { player, slot: "bench", index: from.index }
+    const slot = getSlot(gamestate, ref)
+    const form = currentForm(gamestate, slot)
+    if (!form) continue
+    for (const ability of form.abilities ?? []) {
+      if (ability.type === "Pokémon Power" && pokemonPowerBlocked(slot)) continue
+      actions.push({
+        kind: Action.Ability,
+        player,
+        name: ability.name,
+        from,
+        expr: cardEffect(form.sourceId, "abilities", ability.name),
+        seed: { $self_slot: ref },
+      })
+    }
+  }
+  return actions
+}
+
+// Pokémon Power (Base set) — cannot use if Asleep, Confused, or Paralyzed.
+// That was the standard on these cards; later Abilities often do not share it.
+// Do not parse ability text. Per-card evenIf (e.g. still usable while Asleep) comes later.
+function pokemonPowerBlocked(slot: Slot): boolean {
+  const s = slot.status
+  return s.sleep || s.confused || s.paralyzed
+}
+
 // Attack — payable costs only; seed aims $self_slot / $defending for the expr
 function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
-  const id = gamestate.players[player].active.evolution.at(-1)
-  if (!id) return []
-  const printed = gamestate.cardRegistry[id]
+  const form = currentForm(gamestate, gamestate.players[player].active)
+  if (!form) return []
   const slot = { player, slot: "active" } as const
   const defending = opponent(player)
-  return (printed?.attacks ?? [])
+  return (form.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []))
     .map((attack) => ({
       kind: Action.Attack,
       player,
       name: attack.name,
-      expr: attackExpr(printed.sourceId, attack),
+      expr: attackExpr(form.sourceId, attack),
       seed: {
         $self_slot: slot,
         // consider what happens if bench pokemon are able to take damage from an attack.

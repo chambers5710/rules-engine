@@ -1,6 +1,7 @@
 import { Op, type Expr } from "./dsl.js"
 
 // Card effects — printed card id → named exprs (attacks, abilities, …)
+// Later: optional evenIf / require next to the expr so compute can override defaults (e.g. usable while Asleep).
 export type CardEffects = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>

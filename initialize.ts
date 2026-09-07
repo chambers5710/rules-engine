@@ -155,6 +155,11 @@ function instantiateCard(cardData: Card): CardInstance {
       text: attack.text ?? "",
       damage: attack.damage == null ? "" : String(attack.damage),
     })),
+    abilities: cardData.abilities?.map((ability) => ({
+      name: ability.name,
+      text: ability.text,
+      type: ability.type,
+    })),
     weaknesses: weaknesses,
     resistances: resistances,
     energyType: energyType,
