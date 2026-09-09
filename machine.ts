@@ -1,5 +1,6 @@
 import {
   bothReady,
+  currentForm,
   getSlot,
   hasActive,
   hasPokemonInPlay,
@@ -9,6 +10,7 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
+import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret, resolveSlot, type InterpretCtx } from "./interpret.js"
@@ -101,6 +103,8 @@ function turnPhase(
     case Action.Evolve:
       return markEvolvedThisTurn(runAction(gamestate, action), action.slot)
     case Action.Ability:
+      return runAction(gamestate, action)
+    case Action.PlayTrainer:
       return runAction(gamestate, action)
     case Action.Retreat:
       if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
@@ -269,7 +273,9 @@ function resumeSelect(
 function chooseBinding(
   action: Extract<AvailableAction, { kind: Action.Choose }>
 ): SlotId | string {
-  return action.pick === "cards" ? action.card : action.slot
+  if (action.pick === "cards") return action.card
+  if (action.pick === "attacks") return action.name
+  return action.slot
 }
 
 // Run an action's expr; Select pushes a frame and stops
@@ -305,6 +311,14 @@ function runExpr(
       if (ctx.bindings[step.bind] === until) continue
       return runExpr(gamestate, [...step.then, step, ...expr.slice(i + 1)], ctx, player, kind)
     }
+    if (step.op === Op.RunEffect) {
+      const copied = copiedAttack(
+        gamestate,
+        resolveSlot(step.slot, ctx),
+        String(ctx.bindings[step.attack] ?? "")
+      )
+      return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind)
+    }
     gamestate = interpret(gamestate, step, ctx)
   }
   return gamestate
@@ -336,6 +350,13 @@ function pauseSelect(
     case "attacks":
       return { ...base, pick: "attacks", slot: resolveSlot(step.slot, ctx) }
   }
+}
+
+function copiedAttack(gamestate: GameState, slot: SlotId, name: string): Expr {
+  const form = currentForm(gamestate, getSlot(gamestate, slot))
+  const attack = form?.attacks?.find((row) => row.name === name)
+  if (!form || !attack) return []
+  return attackExpr(form.sourceId, attack)
 }
 
 // Action finished — paused Select is not done; Attack / EndTurn then Checkup

@@ -108,6 +108,7 @@ export type CardInstance = {
   resistances?: { type: EnergyType; modifier: DamageModifier }[]
   energyType?: EnergyType
   energyValue?: number
+  rules?: string[]
   images: { small: string; large: string }
   fieldOverrides: []
 }

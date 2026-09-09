@@ -157,8 +157,16 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     if (!text) return head
     return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
+  if (a.kind === Action.PlayTrainer) {
+    const printed = gamestate.cardRegistry[a.card]
+    const text = (printed?.rules ?? []).join(" ").trim()
+    const head = `${a.kind}  ${printed?.name ?? a.card}`
+    if (!text) return head
+    return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
+  }
   if (a.kind === Action.Choose) {
     if (a.pick === "cards") return `select  ${cardName(gamestate, a.card)}`
+    if (a.pick === "attacks") return `select  ${a.name}`
     const form = currentForm(gamestate, getSlot(gamestate, a.slot))
     const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`
     return `select  ${form?.name ?? dest}  ${dest}`

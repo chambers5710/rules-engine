@@ -11,7 +11,7 @@ import {
   moveZoneToZone,
   removeStatus,
 } from "./ops.js"
-import { swapActive } from "./helpers.js"
+import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
 import type { DamageModifier, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
@@ -84,6 +84,11 @@ function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef 
   return ctx.bindings[source] as ZoneRef
 }
 
+function resolveSlotPile(source: SlotRef | BindingName, ctx: InterpretCtx): SlotRef {
+  if (typeof source !== "string") return source
+  return ctx.bindings[source] as SlotRef
+}
+
 function resolveSlotRef(
   slot: SlotId | BindingName,
   attachment: SlotRef["attachment"],
@@ -125,7 +130,13 @@ export function interpret(
       )
 
     case Op.MoveSlotToZone:
-      return moveSlotToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)
+      return moveSlotToZone(
+        gamestate,
+        resolveCard(primitive.card, ctx),
+        resolveSlotPile(primitive.source, ctx),
+        resolveZone(primitive.dest, ctx),
+        primitive.position
+      )
 
     case Op.MoveSlotToSlot:
       return moveSlotToSlot(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest)
@@ -199,6 +210,12 @@ export function interpret(
       const next = swapActive(gamestate, slot.player, slot.index)
       if (next === gamestate) return gamestate
       return record(next, { op: Op.SwapActive, slot })
+    }
+
+    case Op.Draw: {
+      const self = resolveSlot("$self_slot", ctx)
+      const player = primitive.who === "self" ? self.player : opponent(self.player)
+      return draw(gamestate, player, resolveAmount(primitive.count, ctx))
     }
 
     case Op.If: {

@@ -136,7 +136,7 @@ export const applyDamage = (
   slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, slot).damage += value
+  getSlot(next, slot).damage = Math.max(0, getSlot(next, slot).damage + value)
   return record(next, { op: Op.ApplyDamage, amount: value, slot })
 }
 

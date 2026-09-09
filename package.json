@@ -8,7 +8,9 @@
     "serve:poison": "tsx ./tests/poison.ts",
     "serve:asleep": "tsx ./tests/asleep.ts",
     "serve:paralyzed": "tsx ./tests/paralyzed.ts",
-    "serve:burn": "tsx ./tests/burn.ts"
+    "serve:burn": "tsx ./tests/burn.ts",
+    "serve:metronome": "tsx ./tests/metronome.ts",
+    "serve:trainers": "tsx ./tests/trainers.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

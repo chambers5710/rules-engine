@@ -180,7 +180,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`
+- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:metronome`, `pnpm serve:trainers`
 
 ## Select → bind → run
 
@@ -245,5 +245,7 @@ pnpm serve:poison          # Ivysaur vs Chansey (Poisonpowder)
 pnpm serve:asleep          # Haunter vs Chansey (Hypnosis)
 pnpm serve:paralyzed       # Electabuzz vs Chansey (Thundershock)
 pnpm serve:burn            # Rapidash (basep-51) vs Chansey (Super Singe)
+pnpm serve:metronome       # Clefairy vs Magmar (Metronome)
+pnpm serve:trainers        # Both hands: Bill, Potion, Switch, Gust, Full Heal
 npx tsx ./tests/confuse-ray.ts
 ```

@@ -9,7 +9,7 @@ import {
   sameSlot,
 } from "./board.js"
 import { Action, Op, type ActionFrame, type Expr, type SelectFilter } from "./dsl.js"
-import { cardEffect } from "./effects.js"
+import { attackExpr, cardEffect, trainerEffect } from "./effects.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { DAMAGE_COUNTER, Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
@@ -29,8 +29,10 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Evolve; player: 1 | 2; card: string; slot: SlotId })
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
+  | (ActionBase & { kind: Action.PlayTrainer; player: 1 | 2; card: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string })
   | (ActionBase & { kind: Action.Retreat; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
@@ -60,7 +62,7 @@ function computeSelect(gamestate: GameState): AvailableAction[] {
     case "cards":
       return selectCards(gamestate, frame)
     case "attacks":
-      return []
+      return selectAttacks(gamestate, frame)
   }
 }
 
@@ -115,6 +117,7 @@ function slotMatches(
       case "energy":
       case "basic_pokemon":
       case "evolves_from":
+      case "trainer":
         break
     }
   }
@@ -147,6 +150,20 @@ function selectCards(
     actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
   }
   return actions
+}
+
+function selectAttacks(
+  gamestate: GameState,
+  frame: Extract<ActionFrame, { pick: "attacks" }>
+): AvailableAction[] {
+  const form = currentForm(gamestate, getSlot(gamestate, frame.slot))
+  return (form?.attacks ?? []).map((attack) => ({
+    kind: Action.Choose,
+    player: frame.player,
+    pick: "attacks" as const,
+    name: attack.name,
+    expr: [],
+  }))
 }
 
 function canSum(values: number[], target: number): boolean {
@@ -191,6 +208,7 @@ function computeTurn(gamestate: GameState): AvailableAction[] {
     ...placeBench(gamestate, player),
     ...placeEnergy(gamestate, player),
     ...placeEvolve(gamestate, player),
+    ...playTrainer(gamestate, player),
     ...abilitiesInPlay(gamestate, player),
     ...attacksFromActive(gamestate, player),
     ...retreatFromActive(gamestate, player),
@@ -288,6 +306,28 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
+// Trainer — one play per copy in hand. Discard is the play; effects[id] is the text.
+function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  const hand = { player, zone: "hand" } as const
+  const discard = { player, zone: "discard" } as const
+  const active = { player, slot: "active" } as const
+  return surveyCards(gamestate, hand, { kind: "trainer" }).map((card) => ({
+    kind: Action.PlayTrainer,
+    player,
+    card,
+    expr: [
+      { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
+      ...trainerEffect(gamestate.cardRegistry[card].sourceId),
+    ],
+    seed: {
+      $self_slot: active,
+      $defending: { player: opponent(player), slot: "active" },
+      $hand: hand,
+      $discard: discard,
+    },
+  }))
+}
+
 // Ability — each in-play Pokémon's printed powers; $self_slot is that copy
 function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
@@ -339,23 +379,11 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
       expr: attackExpr(form.sourceId, attack),
       seed: {
         $self_slot: slot,
-        // consider what happens if bench pokemon are able to take damage from an attack.
         $defending: { player: defending, slot: "active" },
+        $energy: { ...slot, attachment: "energy" },
+        $discard: { player, zone: "discard" },
       },
     }))
-}
-
-// Prefer a written card effect; otherwise printed damage through the attack pipeline
-function attackExpr(sourceId: string, attack: { name: string; damage?: string | number | null }): Expr {
-  const written = cardEffect(sourceId, "attacks", attack.name)
-  if (written.length > 0) return written
-  const raw = attack.damage == null ? "" : String(attack.damage).trim()
-  const base = Number(raw.replace(/[^0-9.-]/g, ""))
-  if (!raw || !Number.isFinite(base) || base <= 0) return []
-  return [
-    { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
-    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
-  ]
 }
 
 // Retreat — pay energy value on Active, then swap with a benched Pokémon.

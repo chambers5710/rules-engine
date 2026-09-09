@@ -1,14 +1,13 @@
 import { Op, type Expr } from "./dsl.js"
 import { DAMAGE_COUNTER } from "./types.js"
 
-// Card effects — printed card id → named exprs (attacks, abilities, …)
-// Later: optional evenIf / require next to the expr so compute can override defaults (e.g. usable while Asleep).
+// Pokémon: attacks / abilities by name. Trainers: the expr is the entry (id only).
 export type CardEffects = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
 }
 
-export const effects: Record<string, CardEffects> = {
+export const effects: Record<string, CardEffects | Expr> = {
   // Chansey — first Basic Pokémon in base1
   "base1-1": {
     attacks: {
@@ -103,6 +102,40 @@ export const effects: Record<string, CardEffects> = {
       ],
     },
   },
+  "base1-4": {
+    attacks: {
+      "Fire Spin": [
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$energy",
+          bind: "$pay",
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$energy",
+          dest: "$discard",
+          position: "bottom",
+        },
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$energy",
+          bind: "$pay",
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$energy",
+          dest: "$discard",
+          position: "bottom",
+        },
+        { op: Op.Attack, base: 100, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
   "base1-20": {
     attacks: {
       "Thundershock": [
@@ -143,6 +176,10 @@ export const effects: Record<string, CardEffects> = {
           ]
         },
       ],
+      "Metronome": [
+        { op: Op.Select, pick: "attacks", slot: "$defending", bind: "$copy" },
+        { op: Op.RunEffect, attack: "$copy", slot: "$defending" },
+      ],
     },
   },
   "basep-51": {
@@ -159,6 +196,39 @@ export const effects: Record<string, CardEffects> = {
       ],
     },
   },
+  "base1-82": [
+    { op: Op.RemoveStatus, status: "asleep", slot: "$self_slot" },
+    { op: Op.RemoveStatus, status: "confused", slot: "$self_slot" },
+    { op: Op.RemoveStatus, status: "paralyzed", slot: "$self_slot" },
+    { op: Op.RemoveStatus, status: "poison", slot: "$self_slot" },
+  ],
+  "base1-91": [
+    { op: Op.Draw, who: "self", count: 2 },
+  ],
+  "base1-93": [
+    {
+      op: Op.Select,
+      pick: "slots",
+      who: "opponent",
+      bind: "$to",
+      filter: { kind: "other_than", bind: "$defending" },
+    },
+    { op: Op.SwapActive, slot: "$to" },
+  ],
+  "base1-94": [
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to" },
+    { op: Op.ApplyDamage, amount: -2 * DAMAGE_COUNTER, slot: "$to" },
+  ],
+  "base1-95": [
+    {
+      op: Op.Select,
+      pick: "slots",
+      who: "self",
+      bind: "$to",
+      filter: { kind: "other_than", bind: "$self_slot" },
+    },
+    { op: Op.SwapActive, slot: "$to" },
+  ],
 }
 
 export function cardEffect(
@@ -166,5 +236,28 @@ export function cardEffect(
   bucket: keyof CardEffects,
   name: string
 ): Expr {
-  return effects[sourceId]?.[bucket]?.[name] ?? []
+  const entry = effects[sourceId]
+  if (!entry || Array.isArray(entry)) return []
+  return entry[bucket]?.[name] ?? []
+}
+
+export function trainerEffect(sourceId: string): Expr {
+  const entry = effects[sourceId]
+  return Array.isArray(entry) ? entry : []
+}
+
+// Written effect, or printed numeric damage through the attack pipeline.
+export function attackExpr(
+  sourceId: string,
+  attack: { name: string; damage?: string | number | null }
+): Expr {
+  const written = cardEffect(sourceId, "attacks", attack.name)
+  if (written.length > 0) return written
+  const raw = attack.damage == null ? "" : String(attack.damage).trim()
+  const base = Number(raw.replace(/[^0-9.-]/g, ""))
+  if (!raw || !Number.isFinite(base) || base <= 0) return []
+  return [
+    { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+  ]
 }

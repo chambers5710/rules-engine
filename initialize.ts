@@ -164,6 +164,7 @@ function instantiateCard(cardData: Card): CardInstance {
     resistances: resistances,
     energyType: energyType,
     energyValue: energyValue,
+    rules: cardData.rules,
     images: cardData.images,
     fieldOverrides: [],
   }

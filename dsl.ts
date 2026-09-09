@@ -18,6 +18,8 @@ export enum Op {
   Count = "count",
   Calc = "calc",
   SwapActive = "swap_active",
+  RunEffect = "run_effect",
+  Draw = "draw",
 }
 
 // Action — every top-level choice the client can make
@@ -28,6 +30,7 @@ export enum Action {
   Evolve = "evolve",
   Attack = "attack",
   Ability = "ability",
+  PlayTrainer = "play_trainer",
   Choose = "choose",
   Retreat = "retreat",
   Promote = "promote",
@@ -53,7 +56,7 @@ export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
-  | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
@@ -69,6 +72,8 @@ export type Primitive =
   | { op: Op.Count; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
+  | { op: Op.RunEffect; attack: BindingName; slot: SlotId | BindingName }
+  | { op: Op.Draw; who: "self" | "opponent"; count: number | BindingName }
 
 export type Expr = Primitive[]
 

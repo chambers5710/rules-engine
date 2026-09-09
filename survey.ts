@@ -13,6 +13,7 @@ export type SurveyFilter =
   | { kind: "energy"; type?: EnergyType }
   | { kind: "basic_pokemon" }
   | { kind: "evolves_from"; name: string }
+  | { kind: "trainer" }
 
 // Cards at — ids in that zone or slot attachment, top-first
 export function cardsAt(gamestate: GameState, source: ZoneRef | SlotRef): CardInstanceId[] {
@@ -105,5 +106,7 @@ function cardMatches(
       return isBasicPokemon(gamestate, cardId)
     case "evolves_from":
       return gamestate.cardRegistry[cardId]?.evolvesFrom === filter.name
+    case "trainer":
+      return gamestate.cardRegistry[cardId]?.supertype === "Trainer"
   }
 }
