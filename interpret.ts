@@ -14,7 +14,7 @@ import {
 import { swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
-import type { DamageModifier, GameState, SlotId, SlotRef } from "./types.js"
+import type { DamageModifier, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -79,6 +79,11 @@ function resolveCard(card: string, ctx: InterpretCtx): string {
   return card
 }
 
+function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef {
+  if (typeof source !== "string") return source
+  return ctx.bindings[source] as ZoneRef
+}
+
 function resolveSlotRef(
   slot: SlotId | BindingName,
   attachment: SlotRef["attachment"],
@@ -112,7 +117,12 @@ export function interpret(
       return moveZoneToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)
 
     case Op.MoveZoneToSlot:
-      return moveZoneToSlot(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest)
+      return moveZoneToSlot(
+        gamestate,
+        resolveCard(primitive.card, ctx),
+        resolveZone(primitive.source, ctx),
+        resolveSlotRef(primitive.dest, primitive.attachment, ctx)
+      )
 
     case Op.MoveSlotToZone:
       return moveSlotToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)

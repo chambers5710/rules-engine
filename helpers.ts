@@ -72,7 +72,7 @@ export function swapActive(
   p.bench[index] = {
     evolution: [...active.evolution],
     damage: active.damage,
-    status: { ...active.status },
+    status: emptyStatus(),
     energy: [...active.energy],
     tools: [...active.tools],
     modifiers: [...active.modifiers],
@@ -97,7 +97,7 @@ export const emptyStatus = (): StatusFlags => ({
   poison: false,
   burn: false,
   paralyzed: false,
-  sleep: false,
+  asleep: false,
   confused: false,
 })
 

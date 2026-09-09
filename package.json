@@ -4,7 +4,11 @@
   "scripts": {
     "serve": "tsx ./index.ts",
     "serve:alakazam": "tsx ./tests/alakazam.ts",
-    "serve:scrunch": "tsx ./tests/scrunch.ts"
+    "serve:scrunch": "tsx ./tests/scrunch.ts",
+    "serve:poison": "tsx ./tests/poison.ts",
+    "serve:asleep": "tsx ./tests/asleep.ts",
+    "serve:paralyzed": "tsx ./tests/paralyzed.ts",
+    "serve:burn": "tsx ./tests/burn.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

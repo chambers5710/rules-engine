@@ -9,15 +9,17 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
-import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
+import { discardSlot, draw, emptyStatus, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret, resolveSlot, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
 import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
-import { Phase } from "./types.js"
+import { DAMAGE_COUNTER, Phase } from "./types.js"
 
 const PRIZE_COUNT = 6
 const PRIZES_ON_KO = 1
+const POISON_COUNTERS = 1
+const BURN_COUNTERS = 2
 const PLAYERS = [1, 2] as const
 
 // Apply one client-chosen action (or null when the phase runs with no input).
@@ -84,7 +86,8 @@ function turnPhase(
     case Action.EndTurn:
       return onComplete(gamestate, action.kind)
     case Action.Attack:
-      return runAction(gamestate, action)
+      if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
+      return confusedAttack(gamestate, action)
     case Action.Promote:
       gamestate = promote(gamestate, action.player, action.index)
       return drawOrLose(gamestate)
@@ -100,10 +103,34 @@ function turnPhase(
     case Action.Ability:
       return runAction(gamestate, action)
     case Action.Retreat:
+      if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
       return { ...runAction(gamestate, action), retreatedThisTurn: true }
     default:
       return runAction(gamestate, action)
   }
+}
+
+function attackOrRetreatBlocked(gamestate: GameState, player: 1 | 2): boolean {
+  const status = getSlot(gamestate, { player, slot: "active" }).status
+  return status.asleep || status.paralyzed
+}
+
+// Confused — flip before the attack expr. Tails: 3 counters on Active, attack does not run.
+function confusedAttack(
+  gamestate: GameState,
+  action: Extract<AvailableAction, { kind: Action.Attack }>
+): GameState {
+  const slot = { player: action.player, slot: "active" } as const
+  if (!getSlot(gamestate, slot).status.confused) return runAction(gamestate, action)
+  const ctx: InterpretCtx = { bindings: {} }
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  if (ctx.bindings.$coin === "heads") return runAction(gamestate, action)
+  gamestate = interpret(gamestate, {
+    op: Op.ApplyDamage,
+    amount: 3 * DAMAGE_COUNTER,
+    slot,
+  }, ctx)
+  return onComplete(gamestate, action.kind)
 }
 
 // Enter Turn — draw only if Active is already filled
@@ -139,18 +166,65 @@ function enterCheckup(gamestate: GameState): GameState {
   return checkupPhase({ ...gamestate, phase: Phase.Checkup })
 }
 
-// Checkup — KO every slot, then win/lose; statuses later
+// Checkup — status in order (poison, burn, asleep, paralyzed), then KO, then win/lose
 function checkupPhase(gamestate: GameState): GameState {
+  for (const player of PLAYERS) gamestate = checkupPoison(gamestate, player)
+  for (const player of PLAYERS) gamestate = checkupBurn(gamestate, player)
+  for (const player of PLAYERS) gamestate = checkupAsleep(gamestate, player)
+  gamestate = checkupParalyzed(gamestate, gamestate.activePlayer)
+
   gamestate = resolveKnockouts(gamestate)
+
   for (const player of PLAYERS) {
     if (gamestate.players[player].prize.length === 0) return endGame(gamestate)
     if (!hasPokemonInPlay(gamestate, player)) return endGame(gamestate)
   }
+
   return enterTurn(
     gamestate,
     opponent(gamestate.activePlayer),
     gamestate.turnCount + 1
   )
+}
+
+function checkupPoison(gamestate: GameState, player: 1 | 2): GameState {
+  const slot = { player, slot: "active" } as const
+  if (!getSlot(gamestate, slot).status.poison) return gamestate
+  return interpret(gamestate, {
+    op: Op.ApplyDamage,
+    amount: POISON_COUNTERS * DAMAGE_COUNTER,
+    slot,
+  })
+}
+
+function checkupBurn(gamestate: GameState, player: 1 | 2): GameState {
+  const slot = { player, slot: "active" } as const
+  if (!getSlot(gamestate, slot).status.burn) return gamestate
+  gamestate = interpret(gamestate, {
+    op: Op.ApplyDamage,
+    amount: BURN_COUNTERS * DAMAGE_COUNTER,
+    slot,
+  })
+  const ctx: InterpretCtx = { bindings: {} }
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  if (ctx.bindings.$coin !== "heads") return gamestate
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "burn", slot })
+}
+
+function checkupAsleep(gamestate: GameState, player: 1 | 2): GameState {
+  const slot = { player, slot: "active" } as const
+  if (!getSlot(gamestate, slot).status.asleep) return gamestate
+  const ctx: InterpretCtx = { bindings: {} }
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  if (ctx.bindings.$coin !== "heads") return gamestate
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "asleep", slot })
+}
+
+function checkupParalyzed(gamestate: GameState, player: 1 | 2): GameState {
+  if (player !== gamestate.activePlayer) return gamestate
+  const slot = { player, slot: "active" } as const
+  if (!getSlot(gamestate, slot).status.paralyzed) return gamestate
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "paralyzed", slot })
 }
 
 // KO — discard that slot; opponent takes the default prize count

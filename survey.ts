@@ -10,8 +10,7 @@ import type {
 // Filter — data so compute and (later) expr ask the same question
 // this seems painfully arbitrary
 export type SurveyFilter =
-  | { kind: "energy" }
-  | { kind: "energy_type"; type: EnergyType }
+  | { kind: "energy"; type?: EnergyType }
   | { kind: "basic_pokemon" }
   | { kind: "evolves_from"; name: string }
 
@@ -99,12 +98,9 @@ function cardMatches(
   if (!filter) return true
   switch (filter.kind) {
     case "energy":
-      return isEnergy(gamestate, cardId)
-    case "energy_type":
-      return (
-        isEnergy(gamestate, cardId) &&
-        gamestate.cardRegistry[cardId]?.energyType === filter.type
-      )
+      if (!isEnergy(gamestate, cardId)) return false
+      if (filter.type && gamestate.cardRegistry[cardId]?.energyType !== filter.type) return false
+      return true
     case "basic_pokemon":
       return isBasicPokemon(gamestate, cardId)
     case "evolves_from":

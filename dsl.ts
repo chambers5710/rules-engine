@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, SlotId, SlotRef, Status, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, EnergyType, SlotId, SlotRef, Status, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -45,12 +45,14 @@ export type SelectFilter =
   | { kind: "survives_counters"; counters: number }
   | { kind: "other_than"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
+  | { kind: "has_type"; type: EnergyType }
+  | SurveyFilter
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
-  | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
+  | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }

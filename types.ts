@@ -85,7 +85,7 @@ export type Modifier = {
 }
 
 // Status — special conditions; more than one flag may be on
-export type Status = "poison" | "burn" | "paralyzed" | "sleep" | "confused"
+export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"
 
 // Status flags — healthy is all false
 export type StatusFlags = Record<Status, boolean>

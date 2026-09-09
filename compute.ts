@@ -107,6 +107,15 @@ function slotMatches(
       }
       case "pays":
         break
+      case "has_type": {
+        const types = currentForm(gamestate, slot)?.types ?? []
+        if (!types.includes(filter.type)) return false
+        break
+      }
+      case "energy":
+      case "basic_pokemon":
+      case "evolves_from":
+        break
     }
   }
   return true
@@ -116,9 +125,16 @@ function selectCards(
   gamestate: GameState,
   frame: Extract<ActionFrame, { pick: "cards" }>
 ): AvailableAction[] {
-  const pays = [frame.filter ?? []].flat().find((filter) => filter.kind === "pays")
+  const filters = [frame.filter ?? []].flat()
+  const pays = filters.find((filter) => filter.kind === "pays")
   const need = pays ? frame.bindings[pays.bind] : undefined
-  const cards = surveyCards(gamestate, frame.source, { kind: "energy" }) // probably needs to not be hardcoded?
+  const survey = filters.find(
+    (filter) =>
+      filter.kind === "energy" ||
+      filter.kind === "basic_pokemon" ||
+      filter.kind === "evolves_from"
+  )
+  const cards = surveyCards(gamestate, frame.source, survey)
   const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
   const actions: AvailableAction[] = []
   for (let i = 0; i < cards.length; i++) {
@@ -193,7 +209,8 @@ function placeActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
         op: Op.MoveZoneToSlot,
         card,
         source: { player, zone: "hand" },
-        dest: { player, slot: "active", attachment: "evolution" },
+        dest: { player, slot: "active" },
+        attachment: "evolution",
       },
     ],
   }))
@@ -212,7 +229,8 @@ function placeBench(gamestate: GameState, player: 1 | 2): AvailableAction[] {
         op: Op.MoveZoneToSlot,
         card,
         source: { player, zone: "hand" },
-        dest: { player, slot: "bench", index, attachment: "evolution" },
+        dest: { player, slot: "bench", index },
+        attachment: "evolution",
       },
     ],
   }))
@@ -232,7 +250,8 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
           op: Op.MoveZoneToSlot,
           card,
           source: { player, zone: "hand" },
-          dest: { ...slot, attachment: "energy" },
+          dest: slot,
+          attachment: "energy",
         },
       ],
     }))
@@ -259,7 +278,8 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
             op: Op.MoveZoneToSlot,
             card,
             source: { player, zone: "hand" },
-            dest: { ...slotId, attachment: "evolution" },
+            dest: slotId,
+            attachment: "evolution",
           },
         ],
       })
@@ -283,7 +303,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
         name: ability.name,
         slot: slotId,
         expr: cardEffect(form.sourceId, "abilities", ability.name),
-        seed: { $self_slot: slotId },
+        seed: { $self_slot: slotId, $hand: { player, zone: "hand" } },
       })
     }
   }
@@ -295,12 +315,18 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
 // Do not parse ability text. Per-card evenIf (e.g. still usable while Asleep) comes later.
 function pokemonPowerBlocked(slot: Slot): boolean {
   const s = slot.status
-  return s.sleep || s.confused || s.paralyzed
+  return s.asleep || s.paralyzed|| s.confused 
+}
+
+function attackOrRetreatBlocked(slot: Slot): boolean {
+  return slot.status.asleep || slot.status.paralyzed
 }
 
 // Attack — payable costs only; seed aims $self_slot / $defending for the expr
 function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
-  const form = currentForm(gamestate, gamestate.players[player].active)
+  const active = gamestate.players[player].active
+  if (attackOrRetreatBlocked(active)) return []
+  const form = currentForm(gamestate, active)
   if (!form) return []
   const slot = { player, slot: "active" } as const
   const defending = opponent(player)
@@ -333,12 +359,13 @@ function attackExpr(sourceId: string, attack: { name: string; damage?: string | 
 }
 
 // Retreat — pay energy value on Active, then swap with a benched Pokémon.
-// Asleep and Paralyzed block retreat; statuses later.
 function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   if (gamestate.retreatedThisTurn) return []
   if (occupiedBench(gamestate, player).length === 0) return []
+  const active = gamestate.players[player].active
+  if (attackOrRetreatBlocked(active)) return []
   const slot = { player, slot: "active" } as const
-  const form = currentForm(gamestate, gamestate.players[player].active)
+  const form = currentForm(gamestate, active)
   if (!form) return []
   const cost = form.retreatCost ?? []
   if (!canPayEnergyCost(gamestate, slot, cost)) return []

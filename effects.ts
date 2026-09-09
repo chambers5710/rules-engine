@@ -50,7 +50,7 @@ export const effects: Record<string, CardEffects> = {
   "base1-2": {
     attacks: {
       "Hydro Pump": [
-        { op: Op.Count, slot: "$self_slot", attachment: "energy", filter: { kind: "energy_type", type: "Water" }, as: "energy_value", bind: "$water" },
+        { op: Op.Count, slot: "$self_slot", attachment: "energy", filter: { kind: "energy", type: "Water" }, as: "energy_value", bind: "$water" },
         { op: Op.Calc, fn: "sub", a: "$water", b: 3, bind: "$extra" },
         { op: Op.Calc, fn: "max", a: "$extra", b: 0, bind: "$extra" },
         { op: Op.Calc, fn: "min", a: "$extra", b: 2, bind: "$extra" },
@@ -60,6 +60,31 @@ export const effects: Record<string, CardEffects> = {
         { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
       ],
     },
+    abilities: {
+      "Rain Dance": [
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$hand",
+          bind: "$energy",
+          filter: { kind: "energy", type: "Water" },
+        },
+        {
+          op: Op.Select,
+          pick: "slots",
+          who: "self",
+          bind: "$to",
+          filter: { kind: "has_type", type: "Water" },
+        },
+        {
+          op: Op.MoveZoneToSlot,
+          card: "$energy",
+          source: "$hand",
+          dest: "$to",
+          attachment: "energy",
+        },
+      ]
+    }
   },
   "base1-3": {
     attacks: {
@@ -78,13 +103,57 @@ export const effects: Record<string, CardEffects> = {
       ],
     },
   },
+  "base1-20": {
+    attacks: {
+      "Thundershock": [
+        { op: Op.Attack, base: 10, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            { op: Op.ApplyStatus, status: "paralyzed", slot: "$defending" }
+          ]
+        },
+      ],
+    },
+  },
+  "base1-29": {
+    attacks: {
+      "Hypnosis": [
+        { op: Op.ApplyStatus, status: "asleep", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-30": {
+    attacks: {
+      "Poisonpowder": [
+        { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.ApplyStatus, status: "poison", slot: "$defending" },
+      ],
+    },
+  },
   "base1-5": {
     attacks: {
       "Sing": [
         { op: Op.FlipCoin, bind: "$coin" },
         {
           op: Op.If, bind: "$coin", equals: "heads", then: [
-            { op: Op.ApplyStatus, status: "sleep", slot: "$defending" }
+            { op: Op.ApplyStatus, status: "asleep", slot: "$defending" }
+          ]
+        },
+      ],
+    },
+  },
+  "basep-51": {
+    attacks: {
+      "Super Singe": [
+        { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            { op: Op.ApplyStatus, status: "burn", slot: "$defending" }
           ]
         },
       ],
