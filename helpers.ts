@@ -1,5 +1,6 @@
 import { getSlot } from "./board.js"
-import type { GameState, Slot, SlotId, StatusFlags } from "./types.js"
+import { emptyStatus } from "./status.js"
+import type { GameState, Slot, SlotId } from "./types.js"
 import { copy, moveSlotToZone, moveZoneToZone } from "./ops.js"
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
@@ -90,15 +91,6 @@ export const emptySlot = (): Slot => ({
   tools: [],
   modifiers: [],
   evolvedThisTurn: false,
-})
-
-// Empty status — no special conditions
-export const emptyStatus = (): StatusFlags => ({
-  poison: false,
-  burn: false,
-  paralyzed: false,
-  asleep: false,
-  confused: false,
 })
 
 // Discard slot — Pokémon, energy, and tools to discard; slot cleared

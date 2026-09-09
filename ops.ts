@@ -1,6 +1,7 @@
 import { getSlot } from "./board.js"
 import { Op } from "./dsl.js"
 import { record } from "./history.js"
+import { emptyStatus, withStatus } from "./status.js"
 import type {
   CardInstanceId,
   GameState,
@@ -62,6 +63,14 @@ const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[]
   return getSlot(gamestate, ref)[ref.attachment]
 }
 
+// A card landing on an already occupied evolution pile is an evolve — all five flags off.
+function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
+  if (dest.attachment !== "evolution") return
+  const pokemon = getSlot(gamestate, dest)
+  if (pokemon.evolution.length === 0) return
+  pokemon.status = emptyStatus()
+}
+
 // Zone to slot — pile onto a Pokémon (evolution, energy, or tool)
 export const moveZoneToSlot = (
   gamestate: GameState,
@@ -77,6 +86,7 @@ export const moveZoneToSlot = (
   const next = copy(gamestate)
   const sourceZone = next.players[source.player][source.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
+  clearStatusOnEvolve(next, dest)
   getSlotAttachment(next, dest).push(cardId)
   return record(next, { op: Op.MoveZoneToSlot, card: cardId, source, dest })
 }
@@ -114,6 +124,7 @@ export const moveSlotToSlot = (
   const next = copy(gamestate)
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
+  clearStatusOnEvolve(next, dest)
   getSlotAttachment(next, dest).push(cardId)
   return record(next, { op: Op.MoveSlotToSlot, card: cardId, source, dest })
 }
@@ -136,7 +147,8 @@ export const applyStatus = (
   slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, slot).status[status] = true
+  const pokemon = getSlot(next, slot)
+  pokemon.status = withStatus(pokemon.status, status)
   return record(next, { op: Op.ApplyStatus, status, slot })
 }
 

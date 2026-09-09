@@ -9,7 +9,7 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
-import { discardSlot, draw, emptyStatus, placePrize, promote, takePrize } from "./helpers.js"
+import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { interpret, resolveSlot, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
