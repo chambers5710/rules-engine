@@ -95,6 +95,21 @@ export function toHand(gamestate: GameState, player: 1 | 2, sourceId: string, n:
   return gamestate
 }
 
+export function toDeck(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
+  while (countIn(gamestate, player, sourceId, "deck") < n) {
+    const found = pull(gamestate, player, sourceId, ["deck"])
+    if (!found) throw new Error(`not enough ${sourceId} for p${player} deck`)
+    gamestate = moveZoneToZone(
+      gamestate,
+      found.card,
+      { player, zone: found.zone },
+      { player, zone: "deck" },
+      "bottom"
+    )
+  }
+  return gamestate
+}
+
 export function toPrize(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
   while (countIn(gamestate, player, sourceId, "prize") < n) {
     const found = pull(gamestate, player, sourceId, ["prize", "hand"])

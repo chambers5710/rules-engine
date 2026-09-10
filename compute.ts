@@ -118,6 +118,7 @@ function slotMatches(
       case "basic_pokemon":
       case "evolves_from":
       case "trainer":
+      case "pokemon":
         break
     }
   }
@@ -135,7 +136,9 @@ function selectCards(
     (filter) =>
       filter.kind === "energy" ||
       filter.kind === "basic_pokemon" ||
-      filter.kind === "evolves_from"
+      filter.kind === "evolves_from" ||
+      filter.kind === "trainer" ||
+      filter.kind === "pokemon"
   )
   const cards = surveyCards(gamestate, frame.source, survey)
   const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
@@ -323,7 +326,10 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       $self_slot: active,
       $defending: { player: opponent(player), slot: "active" },
       $hand: hand,
+      $deck: { player, zone: "deck" },
       $discard: discard,
+      $opp_hand: { player: opponent(player), zone: "hand" },
+      $opp_deck: { player: opponent(player), zone: "deck" },
       $opp_discard: { player: opponent(player), zone: "discard" },
     },
   }))

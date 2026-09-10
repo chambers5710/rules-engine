@@ -10,11 +10,54 @@ import {
   moveZoneToSlot,
   moveZoneToZone,
   removeStatus,
+  shuffle,
 } from "./ops.js"
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
-import { surveyCount, surveyEnergyValue } from "./survey.js"
-import type { Attachment, DamageModifier, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
+import { surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
+import type { Attachment, DamageModifier, GameState, SlotId, SlotRef, ZoneName, ZoneRef } from "./types.js"
+
+function isZoneRef(value: unknown): value is ZoneRef {
+  return typeof value === "object" && value !== null && "zone" in value && "player" in value
+}
+
+function zoneOf(gamestate: GameState, card: string): ZoneRef | undefined {
+  for (const player of [1, 2] as const) {
+    for (const zone of ["hand", "deck", "discard", "prize"] as const) {
+      if (gamestate.players[player][zone].includes(card)) return { player, zone }
+    }
+  }
+}
+
+function resolveReveal(
+  gamestate: GameState,
+  cards: BindingName | BindingName[],
+  ctx: InterpretCtx
+): { cards: string[]; from: 1 | 2; zone?: ZoneName } {
+  const ids: string[] = []
+  let from: 1 | 2 | undefined
+  let zone: ZoneName | undefined
+  for (const name of [cards].flat()) {
+    const bound = ctx.bindings[name]
+    if (isZoneRef(bound)) {
+      from ??= bound.player
+      zone ??= bound.zone
+      ids.push(...surveyCards(gamestate, bound))
+      continue
+    }
+    if (typeof bound === "string" && bound) {
+      ids.push(bound)
+      const at = zoneOf(gamestate, bound)
+      if (at) {
+        from ??= at.player
+        zone ??= at.zone
+        if (at.zone !== zone) zone = undefined
+      }
+    }
+  }
+  const self = ctx.bindings["$self_slot"] as SlotId | undefined
+  return { cards: ids, from: from ?? self?.player ?? 1, zone }
+}
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -124,7 +167,13 @@ export function interpret(
 ): GameState {
   switch (primitive.op) {
     case Op.MoveZoneToZone:
-      return moveZoneToZone(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest, primitive.position)
+      return moveZoneToZone(
+        gamestate,
+        resolveCard(primitive.card, ctx),
+        resolveZone(primitive.source, ctx),
+        resolveZone(primitive.dest, ctx),
+        primitive.position
+      )
 
     case Op.MoveZoneToSlot:
       return moveZoneToSlot(
@@ -198,6 +247,19 @@ export function interpret(
         ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
         return gamestate
       }
+      if (primitive.kind === "first") {
+        const zone = resolveZone(primitive.zone, ctx)
+        ctx.bindings[primitive.bind] = surveyCards(gamestate, zone, primitive.filter)[0] ?? ""
+        return gamestate
+      }
+      if ("zone" in primitive) {
+        ctx.bindings[primitive.bind] = surveyCount(
+          gamestate,
+          resolveZone(primitive.zone, ctx),
+          primitive.filter
+        )
+        return gamestate
+      }
       const source = resolveSlotRef(primitive.slot, primitive.attachment, ctx)
       ctx.bindings[primitive.bind] =
         primitive.kind === "energy_value"
@@ -225,6 +287,16 @@ export function interpret(
       const self = resolveSlot("$self_slot", ctx)
       const player = primitive.who === "self" ? self.player : opponent(self.player)
       return draw(gamestate, player, resolveAmount(primitive.count, ctx))
+    }
+
+    case Op.Shuffle: {
+      const zone = resolveZone(primitive.zone, ctx)
+      return record(shuffle(gamestate, zone.player, zone.zone), { op: Op.Shuffle, zone })
+    }
+
+    case Op.Reveal: {
+      const shown = resolveReveal(gamestate, primitive.cards, ctx)
+      return record(gamestate, { op: Op.Reveal, ...shown, to: primitive.to })
     }
 
     case Op.If: {

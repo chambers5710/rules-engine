@@ -1,10 +1,24 @@
-import { Op, type Expr } from "./dsl.js"
+import { Op, type BindingName, type Expr } from "./dsl.js"
 import { DAMAGE_COUNTER } from "./types.js"
 
 // Pokémon: attacks / abilities by name. Trainers: the expr is the entry (id only).
 export type CardEffects = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
+}
+
+function trainersIntoDeck(hand: BindingName, deck: BindingName): Expr {
+  return [
+    { op: Op.Count, kind: "cards", zone: hand, filter: { kind: "trainer" }, bind: "$n" },
+    {
+      op: Op.Loop, bind: "$n", until: 0, then: [
+        { op: Op.Count, kind: "first", zone: hand, filter: { kind: "trainer" }, bind: "$card" },
+        { op: Op.MoveZoneToZone, card: "$card", source: hand, dest: deck, position: "bottom" },
+        { op: Op.Count, kind: "cards", zone: hand, filter: { kind: "trainer" }, bind: "$n" },
+      ],
+    },
+    { op: Op.Shuffle, zone: deck },
+  ]
 }
 
 export const effects: Record<string, CardEffects | Expr> = {
@@ -273,6 +287,61 @@ export const effects: Record<string, CardEffects | Expr> = {
       position: "bottom",
     },
     { op: Op.ApplyDamage, amount: -4 * DAMAGE_COUNTER, slot: "$to" },
+  ],
+  "base1-71": [
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$a" },
+    { op: Op.MoveZoneToZone, card: "$a", source: "$hand", dest: "$discard", position: "bottom" },
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$b" },
+    { op: Op.MoveZoneToZone, card: "$b", source: "$hand", dest: "$discard", position: "bottom" },
+    { op: Op.Select, pick: "cards", source: "$deck", bind: "$find" },
+    { op: Op.MoveZoneToZone, card: "$find", source: "$deck", dest: "$hand", position: "bottom" },
+    { op: Op.Shuffle, zone: "$deck" },
+  ],
+  "base1-75": [
+    { op: Op.Reveal, cards: "$hand", to: "both" },
+    { op: Op.Reveal, cards: "$opp_hand", to: "both" },
+    ...trainersIntoDeck("$hand", "$deck"),
+    ...trainersIntoDeck("$opp_hand", "$opp_deck"),
+  ],
+  "base1-77": [
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$give", filter: { kind: "pokemon" } },
+    { op: Op.Select, pick: "cards", source: "$deck", bind: "$take", filter: { kind: "pokemon" } },
+    { op: Op.Reveal, cards: "$give", to: "opponent" },
+    { op: Op.Reveal, cards: "$take", to: "opponent" },
+    { op: Op.MoveZoneToZone, card: "$give", source: "$hand", dest: "$deck", position: "bottom" },
+    { op: Op.MoveZoneToZone, card: "$take", source: "$deck", dest: "$hand", position: "bottom" },
+    { op: Op.Shuffle, zone: "$deck" },
+  ],
+  "base1-73": [
+    { op: Op.Count, kind: "cards", zone: "$opp_hand", bind: "$n" },
+    {
+      op: Op.Loop, bind: "$n", until: 0, then: [
+        { op: Op.Count, kind: "first", zone: "$opp_hand", bind: "$card" },
+        { op: Op.MoveZoneToZone, card: "$card", source: "$opp_hand", dest: "$opp_deck", position: "bottom" },
+        { op: Op.Count, kind: "cards", zone: "$opp_hand", bind: "$n" },
+      ],
+    },
+    { op: Op.Shuffle, zone: "$opp_deck" },
+    { op: Op.Draw, who: "opponent", count: 7 },
+  ],
+  "base1-83": [
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$a" },
+    { op: Op.MoveZoneToZone, card: "$a", source: "$hand", dest: "$deck", position: "bottom" },
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$b" },
+    { op: Op.MoveZoneToZone, card: "$b", source: "$hand", dest: "$deck", position: "bottom" },
+    { op: Op.Shuffle, zone: "$deck" },
+    { op: Op.Draw, who: "self", count: 1 },
+  ],
+  "base1-88": [
+    { op: Op.Count, kind: "cards", zone: "$hand", bind: "$n" },
+    {
+      op: Op.Loop, bind: "$n", until: 0, then: [
+        { op: Op.Count, kind: "first", zone: "$hand", bind: "$card" },
+        { op: Op.MoveZoneToZone, card: "$card", source: "$hand", dest: "$discard", position: "bottom" },
+        { op: Op.Count, kind: "cards", zone: "$hand", bind: "$n" },
+      ],
+    },
+    { op: Op.Draw, who: "self", count: 7 },
   ],
   "base1-91": [
     { op: Op.Draw, who: "self", count: 2 },

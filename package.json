@@ -14,6 +14,7 @@
     "serve:burn": "tsx ./tests/status/burn.ts",
     "serve:confuse-ray": "tsx ./tests/status/confuse-ray.ts",
     "serve:trainers": "tsx ./tests/trainers/trainers.ts",
+    "serve:deck": "tsx ./tests/trainers/deck.ts",
     "serve:energy-pile": "tsx ./tests/trainers/energy-pile.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },

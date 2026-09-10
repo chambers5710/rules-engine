@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, EnergyType, SlotId, SlotRef, Status, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -20,6 +20,8 @@ export enum Op {
   SwapActive = "swap_active",
   RunEffect = "run_effect",
   Draw = "draw",
+  Shuffle = "shuffle",
+  Reveal = "reveal",
 }
 
 // Action — every top-level choice the client can make
@@ -53,8 +55,10 @@ export type SelectFilter =
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 
+export type RevealTo = "self" | "opponent" | "both"
+
 export type Primitive =
-  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
@@ -70,11 +74,15 @@ export type Primitive =
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
   | { op: Op.RunEffect; attack: BindingName; slot: SlotId | BindingName }
   | { op: Op.Draw; who: "self" | "opponent"; count: number | BindingName }
+  | { op: Op.Shuffle; zone: ZoneRef | BindingName }
+  | { op: Op.Reveal; cards: BindingName | BindingName[]; to: RevealTo }
 
 export type Expr = Primitive[]
 
@@ -91,6 +99,8 @@ export type HistoryEntry =
   | { op: Op.FlipCoin; result: "heads" | "tails" }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.SwapActive; slot: SlotId }
+  | { op: Op.Shuffle; zone: ZoneRef }
+  | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }
 
 type ActionFrameBase = {
   player: 1 | 2
