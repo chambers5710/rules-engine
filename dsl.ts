@@ -56,7 +56,7 @@ export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
-  | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition }
+  | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
@@ -64,12 +64,13 @@ export type Primitive =
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName }
   | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[] }
-  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; filter?: SelectFilter | SelectFilter[] }
+  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
-  | { op: Op.Count; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; as: "cards" | "energy_value"; bind: BindingName }
+  | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
   | { op: Op.RunEffect; attack: BindingName; slot: SlotId | BindingName }

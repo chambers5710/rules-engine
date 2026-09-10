@@ -18,6 +18,8 @@ Pokémon TCG rules as a small instruction set over an immutable-style game snaps
 
 `Action` is the game-level vocabulary. `Op` moves the data. Compute offers actions; the client picks one; the machine runs its `expr` through interpret.
 
+Specs: `status.md` (special conditions), `coverage.md` (Base Set authored vs blocked).
+
 ## Extracted rule values
 
 Any quantity a rule reads — prizes on KO, prize count, opening-hand size — is a named value, not a literal at the call site. Card text later rewrites those values **before** the rule body runs. Defaults stay in one place (`PRIZES_ON_KO = 1`).
@@ -120,9 +122,9 @@ When this is done, wrapping your head around the engine is six nouns, not a per-
 
 Names on the interpret context. Every real attack uses them, not just tests.
 
-- **Seeded** — compute puts `$self_slot` and `$defending` on the action before the client picks it. `runAction` copies `action.seed` into `ctx.bindings`. Interpret only reads those names.
+- **Seeded** — compute puts `$self_slot` and `$defending` on attacks (also `$energy` / `$discard`). Trainers get `$self_slot`, `$defending`, `$hand`, `$discard`. Powers get `$self_slot` and `$hand`. `runAction` copies `action.seed` into `ctx.bindings`.
 - **Written** — primitives with `bind` store results (`$damage`, `$coin`); later steps only read
-- **Chosen** — (planned) `Select` pauses; the player’s pick writes the bind
+- **Chosen** — `Select` pauses; `Choose` writes the bind and resume runs `remaining`
 
 `attack` runs the damage pipeline and binds a number. `apply_damage` only mutates counters.
 
@@ -131,18 +133,22 @@ Names on the interpret context. Every real attack uses them, not just tests.
 Read-only. Compute and card text ask the same questions.
 
 - **Pile** — `ZoneRef` or `SlotRef` (see Nouns)
-- **Filter** — `energy` (optional `type`), `basic_pokemon`
+- **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`
 - **Reduce** — list, count, or sum of `energyValue`
+
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. Not “how many Darkness Pokémon on the Bench.” In-play filters for Select (`has_type`, `has_counters`, …) live in compute, not `survey.ts`. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
 ## Effects
 
-Pure `Expr`, keyed by printed card id then name (`attacks` / `abilities`). Compute attaches the expr; cost stays on the card. Missing names are `[]`.
+Pure `Expr`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: the entry **is** the expr (`trainerEffect(id)`). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers still list; play discards them and runs nothing else.
 
-Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`.
+Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr).
 
-Today: Alakazam Confuse Ray, Chansey Scrunch / Double-edge, Clefairy Sing. Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not. Metronome waits on Select. Hydro Pump waits on count + math.
+Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not.
+
+What is authored vs what Base Set text cannot say yet: `coverage.md`. Status: `status.md`.
 
 ## Modifiers
 
@@ -170,17 +176,15 @@ while not Ended:
   gamestate = machine(gamestate, action)
 ```
 
-`gamestate.md` is rewritten at process start, after init, and after every action.
-
 ## Status today
 
 - Init: shuffle, draw 7, mulligan until Basic Pokémon (Energy `"Basic"` does not count)
 - Both Ready → 6 prizes from deck top (no shuffle after prizes) → Turn, first-player draw
-- Turn: place Bench, attach Energy (once), attack, EndTurn
+- Turn: place Bench, attach Energy (once), play Trainers, attack, EndTurn
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- Live board: `gamestate.md`. HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:metronome`, `pnpm serve:trainers`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:energy-pile`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -197,55 +201,42 @@ run_effect  $copy
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `bindings`. Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` fetches `cardEffect` for the bound name and runs it in the same bindings.
-5. **Metronome** — Select defending attacks, bind, run. No special case in `attacksFromActive`.
+5. **Metronome** — Select defending attacks, bind, `run_effect`. No special case in `attacksFromActive`.
 6. **Later** — strip “requirements to use” on the copy (discard Energy, etc.). Weakness uses Clefairy because `$self_slot` is still Clefairy.
 
-**Done:** (1) and (2). **Not done:** (3)–(6).
+**Done:** (1)–(5). **Not done:** (6).
 
 `actionStack` is in-flight only. Lasting shields stay on `slot.modifiers`. Phase beats (poison, “at end of turn”) are a later queue — not this stack.
 
-## Math (tentative)
+## Math
 
-Hydro Pump is 40 + 10 per Water on `$self_slot` not spent on the WWW cost, extra after the 2nd ignored (cap +20). Survey can already produce that count. The expr cannot read it or do `min` / `+`. Do not precompute 40/50/60 in compute.
+Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `attack.base`. The 3 and the cap 2 live in the effect, not in compute.
 
-1. **`count`** — `from` (slot/pile, may be a binding) + survey filter, `bind` a number (`surveyEnergyValue` for Energy).
-2. **`calc`** — one step: `add` | `sub` | `mul` | `min` | `max`. Inputs are numbers or `$names`. `bind` the result. No nested expressions; chain primitives.
-3. **`attack.base`** — allow a binding (same as `apply_damage` already does).
-
-Hydro Pump:
-
-```
-count  from $self_slot energy  filter Water  bind $water
-calc   sub  $water  3  bind $extra
-calc   min  $extra  2  bind $extra
-calc   mul  $extra  10 bind $bonus
-calc   add  40  $bonus bind $base
-attack base $base  …  bind $damage
-apply_damage $damage  $defending
-```
-
-The 3 and the cap 2 are authored in the effect (printed cost / printed cap), not inferred.
+`Count` `kind: "damage"` reads `slot.damage` (HP units). It does not count Pokémon in play. `Draw` exists (`who` + `count`). There is no shuffle-in-place op.
 
 ## Roadmap
 
-- Noun freeze (README: kill `InPlaySlot` → rename fields → Select by `pick` → `Pile` is survey)
-- Select → bind → run (finish 3–5)
-- Math (`count` + `calc` + bound `attack.base`)
-- Retreat
-- Checkup statuses (confused actually matters)
+- Noun freeze (README: remaining aliases if any)
+- Metronome (6): strip copy costs / discards
+- Survey seats + zone shuffle/search (`coverage.md`)
 - History log for replay
+- `evenIf` on Pokémon Powers
 
 ## Tests
 
 ```bash
 pnpm serve                 # HTTP session, default decks
-pnpm serve:alakazam        # Alakazam vs Blastoise fixture
-pnpm serve:scrunch         # Chansey vs Hitmonchan fixture
+pnpm serve:init            # Init — Play Active
+pnpm serve:alakazam        # Alakazam vs Blastoise (Damage Swap)
+pnpm serve:scrunch         # Chansey vs Hitmonchan (Scrunch)
+pnpm serve:chansey         # Chansey vs Clefairy (Double-edge)
+pnpm serve:metronome       # Clefairy vs Magmar (Metronome)
+pnpm serve:count-damage    # Flail / Meditate / Karate Chop (reset cycles)
 pnpm serve:poison          # Ivysaur vs Chansey (Poisonpowder)
 pnpm serve:asleep          # Haunter vs Chansey (Hypnosis)
 pnpm serve:paralyzed       # Electabuzz vs Chansey (Thundershock)
-pnpm serve:burn            # Rapidash (basep-51) vs Chansey (Super Singe)
-pnpm serve:metronome       # Clefairy vs Magmar (Metronome)
+pnpm serve:burn            # Rapidash vs Chansey (Super Singe)
+pnpm serve:confuse-ray     # Alakazam vs Machop (Confuse Ray)
 pnpm serve:trainers        # Both hands: Bill, Potion, Switch, Gust, Full Heal
-npx tsx ./tests/confuse-ray.ts
+pnpm serve:energy-pile     # Poliwrath vs Magmar (Whirlpool, Super Potion, Energy Removal)
 ```

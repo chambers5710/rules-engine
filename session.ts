@@ -1,17 +1,12 @@
-import { writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { computeAvailableActions } from "./compute.js"
 import { initializeGameState } from "./initialize.js"
 import { stateMachine } from "./machine.js"
 import type { Card, GameState } from "./types.js"
-import { formatAction, formatGamestate } from "./ui.js"
-
-const out = join(dirname(fileURLToPath(import.meta.url)), "gamestate.md")
+import { formatAction } from "./ui.js"
 
 export const DECKS = {
-  1:  "d-ex9-1",
-  2: "d-ex9-2"
+  1:  "d-base1-1",
+  2: "d-base1-2"
 } as const
 
 export type Choice = {
@@ -54,7 +49,6 @@ export function createSession(p1Deck: Card[], p2Deck: Card[]): Session {
 export function createSessionFromState(initial: GameState): Session {
   let gamestate = initial
   let actions = computeAvailableActions(gamestate)
-  persist(gamestate)
 
   const frame = (): Frame => ({
     type: "STATE",
@@ -74,12 +68,7 @@ export function createSessionFromState(initial: GameState): Session {
       if (!action) throw new Error("not a listed choice")
       gamestate = stateMachine(gamestate, action)
       actions = computeAvailableActions(gamestate)
-      persist(gamestate)
       return frame()
     },
   }
-}
-
-function persist(gamestate: GameState) {
-  writeFileSync(out, formatGamestate(gamestate))
 }

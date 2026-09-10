@@ -324,6 +324,7 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       $defending: { player: opponent(player), slot: "active" },
       $hand: hand,
       $discard: discard,
+      $opp_discard: { player: opponent(player), zone: "discard" },
     },
   }))
 }
@@ -382,6 +383,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
         $defending: { player: defending, slot: "active" },
         $energy: { ...slot, attachment: "energy" },
         $discard: { player, zone: "discard" },
+        $opp_discard: { player: defending, zone: "discard" },
       },
     }))
 }
@@ -410,7 +412,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
     { op: Op.SwapActive, slot: "$to" },
   ]
   const pay: Expr = [
-    { op: Op.Count, slot: "$self_slot", attachment: "energy", as: "energy_value", bind: "$before" },
+    { op: Op.Count, kind: "energy_value", slot: "$self_slot", attachment: "energy", bind: "$before" },
     {
       op: Op.Select,
       pick: "cards",
@@ -425,7 +427,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
       dest: { player, zone: "discard" },
       position: "bottom",
     },
-    { op: Op.Count, slot: "$self_slot", attachment: "energy", as: "energy_value", bind: "$after" },
+    { op: Op.Count, kind: "energy_value", slot: "$self_slot", attachment: "energy", bind: "$after" },
     { op: Op.Calc, fn: "sub", a: "$before", b: "$after", bind: "$paid" },
     { op: Op.Calc, fn: "sub", a: "$need", b: "$paid", bind: "$need" },
   ]

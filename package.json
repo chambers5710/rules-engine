@@ -3,14 +3,19 @@
   "type": "module",
   "scripts": {
     "serve": "tsx ./index.ts",
-    "serve:alakazam": "tsx ./tests/alakazam.ts",
-    "serve:scrunch": "tsx ./tests/scrunch.ts",
-    "serve:poison": "tsx ./tests/poison.ts",
-    "serve:asleep": "tsx ./tests/asleep.ts",
-    "serve:paralyzed": "tsx ./tests/paralyzed.ts",
-    "serve:burn": "tsx ./tests/burn.ts",
-    "serve:metronome": "tsx ./tests/metronome.ts",
-    "serve:trainers": "tsx ./tests/trainers.ts"
+    "serve:alakazam": "tsx ./tests/attacks/alakazam.ts",
+    "serve:scrunch": "tsx ./tests/attacks/scrunch.ts",
+    "serve:chansey": "tsx ./tests/attacks/chansey.ts",
+    "serve:metronome": "tsx ./tests/attacks/metronome.ts",
+    "serve:count-damage": "tsx ./tests/attacks/count-damage.ts",
+    "serve:poison": "tsx ./tests/status/poison.ts",
+    "serve:asleep": "tsx ./tests/status/asleep.ts",
+    "serve:paralyzed": "tsx ./tests/status/paralyzed.ts",
+    "serve:burn": "tsx ./tests/status/burn.ts",
+    "serve:confuse-ray": "tsx ./tests/status/confuse-ray.ts",
+    "serve:trainers": "tsx ./tests/trainers/trainers.ts",
+    "serve:energy-pile": "tsx ./tests/trainers/energy-pile.ts",
+    "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

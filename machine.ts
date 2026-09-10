@@ -343,8 +343,10 @@ function pauseSelect(
     case "slots":
       return { ...base, pick: "slots", who: step.who }
     case "cards": {
-      const source: ZoneRef | SlotRef =
-        typeof step.source === "string" ? ctx.bindings[step.source] as ZoneRef | SlotRef : step.source
+      const raw = typeof step.source === "string" ? ctx.bindings[step.source] : step.source
+      const source: ZoneRef | SlotRef = step.attachment
+        ? { ...(raw as SlotId), attachment: step.attachment }
+        : raw as ZoneRef | SlotRef
       return { ...base, pick: "cards", source }
     }
     case "attacks":

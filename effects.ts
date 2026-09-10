@@ -49,7 +49,7 @@ export const effects: Record<string, CardEffects | Expr> = {
   "base1-2": {
     attacks: {
       "Hydro Pump": [
-        { op: Op.Count, slot: "$self_slot", attachment: "energy", filter: { kind: "energy", type: "Water" }, as: "energy_value", bind: "$water" },
+        { op: Op.Count, kind: "energy_value", slot: "$self_slot", attachment: "energy", filter: { kind: "energy", type: "Water" }, bind: "$water" },
         { op: Op.Calc, fn: "sub", a: "$water", b: 3, bind: "$extra" },
         { op: Op.Calc, fn: "max", a: "$extra", b: 0, bind: "$extra" },
         { op: Op.Calc, fn: "min", a: "$extra", b: 2, bind: "$extra" },
@@ -136,6 +136,29 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-13": {
+    attacks: {
+      "Whirlpool": [
+        { op: Op.Attack, base: 40, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$defending",
+          attachment: "energy",
+          bind: "$pay",
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$defending",
+          attachment: "energy",
+          dest: "$opp_discard",
+          position: "bottom",
+        },
+      ],
+    },
+  },
   "base1-20": {
     attacks: {
       "Thundershock": [
@@ -163,6 +186,36 @@ export const effects: Record<string, CardEffects | Expr> = {
         { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
         { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
         { op: Op.ApplyStatus, status: "poison", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-31": {
+    attacks: {
+      "Meditate": [
+        { op: Op.Count, kind: "damage", slot: "$defending", bind: "$slot_damage" },
+        { op: Op.Calc, fn: "add", a: 20, b: "$slot_damage", bind: "$base" },
+        { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-34": {
+    attacks: {
+      "Karate Chop": [
+        { op: Op.Count, kind: "damage", slot: "$self_slot", bind: "$slot_damage" },
+        { op: Op.Calc, fn: "sub", a: 50, b: "$slot_damage", bind: "$base" },
+        { op: Op.Calc, fn: "max", a: "$base", b: 0, bind: "$base" },
+        { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-35": {
+    attacks: {
+      "Flail": [
+        { op: Op.Count, kind: "damage", slot: "$self_slot", bind: "$base" },
+        { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
       ],
     },
   },
@@ -202,8 +255,45 @@ export const effects: Record<string, CardEffects | Expr> = {
     { op: Op.RemoveStatus, status: "paralyzed", slot: "$self_slot" },
     { op: Op.RemoveStatus, status: "poison", slot: "$self_slot" },
   ],
+  "base1-90": [
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$to",
+      attachment: "energy",
+      bind: "$pay",
+    },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$pay",
+      source: "$to",
+      attachment: "energy",
+      dest: "$discard",
+      position: "bottom",
+    },
+    { op: Op.ApplyDamage, amount: -4 * DAMAGE_COUNTER, slot: "$to" },
+  ],
   "base1-91": [
     { op: Op.Draw, who: "self", count: 2 },
+  ],
+  "base1-92": [
+    { op: Op.Select, pick: "slots", who: "opponent", bind: "$to" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$to",
+      attachment: "energy",
+      bind: "$pay",
+    },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$pay",
+      source: "$to",
+      attachment: "energy",
+      dest: "$opp_discard",
+      position: "bottom",
+    },
   ],
   "base1-93": [
     {

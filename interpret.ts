@@ -14,7 +14,7 @@ import {
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { surveyCount, surveyEnergyValue } from "./survey.js"
-import type { DamageModifier, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
+import type { Attachment, DamageModifier, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 
 export type InterpretScript = {
   coins?: Array<"heads" | "tails">
@@ -84,9 +84,14 @@ function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef 
   return ctx.bindings[source] as ZoneRef
 }
 
-function resolveSlotPile(source: SlotRef | BindingName, ctx: InterpretCtx): SlotRef {
-  if (typeof source !== "string") return source
-  return ctx.bindings[source] as SlotRef
+function resolveSlotPile(
+  source: SlotRef | BindingName,
+  ctx: InterpretCtx,
+  attachment?: Attachment
+): SlotRef {
+  const raw = typeof source !== "string" ? source : ctx.bindings[source]
+  if (attachment) return { ...(raw as SlotId), attachment }
+  return raw as SlotRef
 }
 
 function resolveSlotRef(
@@ -133,7 +138,7 @@ export function interpret(
       return moveSlotToZone(
         gamestate,
         resolveCard(primitive.card, ctx),
-        resolveSlotPile(primitive.source, ctx),
+        resolveSlotPile(primitive.source, ctx, primitive.attachment),
         resolveZone(primitive.dest, ctx),
         primitive.position
       )
@@ -189,9 +194,13 @@ export function interpret(
     }
 
     case Op.Count: {
+      if (primitive.kind === "damage") {
+        ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
+        return gamestate
+      }
       const source = resolveSlotRef(primitive.slot, primitive.attachment, ctx)
       ctx.bindings[primitive.bind] =
-        primitive.as === "energy_value"
+        primitive.kind === "energy_value"
           ? surveyEnergyValue(gamestate, source, primitive.filter)
           : surveyCount(gamestate, source, primitive.filter)
       return gamestate

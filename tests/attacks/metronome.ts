@@ -1,8 +1,8 @@
-import cards from "../data/cards/base1.json" with { type: "json" }
-import { listen } from "../index.js"
-import { initializeGameState } from "../initialize.js"
-import { createSessionFromState } from "../session.js"
-import type { Card } from "../types.js"
+import cards from "../../data/cards/base1.json" with { type: "json" }
+import { listen } from "../../index.js"
+import { initializeGameState } from "../../initialize.js"
+import { createSessionFromState } from "../../session.js"
+import type { Card } from "../../types.js"
 import {
   attachEnergy,
   copies,
@@ -12,7 +12,7 @@ import {
   printed,
   toHand,
   toPrize,
-} from "./fixture.js"
+} from "../fixture.js"
 
 const set = cards as Card[]
 
