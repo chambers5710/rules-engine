@@ -1,5 +1,5 @@
 import { moveZoneToSlot, moveZoneToZone } from "../ops.js"
-import type { Card, GameState, ZoneName } from "../types.js"
+import type { Card, GameState, SlotId, ZoneName } from "../types.js"
 import { Phase } from "../types.js"
 
 export function printed(cards: Card[], id: string): Card {
@@ -66,7 +66,13 @@ export function moveToBench(
   )
 }
 
-export function attachEnergy(gamestate: GameState, player: 1 | 2, sourceId: string, n: number): GameState {
+export function attachEnergy(
+  gamestate: GameState,
+  player: 1 | 2,
+  sourceId: string,
+  n: number,
+  dest: SlotId = { player, slot: "active" }
+): GameState {
   for (let i = 0; i < n; i++) {
     const found = pull(gamestate, player, sourceId)
     if (!found) throw new Error(`not enough ${sourceId} to attach for p${player}`)
@@ -74,7 +80,7 @@ export function attachEnergy(gamestate: GameState, player: 1 | 2, sourceId: stri
       gamestate,
       found.card,
       { player, zone: found.zone },
-      { player, slot: "active", attachment: "energy" }
+      { ...dest, attachment: "energy" }
     )
   }
   return gamestate

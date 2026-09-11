@@ -9,7 +9,7 @@ import {
   pokemonInPlay,
 } from "./board.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
-import { attackExpr, cardEffect, trainerEffect } from "./effects.js"
+import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
 import { ifPasses, slotMatches } from "./interpret.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
@@ -34,6 +34,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "skip" })
   | (ActionBase & { kind: Action.Retreat; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
   | (ActionBase & { kind: Action.Ready; player: 1 | 2 })
@@ -78,6 +79,7 @@ function selectSlots(
     if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
     actions.push({ kind: Action.Choose, player: frame.player, pick: "slots", slot: slotId, expr: [] })
   }
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
   return actions
 }
 
@@ -106,8 +108,13 @@ function selectCards(
       const rest = values.filter((_, j) => j !== i)
       if (!canSum(rest, need - value)) continue
     }
+    const excluded = filters.some(
+      (filter) => filter.kind === "other_than" && frame.bindings[filter.bind] === cards[i]
+    )
+    if (excluded) continue
     actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
   }
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
   return actions
 }
 
@@ -116,13 +123,15 @@ function selectAttacks(
   frame: Extract<ActionFrame, { pick: "attacks" }>
 ): AvailableAction[] {
   const form = currentForm(gamestate, getSlot(gamestate, frame.slot))
-  return (form?.attacks ?? []).map((attack) => ({
+  const actions: AvailableAction[] = (form?.attacks ?? []).map((attack) => ({
     kind: Action.Choose,
     player: frame.player,
     pick: "attacks" as const,
     name: attack.name,
     expr: [],
   }))
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  return actions
 }
 
 function canSum(values: number[], target: number): boolean {
@@ -265,30 +274,37 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
-// Trainer — one play per copy in hand. Discard is the play; effects[id] is the text.
+// Trainer — one play per copy in hand. Discard is the play unless the text attaches as a tool.
 function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const hand = { player, zone: "hand" } as const
   const discard = { player, zone: "discard" } as const
   const active = { player, slot: "active" } as const
-  return surveyCards(gamestate, hand, { kind: "trainer" }).map((card) => ({
-    kind: Action.PlayTrainer,
-    player,
-    card,
-    expr: [
-      { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
-      ...trainerEffect(gamestate.cardRegistry[card].sourceId),
-    ],
-    seed: {
-      $self_slot: active,
-      $defending: { player: opponent(player), slot: "active" },
-      $hand: hand,
-      $deck: { player, zone: "deck" },
-      $discard: discard,
-      $opp_hand: { player: opponent(player), zone: "hand" },
-      $opp_deck: { player: opponent(player), zone: "deck" },
-      $opp_discard: { player: opponent(player), zone: "discard" },
-    },
-  }))
+  return surveyCards(gamestate, hand, { kind: "trainer" }).map((card) => {
+    const sourceId = gamestate.cardRegistry[card].sourceId
+    const effect = trainerEffect(sourceId)
+    return {
+      kind: Action.PlayTrainer,
+      player,
+      card,
+      expr: trainerAttaches(sourceId)
+        ? effect
+        : [
+            { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
+            ...effect,
+          ],
+      seed: {
+        $self_slot: active,
+        $defending: { player: opponent(player), slot: "active" },
+        $hand: hand,
+        $deck: { player, zone: "deck" },
+        $discard: discard,
+        $opp_hand: { player: opponent(player), zone: "hand" },
+        $opp_deck: { player: opponent(player), zone: "deck" },
+        $opp_discard: { player: opponent(player), zone: "discard" },
+        $played: card,
+      },
+    }
+  })
 }
 
 // Ability — each in-play Pokémon's printed powers; $self_slot is that copy

@@ -1,5 +1,5 @@
 import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
-import { applyModifier, readModifier } from "./modifiers.js"
+import { applyModifier, foldAdds, foldDamage, rewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
@@ -14,7 +14,7 @@ import {
 } from "./ops.js"
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
-import { surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
+import { printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 function isZoneRef(value: unknown): value is ZoneRef {
@@ -78,7 +78,7 @@ export function pipelineAttackDamage(
   attacker: SlotId,
   defender: SlotId
 ): { damage: number; weakness: boolean; resistance: boolean } {
-  let damage = readModifier(gamestate, defender, "attack_damage", base)
+  let damage = base
   let weakness = false
   let resistance = false
   if (defender.player !== attacker.player && defender.slot === "active") {
@@ -95,6 +95,8 @@ export function pipelineAttackDamage(
       resistance = true
     }
   }
+  damage = foldAdds(gamestate, attacker, damage)
+  damage = foldDamage(gamestate, defender, damage)
   return { damage: Math.max(0, damage), weakness, resistance }
 }
 
@@ -188,6 +190,9 @@ export function slotMatches(
         if (!types.includes(filter.type)) return false
         break
       }
+      case "has_energy":
+        if (surveyCount(gamestate, { ...slotId, attachment: "energy" }) === 0) return false
+        break
     }
   }
   return true
@@ -303,19 +308,29 @@ export function interpret(
       const slot = resolveSlot(primitive.slot, ctx)
       const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
       const until = { beat: primitive.until.beat, player }
+      const rewrite = rewriteOf(primitive)
+      const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
       return record(
         applyModifier(gamestate, slot, {
           field: primitive.field,
-          set: primitive.set,
+          ...rewrite,
           until,
+          ...(card ? { card } : {}),
         }),
-        { op: Op.ApplyModifier, slot, field: primitive.field, set: primitive.set, until }
+        { op: Op.ApplyModifier, slot, field: primitive.field, ...rewrite, until }
       )
     }
 
     case Op.Count: {
       if (primitive.kind === "damage") {
         ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
+        return gamestate
+      }
+      if (primitive.kind === "attack_damage") {
+        const slot = getSlot(gamestate, resolveSlot(primitive.slot, ctx))
+        const name = String(ctx.bindings[primitive.attack] ?? "")
+        const attack = currentForm(gamestate, slot)?.attacks?.find((row) => row.name === name)
+        ctx.bindings[primitive.bind] = printedAttackDamage(attack?.damage)
         return gamestate
       }
       if (primitive.kind === "slots") {

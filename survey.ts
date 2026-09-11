@@ -92,6 +92,12 @@ export function isEnergy(gamestate: GameState, cardId: string): boolean {
   return gamestate.cardRegistry[cardId]?.supertype === "Energy"
 }
 
+export function printedAttackDamage(damage?: string | number | null): number {
+  const raw = damage == null ? "" : String(damage).trim()
+  const n = Number(raw.replace(/[^0-9.-]/g, ""))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 function cardMatches(
   gamestate: GameState,
   cardId: CardInstanceId,

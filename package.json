@@ -9,6 +9,7 @@
     "serve:metronome": "tsx ./tests/attacks/metronome.ts",
     "serve:count-damage": "tsx ./tests/attacks/count-damage.ts",
     "serve:selfdestruct": "tsx ./tests/attacks/selfdestruct.ts",
+    "serve:modifier": "tsx ./tests/attacks/modifier.ts",
     "serve:poison": "tsx ./tests/status/poison.ts",
     "serve:asleep": "tsx ./tests/status/asleep.ts",
     "serve:paralyzed": "tsx ./tests/status/paralyzed.ts",
@@ -17,6 +18,8 @@
     "serve:trainers": "tsx ./tests/trainers/trainers.ts",
     "serve:deck": "tsx ./tests/trainers/deck.ts",
     "serve:energy-pile": "tsx ./tests/trainers/energy-pile.ts",
+    "serve:optional": "tsx ./tests/trainers/optional.ts",
+    "serve:tools": "tsx ./tests/trainers/tools.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {

@@ -76,13 +76,19 @@ export type Attachment = "evolution" | "energy" | "tools"
 // Slot ref — a slot plus which attachment
 export type SlotRef = SlotId & { attachment: Attachment }
 
+export type AttackDamageRewrite =
+  | { set: number }
+  | { add: number }
+  | { sub: number }
+  | { prevent: "all" | number }
+
 // Modifier — on a slot; until.player is set when interpret applies the op
 export type Modifier = {
   field: "attack_damage"
-  set: number
   until: { beat: "end_of_turn"; player: 1 | 2 }
   phase: "pending" | "active"
-}
+  card?: CardInstanceId
+} & AttackDamageRewrite
 
 // Status — special conditions; more than one flag may be on
 export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"

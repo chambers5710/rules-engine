@@ -1,4 +1,5 @@
 import { Op, type BindingName, type Expr } from "./dsl.js"
+import { printedAttackDamage } from "./survey.js"
 import { DAMAGE_COUNTER } from "./types.js"
 
 // Pokémon: attacks / abilities by name. Trainers: the expr is the entry (id only).
@@ -17,6 +18,20 @@ function selfdestruct(hit: number, splash: number): Expr {
       ],
     },
     { op: Op.ApplyDamage, amount: hit, slot: "$self_slot" },
+  ]
+}
+
+function optionalEnergy(source: BindingName, dest: BindingName): Expr {
+  return [
+    { op: Op.Select, pick: "cards", source, attachment: "energy", bind: "$opt", optional: true },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$opt",
+      source,
+      attachment: "energy",
+      dest,
+      position: "bottom",
+    },
   ]
 }
 
@@ -178,6 +193,66 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Selfdestruct": selfdestruct(80, 20),
     },
   },
+  "base1-10": {
+    attacks: {
+      "Barrier": [
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$energy",
+          bind: "$pay",
+          filter: { kind: "energy", type: "Psychic" },
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$energy",
+          dest: "$discard",
+          position: "bottom",
+        },
+        {
+          op: Op.ApplyModifier,
+          slot: "$self_slot",
+          field: "attack_damage",
+          prevent: "all",
+          until: { beat: "end_of_turn", who: "opponent" },
+        },
+      ],
+    },
+  },
+  "base1-14": {
+    attacks: {
+      "Agility": [
+        { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            {
+              op: Op.ApplyModifier,
+              slot: "$self_slot",
+              field: "attack_damage",
+              prevent: "all",
+              until: { beat: "end_of_turn", who: "opponent" },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  "base1-56": {
+    attacks: {
+      "Harden": [
+        {
+          op: Op.ApplyModifier,
+          slot: "$self_slot",
+          field: "attack_damage",
+          prevent: 30,
+          until: { beat: "end_of_turn", who: "opponent" },
+        },
+      ],
+    },
+  },
   "base1-19": {
     attacks: {
       "Earthquake": [
@@ -317,6 +392,23 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-84": [
+    {
+      op: Op.MoveZoneToSlot,
+      card: "$played",
+      source: "$hand",
+      dest: "$self_slot",
+      attachment: "tools",
+    },
+    {
+      op: Op.ApplyModifier,
+      slot: "$self_slot",
+      field: "attack_damage",
+      add: 10,
+      until: { beat: "end_of_turn", who: "owner" },
+      card: "$played",
+    },
+  ],
   "base1-85": [
     {
       op: Op.Each,
@@ -346,6 +438,81 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   ],
+  "base1-74": [
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$a" },
+    { op: Op.MoveZoneToZone, card: "$a", source: "$hand", dest: "$discard", position: "bottom" },
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$b" },
+    { op: Op.MoveZoneToZone, card: "$b", source: "$hand", dest: "$discard", position: "bottom" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$discard",
+      bind: "$find",
+      filter: [{ kind: "trainer" }, { kind: "other_than", bind: "$played" }],
+    },
+    { op: Op.MoveZoneToZone, card: "$find", source: "$discard", dest: "$hand", position: "bottom" },
+  ],
+  "base1-79": [
+    { op: Op.Select, pick: "slots", who: "self", bind: "$from", filter: { kind: "has_energy" } },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$from",
+      attachment: "energy",
+      bind: "$pay",
+    },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$pay",
+      source: "$from",
+      attachment: "energy",
+      dest: "$discard",
+      position: "bottom",
+    },
+    { op: Op.Select, pick: "slots", who: "opponent", bind: "$to" },
+    ...optionalEnergy("$to", "$opp_discard"),
+    ...optionalEnergy("$to", "$opp_discard"),
+  ],
+  "base1-81": [
+    { op: Op.Select, pick: "cards", source: "$hand", bind: "$pay" },
+    { op: Op.MoveZoneToZone, card: "$pay", source: "$hand", dest: "$discard", position: "bottom" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$discard",
+      bind: "$a",
+      filter: [{ kind: "energy" }, { kind: "other_than", bind: "$pay" }],
+      optional: true,
+    },
+    { op: Op.MoveZoneToZone, card: "$a", source: "$discard", dest: "$hand", position: "bottom" },
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$discard",
+      bind: "$b",
+      filter: [{ kind: "energy" }, { kind: "other_than", bind: "$pay" }],
+      optional: true,
+    },
+    { op: Op.MoveZoneToZone, card: "$b", source: "$discard", dest: "$hand", position: "bottom" },
+  ],
+  "base1-80": [
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to" },
+    {
+      op: Op.MoveZoneToSlot,
+      card: "$played",
+      source: "$hand",
+      dest: "$to",
+      attachment: "tools",
+    },
+    {
+      op: Op.ApplyModifier,
+      slot: "$to",
+      field: "attack_damage",
+      sub: 20,
+      until: { beat: "end_of_turn", who: "opponent" },
+      card: "$played",
+    },
+  ],
   "base1-82": [
     { op: Op.RemoveStatus, status: "asleep", slot: "$self_slot" },
     { op: Op.RemoveStatus, status: "confused", slot: "$self_slot" },
@@ -353,7 +520,7 @@ export const effects: Record<string, CardEffects | Expr> = {
     { op: Op.RemoveStatus, status: "poison", slot: "$self_slot" },
   ],
   "base1-90": [
-    { op: Op.Select, pick: "slots", who: "self", bind: "$to" },
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to", filter: { kind: "has_energy" } },
     {
       op: Op.Select,
       pick: "cards",
@@ -488,6 +655,12 @@ export function trainerEffect(sourceId: string): Expr {
   return Array.isArray(entry) ? entry : []
 }
 
+export function trainerAttaches(sourceId: string): boolean {
+  return trainerEffect(sourceId).some(
+    (step) => step.op === Op.MoveZoneToSlot && step.attachment === "tools"
+  )
+}
+
 // Written effect, or printed numeric damage through the attack pipeline.
 export function attackExpr(
   sourceId: string,
@@ -495,9 +668,8 @@ export function attackExpr(
 ): Expr {
   const written = cardEffect(sourceId, "attacks", attack.name)
   if (written.length > 0) return written
-  const raw = attack.damage == null ? "" : String(attack.damage).trim()
-  const base = Number(raw.replace(/[^0-9.-]/g, ""))
-  if (!raw || !Number.isFinite(base) || base <= 0) return []
+  const base = printedAttackDamage(attack.damage)
+  if (base <= 0) return []
   return [
     { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
     { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },

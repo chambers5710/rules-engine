@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, AttackDamageRewrite, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -52,6 +52,7 @@ export type SelectFilter =
   | { kind: "other_than"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
   | { kind: "has_type"; type: EnergyType }
+  | { kind: "has_energy" }
   | SurveyFilter
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
@@ -71,18 +72,19 @@ export type Primitive =
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
-  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[] }
-  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[] }
-  | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[] }
+  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
-  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & AttackDamageRewrite
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
+  | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
@@ -105,7 +107,7 @@ export type HistoryEntry =
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId }
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
-  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; player: 1 | 2 } }
+  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackDamageRewrite
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }
@@ -117,6 +119,7 @@ type ActionFrameBase = {
   bindings: Record<string, unknown>
   bind: BindingName
   filter?: SelectFilter | SelectFilter[]
+  optional?: true
 }
 
 // Paused expr — Select stopped here; remaining runs after the bind is written

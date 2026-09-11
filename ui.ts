@@ -58,6 +58,7 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
   if (a.kind === Action.Choose) {
+    if (a.pick === "skip") return "select  skip"
     if (a.pick === "cards") return `select  ${cardName(gamestate, a.card)}`
     if (a.pick === "attacks") return `select  ${a.name}`
     const form = currentForm(gamestate, getSlot(gamestate, a.slot))

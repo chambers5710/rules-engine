@@ -122,7 +122,7 @@ When this is done, wrapping your head around the engine is six nouns, not a per-
 
 Names on the interpret context. Every real attack uses them, not just tests.
 
-- **Seeded** — compute puts `$self_slot` and `$defending` on attacks (also `$energy` / `$discard`). Trainers get `$self_slot`, `$defending`, `$hand`, `$discard`. Powers get `$self_slot` and `$hand`. `runAction` copies `action.seed` into `ctx.bindings`.
+- **Seeded** — compute puts `$self_slot` and `$defending` on attacks (also `$energy` / `$discard`). Trainers get `$self_slot`, `$defending`, `$hand`, `$discard`, `$played`. Powers get `$self_slot` and `$hand`. `runAction` copies `action.seed` into `ctx.bindings`.
 - **Written** — primitives with `bind` store results (`$damage`, `$coin`); later steps only read
 - **Chosen** — `Select` pauses; `Choose` writes the bind and resume runs `remaining`
 
@@ -136,15 +136,15 @@ Read-only. Compute and card text ask the same questions.
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`
 - **Reduce** — list, count, or sum of `energyValue`
 
-`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
 ## Effects
 
-Pure `Expr`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: the entry **is** the expr (`trainerEffect(id)`). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers still list; play discards them and runs nothing else.
+Pure `Expr`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: the entry **is** the expr (`trainerEffect(id)`). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers still list; play discards them and runs nothing else. A trainer whose expr moves `$played` onto `tools` skips that discard.
 
-Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr).
+Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr — unless the card attaches as a tool).
 
 Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not.
 
@@ -157,14 +157,14 @@ A sticky rewrite of a **field** on an event or card — same idea as extracted r
 There is one `Modifier`, on the slot. Card text cannot say “player 2”; the op uses `who: owner | opponent`. Interpret turns that into `until.player` and calls `applyModifier`. Tick only compares `activePlayer`.
 
 ```
-{ field: "attack_damage", set: 0, until: { beat: "end_of_turn", player: 2 }, phase: "pending" | "active" }
+{ field: "attack_damage", set | add | sub | prevent, until: { beat: "end_of_turn", player: 2 }, phase: "pending" | "active" }
 ```
 
-- **applyModifier** — write `pending` on the slot
-- **readModifier** — one field through `active` modifiers. Attack pipeline calls this; `apply_damage` does not
-- **tickModifiersEnter / tickModifiersEnd** — `walkSeats`; `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
+- **applyModifier** — `pending`, or `active` if `until.player` is already active
+- **foldAdds / foldDamage** — after W/R in the attack pipeline; `apply_damage` does not fold
+- **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
-`pending` / `active` is the two-beat clock so “their next turn” does not die on your extra turn. Keep the field list tiny (`attack_damage` now; cost / type later). No selection module for duration.
+`prevent: "all"` or `prevent: 30` (Harden). `set: 0` is still Scrunch.
 
 ## Loop
 
@@ -184,7 +184,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:init`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -195,13 +195,13 @@ select  from $defending  pick attacks  bind $copy
 run_effect  $copy
 ```
 
-`$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost.
+`$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost. Recoil (`ApplyDamage` a positive literal onto `$self_slot`) is stripped from the copy.
 
 1. **Widen Select** — `pick` says what the menu is; the source type follows `pick` (`among` / `pile` / `slot`). See Nouns. Do not add a `From` union. The answer binds a name, same style as `$coin`.
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `bindings`. Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
-4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` fetches `cardEffect` for the bound name and runs it in the same bindings.
-5. **Metronome** — Select defending attacks, bind, `run_effect`. No special case in `attacksFromActive`.
+4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.
+5. **Metronome** — Select defending attacks, `run_effect`. Recoil on `$self_slot` is dropped. No special case in `attacksFromActive`.
 6. **Later** — strip “requirements to use” on the copy (discard Energy, etc.). Weakness uses Clefairy because `$self_slot` is still Clefairy.
 
 **Done:** (1)–(5). **Not done:** (6).
@@ -217,7 +217,7 @@ Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `atta
 ## Roadmap
 
 - Noun freeze (README: remaining aliases if any)
-- Metronome (6): strip copy costs / discards
+- Metronome (6): full copy minus use-costs (today: printed damage only)
 - Survey seats + zone shuffle/search (`coverage.md`)
 - History log for replay
 - `evenIf` on Pokémon Powers
@@ -240,4 +240,5 @@ pnpm serve:confuse-ray     # Alakazam vs Machop (Confuse Ray)
 pnpm serve:trainers        # Both hands: Bill, Potion, Switch, Gust, Full Heal
 pnpm serve:deck -- oak     # Deck trainers (search | maintenance | oak | impostor | lass | trader)
 pnpm serve:energy-pile     # Poliwrath vs Magmar (Whirlpool, Super Potion, Energy Removal)
+pnpm serve:tools           # Magmar vs Hitmonchan (Defender / PlusPower)
 ```
