@@ -39,7 +39,7 @@ export type Player = {
 // Card registry — every copy in this game, keyed by instanceId
 export type CardRegistry = Record<string, CardInstance>
 
-// Zone — an ordered pile of instance ids (index 0 is top)
+// Zone — an ordered list of instance ids (index 0 is top)
 export type Zone = CardInstanceId[]
 
 // Zone name — keys on Player that hold a Zone

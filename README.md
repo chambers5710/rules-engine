@@ -29,8 +29,9 @@ Any quantity a rule reads — prizes on KO, prize count, opening-hand size — i
 - **Player** — `1 | 2`
 - **Slot** — the Pokémon **data** at a seat (evolution, energy, tools, damage, status, modifiers). Never an address.
 - **SlotId** — the **address** of a seat. Always includes `player`. Active or `bench[n]`.
-- **Pile** — where card copies live: a zone (`ZoneRef`) or an attachment on a seat (`SlotRef` = `SlotId` + `attachment`)
-- **Card instance** — physical copy in `cardRegistry`; piles hold instance ids
+- **Zone** — a player's deck, hand, discard, or prize (`ZoneRef`). Holds instance ids.
+- **Slot attachment** — `evolution` / `energy` / `tools` on a seat (`SlotRef` = `SlotId` + `attachment`). Holds instance ids.
+- **Card instance** — physical copy in `cardRegistry`
 - **Effects** — keyed by printed `sourceId`, never instance id
 
 ## Nouns — do not fork
@@ -44,14 +45,15 @@ This is the blocker. The engine works; the **map** does not. One seat has been `
 | Player | `1 \| 2` | Who |
 | Slot | `Slot` | Value at a seat. `getSlot(state, id)` |
 | SlotId | `{ player, slot: "active" } \| { player, slot: "bench", index }` | Address of a seat. **Always has player.** |
-| Pile | `ZoneRef \| SlotRef` | Address of cards. Zone, or seat + `evolution` / `energy` / `tools` |
+| Zone | `ZoneRef` | Address of a zone (`deck` / `hand` / `discard` / `prize`) |
+| Slot attachment | `SlotRef` | Seat + `evolution` / `energy` / `tools` |
 | ZoneDest | `ZoneRef` + `position` | Write-only: where a card lands in a zone |
 | Card | `CardInstanceId` | One copy |
 | Bind | `$name` | Delayed value on the interpret context. **Not** a seat type. |
 | Action | `Action` + `AvailableAction` | What the player chose |
 | Expr | `Op[]` | Card text |
 
-`Slot` vs `SlotId` vs `Pile` is the only split that is real: **value / seat address / card address**. Same idea as file contents / path / path+filename.
+`Slot` vs `SlotId` is value vs seat address. Cards live on a **zone** or a **slot attachment**. Same idea as file contents / path / path+filename.
 
 ### Delete
 
@@ -61,7 +63,7 @@ This is the blocker. The engine works; the **map** does not. One seat has been `
 | `asSlotId` | Glue for the omission. |
 | `SlotTarget` | A seat **or** a bind, promoted to a board type. DSL fields may be `SlotId \| BindingName`. That union stays in **expr rows only**. |
 | `From` | Re-wraps `ZoneRef` / `SlotId` / bind / “in play” as a fourth language. |
-| `SurveyFrom` | It **is** `Pile`. Survey takes `Pile`. |
+| `SurveyFrom` | Survey takes `ZoneRef` or `SlotRef`. |
 | `to` / `dest` / `ref` / `from` as names for a seat | One field: `slot`. |
 
 `sameSlot` stays: `SlotId` is an object, so equality is a function, not a type.
@@ -70,13 +72,13 @@ This is the blocker. The engine works; the **map** does not. One seat has been `
 
 Stop using `from` for three jobs. The field is the role:
 
-| Place | Seat / pile field |
+| Place | Seat / zone / attachment field |
 |---|---|
 | `AvailableAction` (attach, evolve, ability, choose, promote) | `slot: SlotId` |
 | Move ops | `source` + dest (`SlotRef` or `ZoneDest`) |
 | `Op.Attack` | `attacker` + `defender` (`SlotId \| BindingName`) |
 | `Op.ApplyDamage` / status / modifier | `slot` |
-| `Op.Count` | `pile: Pile`, or `slot` + `attachment` that **is** a `SlotRef` after resolve |
+| `Op.Count` | `zone`, or `slot` + `attachment` (a `SlotRef` after resolve) |
 | `Op.Select` | split on `pick` — see below |
 | Seed / bindings | `$self_slot` and `$defending` are **SlotId values**, not types |
 
@@ -86,13 +88,13 @@ Stop using `from` for three jobs. The field is the role:
 
 ```
 Select  pick "slots"    among  self | opponent     →  menu of SlotId
-Select  pick "cards"    pile   Pile | bind         →  menu of card ids
+Select  pick "cards"    source ZoneRef | SlotRef | bind  →  menu of card ids
 Select  pick "attacks"  slot   SlotId | bind       →  menu of attack names
 ```
 
-`kind: "in_play"` was “list that player’s seats.” That is `pick: "slots"` + `among`. Not a pile, not a `SlotId`.
+`kind: "in_play"` was “list that player’s seats.” That is `pick: "slots"` + `among`. Not a zone, not a `SlotId`.
 
-`who: self | opponent` is card text (relative to the acting player). **Pause resolves it** to player `1 | 2` on the frame. Compute never sees `self`. Compute never sees `$binds`. The frame holds a concrete `among: 1 | 2`, `pile: Pile`, or `slot: SlotId`.
+`who: self | opponent` is card text (relative to the acting player). **Pause resolves it** to player `1 | 2` on the frame. Compute never sees `self`. Compute never sees `$binds`. The frame holds a concrete `among: 1 | 2`, `source: ZoneRef | SlotRef`, or `slot: SlotId`.
 
 `ActionFrame` is a union on `pick`, same as Select. Copying DSL `From` onto the frame is how the aliases leaked into compute.
 
@@ -102,18 +104,18 @@ Card text may write `$self_slot`. That is syntax for a bind.
 
 1. Compute seeds `SlotId` values into `action.seed`.
 2. Interpret (or pause) **resolves** `$name` → `SlotId` / number / card **once**.
-3. Ops, survey, and compute menus only see resolved `SlotId` and `Pile`.
+3. Ops, survey, and compute menus only see resolved `SlotId`, `ZoneRef`, and `SlotRef`.
 
 Do not invent a new type every time a field might still be a string.
 
 ### Rewrite order
 
-Do not pile a fifth alias. Each step must delete more types than it adds. Engine behavior stays; names collapse.
+Do not add a fifth alias. Each step must delete more types than it adds. Engine behavior stays; names collapse.
 
 1. **Kill `InPlaySlot`.** `pokemonInPlay` → `SlotId[]`. Attach / evolve / ability / choose use `slot: SlotId`. Delete `asSlotId`. Mechanical. Proves the rule: a seat always has a player.
 2. **Rename fields.** Ability `from` → `slot`. Attack op `from`/`to` → `attacker`/`defender`. Move op `from` → `source`. Grep must go to zero for seat-`from`.
-3. **Select by `pick`.** Replace `From` with `among` | `pile` | `slot`. Resolve `self`/`opponent` and binds at pause. Compute `switch (frame.pick)` only. Damage Swap is `pick: "slots", among: "self"`.
-4. **`Pile` is survey.** `SurveyFrom` → `Pile`. Count takes a `Pile` (Hydro Pump: `$self_slot` + `attachment: "energy"` → `SlotRef` after resolve). No `From` on Count.
+3. **Select by `pick`.** Replace `From` with `among` | `source` | `slot`. Resolve `self`/`opponent` and binds at pause. Compute `switch (frame.pick)` only. Damage Swap is `pick: "slots", among: "self"`.
+4. **Survey takes a zone or a slot attachment.** `SurveyFrom` is gone. Count takes `zone` or `slot` + `attachment` (Hydro Pump: `$self_slot` + `attachment: "energy"` → `SlotRef` after resolve). No `From` on Count.
 5. **Freeze the table.** A new helper that converts `SlotId` → some other seat type is a bug. A new `*Ref` / `*Target` / `*From` for the same entity is a bug.
 
 When this is done, wrapping your head around the engine is six nouns, not a per-function dialect.
@@ -132,7 +134,7 @@ Names on the interpret context. Every real attack uses them, not just tests.
 
 Read-only. Compute and card text ask the same questions.
 
-- **Pile** — `ZoneRef` or `SlotRef` (see Nouns)
+- **Where** — `ZoneRef` or `SlotRef` (zone vs slot attachment)
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`
 - **Reduce** — list, count, or sum of `energyValue`
 
@@ -199,7 +201,7 @@ run_effect  $copy
 
 `$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost. Recoil (`ApplyDamage` a positive literal onto `$self_slot`) is stripped from the copy.
 
-1. **Widen Select** — `pick` says what the menu is; the source type follows `pick` (`among` / `pile` / `slot`). See Nouns. Do not add a `From` union. The answer binds a name, same style as `$coin`.
+1. **Widen Select** — `pick` says what the menu is; the source type follows `pick` (`among` / `source` / `slot`). See Nouns. Do not add a `From` union. The answer binds a name, same style as `$coin`.
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `bindings`. Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.

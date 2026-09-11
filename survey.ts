@@ -69,10 +69,10 @@ export function surveyEnergyValue(
 // Units on a Pokémon — one entry per energyValue, typed as the card provides
 export function energyUnitsOn(gamestate: GameState, slot: SlotId): EnergyType[] {
   const units: EnergyType[] = []
-  const pile = { ...slot, attachment: "energy" } as const
-  for (const card of cardsAt(gamestate, pile)) {
+  const energy = { ...slot, attachment: "energy" } as const
+  for (const card of cardsAt(gamestate, energy)) {
     const printed = gamestate.cardRegistry[card]
-    const type = energyTypeOf(gamestate, card, pile)
+    const type = energyTypeOf(gamestate, card, energy)
     const n = printed?.energyValue ?? 0
     if (!type) continue
     for (let i = 0; i < n; i++) units.push(type)
@@ -108,7 +108,8 @@ export function isEnergy(gamestate: GameState, cardId: string): boolean {
 
 export function printedAttackDamage(damage?: string | number | null): number {
   const raw = damage == null ? "" : String(damage).trim()
-  const n = Number(raw.replace(/[^0-9.-]/g, ""))
+  if (!/^\d+$/.test(raw)) return 0
+  const n = Number(raw)
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 

@@ -21,6 +21,14 @@ function isZoneRef(value: unknown): value is ZoneRef {
   return typeof value === "object" && value !== null && "zone" in value && "player" in value
 }
 
+function isSlotId(value: unknown): value is SlotId {
+  return typeof value === "object" && value !== null && "player" in value && "slot" in value
+}
+
+function isSlotRef(value: unknown): value is SlotRef {
+  return isSlotId(value) && "attachment" in value
+}
+
 function zoneOf(gamestate: GameState, card: string): ZoneRef | undefined {
   for (const player of [1, 2] as const) {
     for (const zone of ["hand", "deck", "discard", "prize"] as const) {
@@ -117,42 +125,52 @@ function applyDamageModifier(damage: number, modifier: DamageModifier): number {
   }
 }
 
-export function resolveSlot(target: SlotId | BindingName, ctx: InterpretCtx): SlotId {
-  if (typeof target !== "string") return target
-  return ctx.bindings[target] as SlotId
+export function resolveSlot(target: SlotId | BindingName, ctx: InterpretCtx): SlotId | undefined {
+  if (typeof target !== "string") return isSlotId(target) ? target : undefined
+  const bound = ctx.bindings[target]
+  if (bound === "" || bound == null) return undefined
+  return isSlotId(bound) ? bound : undefined
 }
 
 function resolveAmount(amount: number | BindingName, ctx: InterpretCtx): number {
   if (typeof amount === "number") return amount
-  return ctx.bindings[amount] as number
+  const bound = ctx.bindings[amount]
+  return typeof bound === "number" ? bound : 0
 }
 
 function resolveCard(card: string, ctx: InterpretCtx): string {
-  if (card.startsWith("$")) return ctx.bindings[card] as string
-  return card
+  if (!card.startsWith("$")) return card
+  const bound = ctx.bindings[card]
+  return typeof bound === "string" ? bound : ""
 }
 
-function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef {
+function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef | undefined {
   if (typeof source !== "string") return source
-  return ctx.bindings[source] as ZoneRef
+  const bound = ctx.bindings[source]
+  return isZoneRef(bound) ? bound : undefined
 }
 
-function resolveSlotPile(
+function resolveSlotAttachment(
   source: SlotRef | BindingName,
   ctx: InterpretCtx,
   attachment?: Attachment
-): SlotRef {
+): SlotRef | undefined {
   const raw = typeof source !== "string" ? source : ctx.bindings[source]
-  if (attachment) return { ...(raw as SlotId), attachment }
-  return raw as SlotRef
+  if (attachment) {
+    if (!isSlotId(raw)) return undefined
+    return { ...raw, attachment }
+  }
+  return isSlotRef(raw) ? raw : undefined
 }
 
 function resolveSlotRef(
   slot: SlotId | BindingName,
   attachment: SlotRef["attachment"],
   ctx: InterpretCtx
-): SlotRef {
-  return { ...resolveSlot(slot, ctx), attachment }
+): SlotRef | undefined {
+  const id = resolveSlot(slot, ctx)
+  if (!id) return undefined
+  return { ...id, attachment }
 }
 
 function calcFn(fn: CalcFn, a: number, b: number): number {
@@ -246,7 +264,9 @@ export function ifPasses(
   ctx: InterpretCtx
 ): boolean {
   if ("status" in primitive) {
-    return getSlot(gamestate, resolveSlot(primitive.slot, ctx)).status[primitive.status]
+    const slot = resolveSlot(primitive.slot, ctx)
+    if (!slot) return false
+    return getSlot(gamestate, slot).status[primitive.status]
   }
   return ctx.bindings[primitive.bind] === primitive.equals
 }
@@ -257,43 +277,42 @@ export function interpret(
   ctx: InterpretCtx = { bindings: {} }
 ): GameState {
   switch (primitive.op) {
-    case Op.MoveZoneToZone:
-      return moveZoneToZone(
-        gamestate,
-        resolveCard(primitive.card, ctx),
-        resolveZone(primitive.source, ctx),
-        resolveZone(primitive.dest, ctx),
-        primitive.position
-      )
+    case Op.MoveZoneToZone: {
+      const source = resolveZone(primitive.source, ctx)
+      const dest = resolveZone(primitive.dest, ctx)
+      const card = resolveCard(primitive.card, ctx)
+      if (!source || !dest || !card) return gamestate
+      return moveZoneToZone(gamestate, card, source, dest, primitive.position)
+    }
 
-    case Op.MoveZoneToSlot:
-      return moveZoneToSlot(
-        gamestate,
-        resolveCard(primitive.card, ctx),
-        resolveZone(primitive.source, ctx),
-        resolveSlotRef(primitive.dest, primitive.attachment, ctx)
-      )
+    case Op.MoveZoneToSlot: {
+      const source = resolveZone(primitive.source, ctx)
+      const dest = resolveSlotRef(primitive.dest, primitive.attachment, ctx)
+      const card = resolveCard(primitive.card, ctx)
+      if (!source || !dest || !card) return gamestate
+      return moveZoneToSlot(gamestate, card, source, dest)
+    }
 
-    case Op.MoveSlotToZone:
-      return moveSlotToZone(
-        gamestate,
-        resolveCard(primitive.card, ctx),
-        resolveSlotPile(primitive.source, ctx, primitive.attachment),
-        resolveZone(primitive.dest, ctx),
-        primitive.position
-      )
+    case Op.MoveSlotToZone: {
+      const source = resolveSlotAttachment(primitive.source, ctx, primitive.attachment)
+      const dest = resolveZone(primitive.dest, ctx)
+      const card = resolveCard(primitive.card, ctx)
+      if (!source || !dest || !card) return gamestate
+      return moveSlotToZone(gamestate, card, source, dest, primitive.position)
+    }
 
-    case Op.MoveSlotToSlot:
-      return moveSlotToSlot(
-        gamestate,
-        resolveCard(primitive.card, ctx),
-        resolveSlotPile(primitive.source, ctx, primitive.attachment),
-        resolveSlotPile(primitive.dest, ctx, primitive.attachment)
-      )
+    case Op.MoveSlotToSlot: {
+      const source = resolveSlotAttachment(primitive.source, ctx, primitive.attachment)
+      const dest = resolveSlotAttachment(primitive.dest, ctx, primitive.attachment)
+      const card = resolveCard(primitive.card, ctx)
+      if (!source || !dest || !card) return gamestate
+      return moveSlotToSlot(gamestate, card, source, dest)
+    }
 
     case Op.Attack: {
       const attacker = resolveSlot(primitive.attacker, ctx)
       const defender = resolveSlot(primitive.defender, ctx)
+      if (!attacker || !defender) return gamestate
       const hit = pipelineAttackDamage(
         gamestate,
         resolveAmount(primitive.base, ctx),
@@ -304,24 +323,23 @@ export function interpret(
       return record(gamestate, { op: Op.Attack, attacker, defender, ...hit })
     }
 
-    case Op.ApplyDamage:
-      return applyDamage(
-        gamestate,
-        resolveAmount(primitive.amount, ctx),
-        resolveSlot(primitive.slot, ctx),
-        primitive.source
-      )
+    case Op.ApplyDamage: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      if (!slot) return gamestate
+      return applyDamage(gamestate, resolveAmount(primitive.amount, ctx), slot, primitive.source)
+    }
 
-    case Op.ApplyStatus:
-      return applyStatus(
-        gamestate,
-        primitive.status,
-        resolveSlot(primitive.slot, ctx),
-        primitive.counters
-      )
+    case Op.ApplyStatus: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      if (!slot) return gamestate
+      return applyStatus(gamestate, primitive.status, slot, primitive.counters)
+    }
 
-    case Op.RemoveStatus:
-      return removeStatus(gamestate, primitive.status, resolveSlot(primitive.slot, ctx))
+    case Op.RemoveStatus: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      if (!slot) return gamestate
+      return removeStatus(gamestate, primitive.status, slot)
+    }
 
     case Op.FlipCoin: {
       const scripted = ctx.script?.coins?.shift()
@@ -336,57 +354,83 @@ export function interpret(
 
     case Op.ApplyModifier: {
       const slot = resolveSlot(primitive.slot, ctx)
-      const card = "card" in primitive && primitive.card ? resolveCard(primitive.card, ctx) : undefined
-      const extra = card ? { card } : {}
-      if (primitive.field === "weakness_type" || primitive.field === "resistance_type") {
-        const raw = primitive.set
-        const set = (raw.startsWith("$") ? String(ctx.bindings[raw] ?? "") : raw) as EnergyType
-        if (!set) return gamestate
-        const leave = { beat: "leave_play" as const }
-        return record(
-          applyModifier(gamestate, slot, { field: primitive.field, set, until: leave, ...extra }),
-          { op: Op.ApplyModifier, slot, field: primitive.field, set, until: leave }
-        )
+      if (!slot) return gamestate
+      switch (primitive.field) {
+        case "weakness_type":
+        case "resistance_type": {
+          const raw = primitive.set
+          const set = (raw.startsWith("$") ? String(ctx.bindings[raw] ?? "") : raw) as EnergyType
+          if (!set) return gamestate
+          const until = { beat: "leave_play" as const }
+          if (primitive.field === "weakness_type") {
+            return record(
+              applyModifier(gamestate, slot, { field: "weakness_type", set, until }),
+              { op: Op.ApplyModifier, slot, field: "weakness_type", set, until },
+            )
+          }
+          return record(
+            applyModifier(gamestate, slot, { field: "resistance_type", set, until }),
+            { op: Op.ApplyModifier, slot, field: "resistance_type", set, until },
+          )
+        }
+        case "attack_use": {
+          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
+          const until = { beat: "end_of_turn" as const, player }
+          const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "attack_use", ...rewrite, until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "attack_use", ...rewrite, until },
+          )
+        }
+        case "energy_type": {
+          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
+          const until = { beat: "end_of_turn" as const, player }
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "energy_type", set: primitive.set, until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "energy_type", set: primitive.set, until },
+          )
+        }
+        case "attack_damage": {
+          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
+          const until = { beat: "end_of_turn" as const, player }
+          const rewrite = rewriteOf(primitive)
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "attack_damage", ...rewrite, until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "attack_damage", ...rewrite, until },
+          )
+        }
       }
-      const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-      const until = { beat: primitive.until.beat, player }
-      if (primitive.field === "attack_use") {
-        const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
-        return record(
-          applyModifier(gamestate, slot, { field: "attack_use", ...rewrite, until, ...extra }),
-          { op: Op.ApplyModifier, slot, field: "attack_use", ...rewrite, until }
-        )
-      }
-      if (primitive.field === "energy_type") {
-        const rewrite = { set: primitive.set }
-        return record(
-          applyModifier(gamestate, slot, { field: "energy_type", ...rewrite, until, ...extra }),
-          { op: Op.ApplyModifier, slot, field: "energy_type", ...rewrite, until }
-        )
-      }
-      const rewrite = rewriteOf(primitive)
-      return record(
-        applyModifier(gamestate, slot, { field: "attack_damage", ...rewrite, until, ...extra }),
-        { op: Op.ApplyModifier, slot, field: "attack_damage", ...rewrite, until }
-      )
     }
 
     case Op.Count: {
       if (primitive.kind === "damage") {
-        ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
+        const slot = resolveSlot(primitive.slot, ctx)
+        ctx.bindings[primitive.bind] = slot ? getSlot(gamestate, slot).damage : 0
         return gamestate
       }
       if (primitive.kind === "weakness") {
-        ctx.bindings[primitive.bind] = currentForm(gamestate, getSlot(gamestate, resolveSlot(primitive.slot, ctx)))?.weaknesses?.length ?? 0
+        const slot = resolveSlot(primitive.slot, ctx)
+        ctx.bindings[primitive.bind] = slot
+          ? currentForm(gamestate, getSlot(gamestate, slot))?.weaknesses?.length ?? 0
+          : 0
         return gamestate
       }
       if (primitive.kind === "hp") {
-        const hp = Number(currentForm(gamestate, getSlot(gamestate, resolveSlot(primitive.slot, ctx)))?.hp)
+        const slot = resolveSlot(primitive.slot, ctx)
+        const hp = slot ? Number(currentForm(gamestate, getSlot(gamestate, slot))?.hp) : NaN
         ctx.bindings[primitive.bind] = Number.isFinite(hp) ? hp : 0
         return gamestate
       }
       if (primitive.kind === "attack_damage") {
-        const slot = getSlot(gamestate, resolveSlot(primitive.slot, ctx))
+        const id = resolveSlot(primitive.slot, ctx)
+        if (!id) {
+          ctx.bindings[primitive.bind] = 0
+          return gamestate
+        }
+        const slot = getSlot(gamestate, id)
         const name = String(ctx.bindings[primitive.attack] ?? "")
         const attack = currentForm(gamestate, slot)?.attacks?.find((row) => row.name === name)
         ctx.bindings[primitive.bind] = printedAttackDamage(attack?.damage)
@@ -394,14 +438,16 @@ export function interpret(
       }
       if (primitive.kind === "slots") {
         const self = resolveSlot("$self_slot", ctx)
-        ctx.bindings[primitive.bind] = surveySlots(
-          gamestate,
-          self.player,
-          primitive.who,
-          primitive.among,
-          [primitive.filter ?? []].flat(),
-          ctx.bindings
-        ).length
+        ctx.bindings[primitive.bind] = self
+          ? surveySlots(
+              gamestate,
+              self.player,
+              primitive.who,
+              primitive.among,
+              [primitive.filter ?? []].flat(),
+              ctx.bindings
+            ).length
+          : 0
         return gamestate
       }
       if (primitive.kind === "first") {
@@ -409,22 +455,22 @@ export function interpret(
           "zone" in primitive
             ? resolveZone(primitive.zone, ctx)
             : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
-        ctx.bindings[primitive.bind] = surveyCards(gamestate, source, primitive.filter)[0] ?? ""
+        ctx.bindings[primitive.bind] = source
+          ? surveyCards(gamestate, source, primitive.filter)[0] ?? ""
+          : ""
         return gamestate
       }
       if ("zone" in primitive) {
-        ctx.bindings[primitive.bind] = surveyCount(
-          gamestate,
-          resolveZone(primitive.zone, ctx),
-          primitive.filter
-        )
+        const zone = resolveZone(primitive.zone, ctx)
+        ctx.bindings[primitive.bind] = zone ? surveyCount(gamestate, zone, primitive.filter) : 0
         return gamestate
       }
       const source = resolveSlotRef(primitive.slot, primitive.attachment, ctx)
-      ctx.bindings[primitive.bind] =
-        primitive.kind === "energy_value"
+      ctx.bindings[primitive.bind] = source
+        ? primitive.kind === "energy_value"
           ? surveyEnergyValue(gamestate, source, primitive.filter)
           : surveyCount(gamestate, source, primitive.filter)
+        : 0
       return gamestate
     }
 
@@ -437,7 +483,7 @@ export function interpret(
 
     case Op.SwapActive: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (slot.slot !== "bench") return gamestate
+      if (!slot || slot.slot !== "bench") return gamestate
       const next = swapActive(gamestate, slot.player, slot.index)
       if (next === gamestate) return gamestate
       return record(next, { op: Op.SwapActive, slot })
@@ -445,12 +491,14 @@ export function interpret(
 
     case Op.Draw: {
       const self = resolveSlot("$self_slot", ctx)
+      if (!self) return gamestate
       const player = primitive.who === "self" ? self.player : opponent(self.player)
       return draw(gamestate, player, resolveAmount(primitive.count, ctx))
     }
 
     case Op.Shuffle: {
       const zone = resolveZone(primitive.zone, ctx)
+      if (!zone) return gamestate
       return record(shuffle(gamestate, zone.player, zone.zone), { op: Op.Shuffle, zone })
     }
 

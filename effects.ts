@@ -21,6 +21,32 @@ function selfdestruct(hit: number, splash: number): Expr {
   ]
 }
 
+function discardDefendingEnergy(): Expr {
+  return [
+    { op: Op.Count, kind: "cards", slot: "$defending", attachment: "energy", bind: "$n" },
+    { op: Op.Calc, fn: "min", a: "$n", b: 1, bind: "$has" },
+    {
+      op: Op.If, bind: "$has", equals: 1, then: [
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$defending",
+          attachment: "energy",
+          bind: "$pay",
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$defending",
+          attachment: "energy",
+          dest: "$opp_discard",
+          position: "bottom",
+        },
+      ],
+    },
+  ]
+}
+
 function whirlwind(hit: number): Expr {
   return [
     { op: Op.Attack, base: hit, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
@@ -358,27 +384,7 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Hyper Beam": [
         { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
         { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
-        { op: Op.Count, kind: "cards", slot: "$defending", attachment: "energy", bind: "$n" },
-        { op: Op.Calc, fn: "min", a: "$n", b: 1, bind: "$has" },
-        {
-          op: Op.If, bind: "$has", equals: 1, then: [
-            {
-              op: Op.Select,
-              pick: "cards",
-              source: "$defending",
-              attachment: "energy",
-              bind: "$pay",
-            },
-            {
-              op: Op.MoveSlotToZone,
-              card: "$pay",
-              source: "$defending",
-              attachment: "energy",
-              dest: "$opp_discard",
-              position: "bottom",
-            },
-          ],
-        },
+        ...discardDefendingEnergy(),
       ],
     },
   },
@@ -473,21 +479,7 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Whirlpool": [
         { op: Op.Attack, base: 40, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
         { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
-        {
-          op: Op.Select,
-          pick: "cards",
-          source: "$defending",
-          attachment: "energy",
-          bind: "$pay",
-        },
-        {
-          op: Op.MoveSlotToZone,
-          card: "$pay",
-          source: "$defending",
-          attachment: "energy",
-          dest: "$opp_discard",
-          position: "bottom",
-        },
+        ...discardDefendingEnergy(),
       ],
     },
   },
@@ -966,15 +958,16 @@ export function trainerAttaches(sourceId: string): boolean {
   )
 }
 
-// Written effect, or printed numeric damage through the attack pipeline.
+// Written effect, or whole-string integer damage with empty extra text.
 export function attackExpr(
   sourceId: string,
-  attack: { name: string; damage?: string | number | null }
+  attack: { name: string; damage?: string | number | null; text?: string | null }
 ): Expr {
   const written = cardEffect(sourceId, "attacks", attack.name)
   if (written.length > 0) return written
   const base = printedAttackDamage(attack.damage)
   if (base <= 0) return []
+  if (String(attack.text ?? "").trim() !== "") return []
   return [
     { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
     { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },

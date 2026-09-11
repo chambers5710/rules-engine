@@ -10,13 +10,14 @@ import {
   opponent,
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
-import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
+import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
-import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
+import { selectChoices, selectFrame } from "./select.js"
+import type { GameState, SlotId } from "./types.js"
 import { DAMAGE_COUNTER, Phase } from "./types.js"
 
 const PRIZE_COUNT = 6
@@ -318,12 +319,12 @@ function runExpr(
   for (let i = 0; i < expr.length; i++) {
     const step = expr[i]
     if (step.op === Op.Select) {
+      const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1))
+      const choices = frame ? selectChoices(gamestate, frame) : []
+      if (!frame || (choices.length === 0 && !step.optional)) continue
       return {
         ...gamestate,
-        actionStack: [
-          ...gamestate.actionStack,
-          pauseSelect(step, ctx, player, kind, expr.slice(i + 1)),
-        ],
+        actionStack: [...gamestate.actionStack, frame],
       }
     }
     if (step.op === Op.If) {
@@ -337,6 +338,7 @@ function runExpr(
     }
     if (step.op === Op.Each) {
       const self = resolveSlot("$self_slot", ctx)
+      if (!self) continue
       for (const seat of surveySlots(
         gamestate,
         self.player,
@@ -351,54 +353,15 @@ function runExpr(
       continue
     }
     if (step.op === Op.RunEffect) {
-      const copied = copiedAttack(
-        gamestate,
-        resolveSlot(step.slot, ctx),
-        String(ctx.bindings[step.attack] ?? "")
-      )
+      const slot = resolveSlot(step.slot, ctx)
+      const copied = slot
+        ? copiedAttack(gamestate, slot, String(ctx.bindings[step.attack] ?? ""))
+        : []
       return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind)
     }
     gamestate = interpret(gamestate, step, ctx)
   }
   return gamestate
-}
-
-function pauseSelect(
-  step: Extract<Primitive, { op: Op.Select }>,
-  ctx: InterpretCtx,
-  player: 1 | 2,
-  kind: Action,
-  remaining: Expr
-): ActionFrame {
-  const base = {
-    remaining,
-    bindings: ctx.bindings,
-    player,
-    bind: step.bind,
-    filter: step.filter,
-    optional: step.optional,
-    kind,
-  }
-  switch (step.pick) {
-    case "slots":
-      return {
-        ...base,
-        pick: "slots",
-        who: step.who,
-        chooser: step.chooser === "opponent" ? opponent(player) : player,
-      }
-    case "cards": {
-      const raw = typeof step.source === "string" ? ctx.bindings[step.source] : step.source
-      const source: ZoneRef | SlotRef = step.attachment
-        ? { ...(raw as SlotId), attachment: step.attachment }
-        : raw as ZoneRef | SlotRef
-      return { ...base, pick: "cards", source }
-    }
-    case "attacks":
-      return { ...base, pick: "attacks", slot: resolveSlot(step.slot, ctx) }
-    case "types":
-      return { ...base, pick: "types", except: step.except ?? ["Colorless"] }
-  }
 }
 
 function copiedAttack(gamestate: GameState, slot: SlotId, name: string): Expr {

@@ -8,10 +8,11 @@ import {
   opponent,
   pokemonInPlay,
 } from "./board.js"
-import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
+import { Action, Op, type Expr, type Primitive } from "./dsl.js"
 import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
-import { ifPasses, slotMatches } from "./interpret.js"
+import { ifPasses } from "./interpret.js"
 import { attackBanned } from "./modifiers.js"
+import { exprPlayable, selectChoices } from "./select.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
@@ -60,109 +61,7 @@ export function computeAvailableActions(gamestate: GameState): AvailableAction[]
 function computeSelect(gamestate: GameState): AvailableAction[] {
   const frame = gamestate.actionStack.at(-1)
   if (!frame) return []
-  switch (frame.pick) {
-    case "slots":
-      return selectSlots(gamestate, frame)
-    case "cards":
-      return selectCards(gamestate, frame)
-    case "attacks":
-      return selectAttacks(gamestate, frame)
-    case "types":
-      return selectTypes(frame)
-  }
-}
-
-function selectSlots(
-  gamestate: GameState,
-  frame: Extract<ActionFrame, { pick: "slots" }>
-): AvailableAction[] {
-  const player = frame.who === "self" ? frame.player : opponent(frame.player)
-  const filters = [frame.filter ?? []].flat()
-  const actions: AvailableAction[] = []
-  for (const slotId of pokemonInPlay(gamestate, player)) {
-    if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
-    actions.push({ kind: Action.Choose, player: frame.chooser, pick: "slots", slot: slotId, expr: [] })
-  }
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
-  return actions
-}
-
-function selectCards(
-  gamestate: GameState,
-  frame: Extract<ActionFrame, { pick: "cards" }>
-): AvailableAction[] {
-  const filters = [frame.filter ?? []].flat()
-  const pays = filters.find((filter) => filter.kind === "pays")
-  const need = pays ? frame.bindings[pays.bind] : undefined
-  const survey = filters.find(
-    (filter) =>
-      filter.kind === "energy" ||
-      filter.kind === "basic_pokemon" ||
-      filter.kind === "evolves_from" ||
-      filter.kind === "trainer" ||
-      filter.kind === "pokemon"
-  )
-  const cards = surveyCards(gamestate, frame.source, survey)
-  const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
-  const actions: AvailableAction[] = []
-  for (let i = 0; i < cards.length; i++) {
-    const value = values[i]
-    if (typeof need === "number") {
-      if (value <= 0 || value > need) continue
-      const rest = values.filter((_, j) => j !== i)
-      if (!canSum(rest, need - value)) continue
-    }
-    const excluded = filters.some(
-      (filter) => filter.kind === "other_than" && frame.bindings[filter.bind] === cards[i]
-    )
-    if (excluded) continue
-    actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
-  }
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
-  return actions
-}
-
-function selectAttacks(
-  gamestate: GameState,
-  frame: Extract<ActionFrame, { pick: "attacks" }>
-): AvailableAction[] {
-  const form = currentForm(gamestate, getSlot(gamestate, frame.slot))
-  const actions: AvailableAction[] = (form?.attacks ?? []).map((attack) => ({
-    kind: Action.Choose,
-    player: frame.player,
-    pick: "attacks" as const,
-    name: attack.name,
-    expr: [],
-  }))
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
-  return actions
-}
-
-const CONVERSION_TYPES = ["Grass", "Fire", "Water", "Lightning", "Psychic", "Fighting"] as const
-
-function selectTypes(frame: Extract<ActionFrame, { pick: "types" }>): AvailableAction[] {
-  const skip = new Set(frame.except)
-  const actions: AvailableAction[] = CONVERSION_TYPES.filter((type) => !skip.has(type)).map((type) => ({
-    kind: Action.Choose,
-    player: frame.player,
-    pick: "types" as const,
-    name: type,
-    expr: [],
-  }))
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
-  return actions
-}
-
-function canSum(values: number[], target: number): boolean {
-  if (target === 0) return true
-  const ok = new Set([0])
-  for (const value of values) {
-    for (const sum of [...ok]) {
-      if (sum + value === target) return true
-      if (sum + value < target) ok.add(sum + value)
-    }
-  }
-  return ok.has(target)
+  return selectChoices(gamestate, frame)
 }
 
 // Init — Active first; then optional bench Basics plus Ready
@@ -298,32 +197,32 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const hand = { player, zone: "hand" } as const
   const discard = { player, zone: "discard" } as const
   const active = { player, slot: "active" } as const
-  return surveyCards(gamestate, hand, { kind: "trainer" }).map((card) => {
+  const actions: AvailableAction[] = []
+  for (const card of surveyCards(gamestate, hand, { kind: "trainer" })) {
     const sourceId = gamestate.cardRegistry[card].sourceId
     const effect = trainerEffect(sourceId)
-    return {
-      kind: Action.PlayTrainer,
-      player,
-      card,
-      expr: trainerAttaches(sourceId)
-        ? effect
-        : [
-            { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
-            ...effect,
-          ],
-      seed: {
-        $self_slot: active,
-        $defending: { player: opponent(player), slot: "active" },
-        $hand: hand,
-        $deck: { player, zone: "deck" },
-        $discard: discard,
-        $opp_hand: { player: opponent(player), zone: "hand" },
-        $opp_deck: { player: opponent(player), zone: "deck" },
-        $opp_discard: { player: opponent(player), zone: "discard" },
-        $played: card,
-      },
+    if (effect.length === 0) continue
+    const expr: Expr = trainerAttaches(sourceId)
+      ? effect
+      : [
+          { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
+          ...effect,
+        ]
+    const seed = {
+      $self_slot: active,
+      $defending: { player: opponent(player), slot: "active" },
+      $hand: hand,
+      $deck: { player, zone: "deck" },
+      $discard: discard,
+      $opp_hand: { player: opponent(player), zone: "hand" },
+      $opp_deck: { player: opponent(player), zone: "deck" },
+      $opp_discard: { player: opponent(player), zone: "discard" },
+      $played: card,
     }
-  })
+    if (!exprPlayable(gamestate, expr, seed, player, Action.PlayTrainer)) continue
+    actions.push({ kind: Action.PlayTrainer, player, card, expr, seed })
+  }
+  return actions
 }
 
 // Ability — each in-play Pokémon's printed powers; $self_slot is that copy
@@ -335,13 +234,17 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     if (!form) continue
     for (const ability of form.abilities ?? []) {
       if (ability.type === "Pokémon Power" && pokemonPowerBlocked(slot)) continue
+      const expr = cardEffect(form.sourceId, "abilities", ability.name)
+      if (expr.length === 0) continue
+      const seed = { $self_slot: slotId, $hand: { player, zone: "hand" } }
+      if (!exprPlayable(gamestate, expr, seed, player, Action.Ability)) continue
       actions.push({
         kind: Action.Ability,
         player,
         name: ability.name,
         slot: slotId,
-        expr: cardEffect(form.sourceId, "abilities", ability.name),
-        seed: { $self_slot: slotId, $hand: { player, zone: "hand" } },
+        expr,
+        seed,
       })
     }
   }
@@ -372,6 +275,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []) && !attackBanned(active, attack.name))
     .flatMap((attack) => {
       const expr = attackExpr(form.sourceId, attack)
+      if (expr.length === 0) return []
       const seed = {
         $self_slot: slot,
         $defending: { player: defending, slot: "active" },
@@ -381,6 +285,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
       }
       const gate = statusUseGate(expr)
       if (gate && !ifPasses(gamestate, gate, { bindings: seed })) return []
+      if (!exprPlayable(gamestate, expr, seed, player, Action.Attack)) return []
       return [{ kind: Action.Attack, player, name: attack.name, expr, seed }]
     })
 }

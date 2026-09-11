@@ -2,7 +2,7 @@
 
 What `effects.ts` can say today vs printed Base Set text. Special Conditions: `status.md`.
 
-Plain numbered damage with empty text is automatic (`attack` → `apply_damage`). `"40+"` / `"30×"` / `"50-"` are not.
+Plain numbered damage with empty text is automatic (`attack` → `apply_damage`). `"40+"` / `"30×"` / `"50-"` and integer-plus-text attacks are not.
 
 ## Authored
 

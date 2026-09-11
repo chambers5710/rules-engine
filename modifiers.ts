@@ -27,10 +27,14 @@ export function rewriteOf(modifier: AttackDamageRewrite): AttackDamageRewrite {
   return { prevent: modifier.prevent }
 }
 
+type ModifierWrite = {
+  [F in Modifier["field"]]: Omit<Extract<Modifier, { field: F }>, "phase">
+}[Modifier["field"]]
+
 export function applyModifier(
   gamestate: GameState,
   slot: SlotId,
-  modifier: Omit<Modifier, "phase">
+  modifier: ModifierWrite
 ): GameState {
   const next = copy(gamestate)
   const phase =

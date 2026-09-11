@@ -37,7 +37,7 @@ const placeInZone = (zone: Zone, position: ZonePosition, cardId: CardInstanceId)
   }
 }
 
-// Zone to zone — take a card off one pile and place it on another
+// Zone to zone — take a card off one zone and place it on another
 export const moveZoneToZone = (
   gamestate: GameState,
   cardId: CardInstanceId,
@@ -58,12 +58,12 @@ export const moveZoneToZone = (
   return record(next, { op: Op.MoveZoneToZone, card: cardId, source, dest, position })
 }
 
-// Slot attachment — the named pile on that slot
+// Slot attachment — evolution, energy, or tools on that seat
 const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
   return getSlot(gamestate, ref)[ref.attachment]
 }
 
-// A card landing on an already occupied evolution pile is an evolve — all five flags off.
+// A card landing on an already occupied evolution attachment is an evolve — all five flags off.
 function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
   if (dest.attachment !== "evolution") return
   const pokemon = getSlot(gamestate, dest)
@@ -73,7 +73,7 @@ function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
   pokemon.modifiers = pokemon.modifiers.filter((m) => m.until.beat !== "leave_play")
 }
 
-// Zone to slot — pile onto a Pokémon (evolution, energy, or tool)
+// Zone to slot — onto a Pokémon attachment (evolution, energy, or tool)
 export const moveZoneToSlot = (
   gamestate: GameState,
   cardId: CardInstanceId,
@@ -93,7 +93,7 @@ export const moveZoneToSlot = (
   return record(next, { op: Op.MoveZoneToSlot, card: cardId, source, dest })
 }
 
-// Slot to zone — off a Pokémon back into a pile
+// Slot to zone — off a Pokémon attachment back into a zone
 export const moveSlotToZone = (
   gamestate: GameState,
   cardId: CardInstanceId,
@@ -112,7 +112,7 @@ export const moveSlotToZone = (
   return record(next, { op: Op.MoveSlotToZone, card: cardId, source, dest, position })
 }
 
-// Slot to slot — between Pokémon piles (retreat, attach, evolve)
+// Slot to slot — between Pokémon attachments (retreat, attach, evolve)
 export const moveSlotToSlot = (
   gamestate: GameState,
   cardId: CardInstanceId,
@@ -138,6 +138,9 @@ export const applyDamage = (
   slot: SlotId,
   source?: "poison" | "burn"
 ) => {
+  if (!slot || typeof slot.player !== "number" || (slot.slot !== "active" && slot.slot !== "bench")) {
+    return gamestate
+  }
   const next = copy(gamestate)
   getSlot(next, slot).damage = Math.max(0, getSlot(next, slot).damage + value)
   return record(next, {
@@ -177,7 +180,7 @@ export const removeStatus = (
   return record(next, { op: Op.RemoveStatus, status, slot })
 }
 
-// Shuffle — copy, then Fisher–Yates one of a player's piles
+// Shuffle — copy, then Fisher–Yates one of a player's zones
 export const shuffle = (
   gamestate: GameState,
   player: 1 | 2,
