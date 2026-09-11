@@ -69,6 +69,7 @@ function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
   const pokemon = getSlot(gamestate, dest)
   if (pokemon.evolution.length === 0) return
   pokemon.status = emptyStatus()
+  pokemon.poisonCounters = 1
 }
 
 // Zone to slot — pile onto a Pokémon (evolution, energy, or tool)
@@ -144,11 +145,15 @@ export const applyDamage = (
 export const applyStatus = (
   gamestate: GameState,
   status: Status,
-  slot: SlotId
+  slot: SlotId,
+  counters?: number
 ) => {
   const next = copy(gamestate)
   const pokemon = getSlot(next, slot)
   pokemon.status = withStatus(pokemon.status, status)
+  if (status === "poison") {
+    pokemon.poisonCounters = Math.max(pokemon.poisonCounters ?? 1, counters ?? 1)
+  }
   return record(next, { op: Op.ApplyStatus, status, slot })
 }
 
@@ -159,7 +164,9 @@ export const removeStatus = (
   slot: SlotId
 ) => {
   const next = copy(gamestate)
-  getSlot(next, slot).status[status] = false
+  const pokemon = getSlot(next, slot)
+  pokemon.status[status] = false
+  if (status === "poison") pokemon.poisonCounters = 1
   return record(next, { op: Op.RemoveStatus, status, slot })
 }
 

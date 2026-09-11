@@ -19,7 +19,7 @@ When implementing a card from another set, check whether its era matches this ge
 
 `Status`: `asleep` | `confused` | `paralyzed` | `poison` | `burn`. More than one flag may be on, with the overlap rule below.
 
-Amounts use `DAMAGE_COUNTER` (10). Poison = 1, Burn = 2, Confused fail = 3. Card text that changes those amounts rewrites the same values, not a new condition.
+Amounts use `DAMAGE_COUNTER` (10). Poison = `slot.poisonCounters` (default 1; Toxic sets 2) × 10, Burn = 2, Confused fail = 3. Card text that changes poison amount writes `poisonCounters`, not a new condition.
 
 ## Where they sit
 

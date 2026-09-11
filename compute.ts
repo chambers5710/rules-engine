@@ -77,9 +77,9 @@ function selectSlots(
   const actions: AvailableAction[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
     if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
-    actions.push({ kind: Action.Choose, player: frame.player, pick: "slots", slot: slotId, expr: [] })
+    actions.push({ kind: Action.Choose, player: frame.chooser, pick: "slots", slot: slotId, expr: [] })
   }
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
   return actions
 }
 

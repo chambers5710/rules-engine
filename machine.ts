@@ -200,10 +200,12 @@ function afterKnockouts(gamestate: GameState): GameState {
 
 function checkupPoison(gamestate: GameState, player: 1 | 2): GameState {
   const slot = { player, slot: "active" } as const
-  if (!getSlot(gamestate, slot).status.poison) return gamestate
+  const pokemon = getSlot(gamestate, slot)
+  if (!pokemon.status.poison) return gamestate
+  const counters = pokemon.poisonCounters ?? POISON_COUNTERS
   return interpret(gamestate, {
     op: Op.ApplyDamage,
-    amount: POISON_COUNTERS * DAMAGE_COUNTER,
+    amount: counters * DAMAGE_COUNTER,
     slot,
   })
 }
@@ -365,7 +367,12 @@ function pauseSelect(
   }
   switch (step.pick) {
     case "slots":
-      return { ...base, pick: "slots", who: step.who }
+      return {
+        ...base,
+        pick: "slots",
+        who: step.who,
+        chooser: step.chooser === "opponent" ? opponent(player) : player,
+      }
     case "cards": {
       const raw = typeof step.source === "string" ? ctx.bindings[step.source] : step.source
       const source: ZoneRef | SlotRef = step.attachment

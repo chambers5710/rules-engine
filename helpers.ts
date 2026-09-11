@@ -45,6 +45,7 @@ export function promote(
     tools: [...from.tools],
     modifiers: [...from.modifiers],
     evolvedThisTurn: from.evolvedThisTurn,
+    poisonCounters: from.poisonCounters,
   }
   p.bench[index] = emptySlot()
   return next
@@ -69,6 +70,7 @@ export function swapActive(
     tools: [...bench.tools],
     modifiers: [...bench.modifiers],
     evolvedThisTurn: bench.evolvedThisTurn,
+    poisonCounters: bench.poisonCounters,
   }
   p.bench[index] = {
     evolution: [...active.evolution],
@@ -78,6 +80,7 @@ export function swapActive(
     tools: [...active.tools],
     modifiers: [...active.modifiers],
     evolvedThisTurn: active.evolvedThisTurn,
+    poisonCounters: 1,
   }
   return next
 }
@@ -91,6 +94,7 @@ export const emptySlot = (): Slot => ({
   tools: [],
   modifiers: [],
   evolvedThisTurn: false,
+  poisonCounters: 1,
 })
 
 // Discard slot — Pokémon, energy, and tools to discard; slot cleared

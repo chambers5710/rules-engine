@@ -63,6 +63,7 @@ export type Slot = {
   tools: CardInstanceId[]
   modifiers: Modifier[]
   evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet
+  poisonCounters: number
 }
 
 // Slot id — which Pokémon in play

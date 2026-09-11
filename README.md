@@ -136,7 +136,7 @@ Read-only. Compute and card text ask the same questions.
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`
 - **Reduce** — list, count, or sum of `energyValue`
 
-`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
@@ -184,7 +184,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:init`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -212,7 +212,7 @@ run_effect  $copy
 
 Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `attack.base`. The 3 and the cap 2 live in the effect, not in compute.
 
-`Count` `kind: "damage"` reads `slot.damage` (HP units). It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind or card binds, `to`: self / opponent / both) — no board write, no pause. `If` is bind `equals` or `slot` + `status` (any special condition).
+`Count` `kind: "damage"` reads `slot.damage` (HP units). `kind: "hp"` is printed HP. `Calc` `half_up_10` is Super Fang. It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind or card binds, `to`: self / opponent / both) — no board write, no pause. `If` is bind `equals` or `slot` + `status` (any special condition). Slot Select may set `chooser: "opponent"`.
 
 ## Roadmap
 
@@ -241,4 +241,5 @@ pnpm serve:trainers        # Both hands: Bill, Potion, Switch, Gust, Full Heal
 pnpm serve:deck -- oak     # Deck trainers (search | maintenance | oak | impostor | lass | trader)
 pnpm serve:energy-pile     # Poliwrath vs Magmar (Whirlpool, Super Potion, Energy Removal)
 pnpm serve:tools           # Magmar vs Hitmonchan (Defender / PlusPower)
+pnpm serve:leftover -- fang  # Super Fang / Toxic / Whirlwind (reset cycles)
 ```

@@ -159,6 +159,9 @@ function calcFn(fn: CalcFn, a: number, b: number): number {
       return Math.min(a, b)
     case "max":
       return Math.max(a, b)
+    case "half_up_10":
+      if (a <= 0) return 0
+      return Math.ceil(a / 2 / (b || 10)) * (b || 10)
   }
 }
 
@@ -288,7 +291,12 @@ export function interpret(
       )
 
     case Op.ApplyStatus:
-      return applyStatus(gamestate, primitive.status, resolveSlot(primitive.slot, ctx))
+      return applyStatus(
+        gamestate,
+        primitive.status,
+        resolveSlot(primitive.slot, ctx),
+        primitive.counters
+      )
 
     case Op.RemoveStatus:
       return removeStatus(gamestate, primitive.status, resolveSlot(primitive.slot, ctx))
@@ -324,6 +332,11 @@ export function interpret(
     case Op.Count: {
       if (primitive.kind === "damage") {
         ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
+        return gamestate
+      }
+      if (primitive.kind === "hp") {
+        const hp = Number(currentForm(gamestate, getSlot(gamestate, resolveSlot(primitive.slot, ctx)))?.hp)
+        ctx.bindings[primitive.bind] = Number.isFinite(hp) ? hp : 0
         return gamestate
       }
       if (primitive.kind === "attack_damage") {

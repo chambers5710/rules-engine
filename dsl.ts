@@ -55,7 +55,7 @@ export type SelectFilter =
   | { kind: "has_energy" }
   | SurveyFilter
 
-export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
+export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10"
 
 export type SeatWho = "self" | "opponent" | "both"
 export type SeatAmong = "bench" | "in_play"
@@ -69,10 +69,10 @@ export type Primitive =
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
-  | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName }
+  | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
-  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; chooser?: "self" | "opponent"; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
@@ -84,6 +84,7 @@ export type Primitive =
   | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
+  | { op: Op.Count; kind: "hp"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
@@ -124,6 +125,6 @@ type ActionFrameBase = {
 
 // Paused expr — Select stopped here; remaining runs after the bind is written
 export type ActionFrame =
-  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent" })
+  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; chooser: 1 | 2 })
   | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef })
   | (ActionFrameBase & { pick: "attacks"; slot: SlotId })

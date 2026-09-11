@@ -20,6 +20,7 @@
     "serve:energy-pile": "tsx ./tests/trainers/energy-pile.ts",
     "serve:optional": "tsx ./tests/trainers/optional.ts",
     "serve:tools": "tsx ./tests/trainers/tools.ts",
+    "serve:leftover": "tsx ./tests/attacks/leftover.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {

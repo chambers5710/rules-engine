@@ -6,7 +6,7 @@ Plain numbered damage with empty text is automatic (`attack` → `apply_damage`)
 
 ## Authored
 
-**Pokémon (by name, under the printed id):** Confuse Ray, Damage Swap, Hydro Pump, Rain Dance, Scrunch, Double-edge, Fire Spin, Whirlpool, Thundershock, Thunder Wave (Magneton), Hypnosis, Dream Eater, Poisonpowder (Ivysaur), Sing, Metronome (copy minus recoil), Meditate, Karate Chop, Flail, Earthquake, Selfdestruct (Magneton / Magnemite), Harden (Onix), Agility (Raichu), Barrier (Mewtwo).
+**Pokémon (by name, under the printed id):** Confuse Ray, Damage Swap, Hydro Pump, Rain Dance, Scrunch, Double-edge, Fire Spin, Whirlpool, Thundershock, Thunder Wave (Magneton), Hypnosis, Dream Eater, Poisonpowder (Ivysaur), Sing, Metronome (copy minus recoil), Meditate, Karate Chop, Flail, Earthquake, Selfdestruct (Magneton / Magnemite), Harden (Onix), Agility (Raichu), Barrier (Mewtwo), Super Fang, Toxic, Whirlwind (Pidgey / Pidgeotto).
 
 **Trainers (id is the key, array expr):** Bill `base1-91`, Potion `base1-94`, Switch `base1-95`, Gust of Wind `base1-93`, Full Heal `base1-82`, Super Potion `base1-90`, Energy Removal `base1-92`, Computer Search `base1-71`, Maintenance `base1-83`, Professor Oak `base1-88`, Impostor Professor Oak `base1-73`, Lass `base1-75`, Pokémon Trader `base1-77`, Pokémon Center `base1-85`, Item Finder `base1-74`, Super Energy Removal `base1-79`, Energy Retrieval `base1-81`, Defender `base1-80`, PlusPower `base1-84`. Play discards the card first, then this expr — unless the expr attaches it as a tool.
 
@@ -14,9 +14,7 @@ Plain numbered damage with empty text is automatic (`attack` → `apply_damage`)
 
 | Hole | Blocks |
 |---|---|
-| Count/If on **seats** is done (`kind: "slots"` + `Each`). Super Fang / Toxic are not seat counts | Super Fang (half HP), Toxic 20 poison |
 | Energy Trans (move energy between seats) | Energy Trans |
-| Opponent as chooser | Whirlwind |
 | Next-turn attack gate besides Confused | Sand-attack, Amnesia |
 | Triggers (on-hit, on-KO, last attack) | Strikes Back, Destiny Bond, Mirror Move, Leech Seed |
 | Rewrite Energy type / become Energy | Energy Burn, Buzzap |
@@ -26,7 +24,7 @@ Metronome copies the attack expr and drops recoil (`ApplyDamage` a positive lite
 
 ## Attacks not authorable
 
-Raticate Super Fang; Nidoking Toxic; Dragonair Hyper Beam; Pidgey/Pidgeotto Whirlwind; Sand-attack; Poliwhirl Amnesia; Pidgeotto Mirror Move; Gastly Destiny Bond; Farfetch'd Leek Slap; Porygon Conversion 1 / 2; Bulbasaur Leech Seed.
+Dragonair Hyper Beam; Sand-attack; Poliwhirl Amnesia; Pidgeotto Mirror Move; Gastly Destiny Bond; Farfetch'd Leek Slap; Porygon Conversion 1 / 2; Bulbasaur Leech Seed.
 
 **Stretch (not honest):** Recover (discard Energy + huge negative damage); Thunderbolt discard-all (loop Select on `$energy`); two-coin × damage (two flips + `Calc`); Horn Hazard (hit only on heads).
 

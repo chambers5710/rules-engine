@@ -21,6 +21,28 @@ function selfdestruct(hit: number, splash: number): Expr {
   ]
 }
 
+function whirlwind(hit: number): Expr {
+  return [
+    { op: Op.Attack, base: hit, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+    { op: Op.Count, kind: "slots", who: "opponent", among: "bench", bind: "$n" },
+    { op: Op.Calc, fn: "min", a: "$n", b: 1, bind: "$has" },
+    {
+      op: Op.If, bind: "$has", equals: 1, then: [
+        {
+          op: Op.Select,
+          pick: "slots",
+          who: "opponent",
+          chooser: "opponent",
+          bind: "$to",
+          filter: { kind: "other_than", bind: "$defending" },
+        },
+        { op: Op.SwapActive, slot: "$to" },
+      ],
+    },
+  ]
+}
+
 function optionalEnergy(source: BindingName, dest: BindingName): Expr {
   return [
     { op: Op.Select, pick: "cards", source, attachment: "energy", bind: "$opt", optional: true },
@@ -193,6 +215,15 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Selfdestruct": selfdestruct(80, 20),
     },
   },
+  "base1-11": {
+    attacks: {
+      "Toxic": [
+        { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.ApplyStatus, status: "poison", slot: "$defending", counters: 2 },
+      ],
+    },
+  },
   "base1-10": {
     attacks: {
       "Barrier": [
@@ -218,6 +249,28 @@ export const effects: Record<string, CardEffects | Expr> = {
           until: { beat: "end_of_turn", who: "opponent" },
         },
       ],
+    },
+  },
+  "base1-22": {
+    attacks: {
+      "Whirlwind": whirlwind(20),
+    },
+  },
+  "base1-40": {
+    attacks: {
+      "Super Fang": [
+        { op: Op.Count, kind: "hp", slot: "$defending", bind: "$hp" },
+        { op: Op.Count, kind: "damage", slot: "$defending", bind: "$dmg" },
+        { op: Op.Calc, fn: "sub", a: "$hp", b: "$dmg", bind: "$left" },
+        { op: Op.Calc, fn: "half_up_10", a: "$left", b: 10, bind: "$base" },
+        { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-57": {
+    attacks: {
+      "Whirlwind": whirlwind(10),
     },
   },
   "base1-14": {
