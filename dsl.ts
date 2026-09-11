@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, AttackDamageRewrite, AttackUseRewrite, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, AttackDamageRewrite, AttackUseRewrite, EnergyType, EnergyTypeRewrite, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -44,7 +44,7 @@ export enum Action {
 export type BindingName = `$${string}`
 
 // Select pick — what the paused menu lists
-export type SelectPick = "cards" | "attacks" | "slots"
+export type SelectPick = "cards" | "attacks" | "slots" | "types"
 
 export type SelectFilter =
   | { kind: "has_counters"; counters: number }
@@ -75,6 +75,7 @@ export type Primitive =
   | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; chooser?: "self" | "opponent"; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "types"; except?: EnergyType[]; optional?: true }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
@@ -83,12 +84,15 @@ export type Primitive =
       | { flip: true }
       | { ban: string | BindingName }
     )
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "energy_type"; set: EnergyType; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName }
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "weakness_type" | "resistance_type"; set: EnergyType | BindingName; until: { beat: "leave_play" } }
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "hp"; slot: SlotId | BindingName; bind: BindingName }
+  | { op: Op.Count; kind: "weakness"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
@@ -114,6 +118,8 @@ export type HistoryEntry =
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackDamageRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackUseRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "energy_type"; until: { beat: "end_of_turn"; player: 1 | 2 } } & EnergyTypeRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "weakness_type" | "resistance_type"; until: { beat: "leave_play" } } & EnergyTypeRewrite
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }
@@ -133,3 +139,4 @@ export type ActionFrame =
   | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; chooser: 1 | 2 })
   | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef })
   | (ActionFrameBase & { pick: "attacks"; slot: SlotId })
+  | (ActionFrameBase & { pick: "types"; except: EnergyType[] })

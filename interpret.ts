@@ -1,5 +1,5 @@
 import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
-import { applyModifier, foldAdds, foldDamage, rewriteOf, useRewriteOf } from "./modifiers.js"
+import { applyModifier, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
@@ -15,7 +15,7 @@ import {
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
-import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
+import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 function isZoneRef(value: unknown): value is ZoneRef {
   return typeof value === "object" && value !== null && "zone" in value && "player" in value
@@ -84,13 +84,15 @@ export function pipelineAttackDamage(
   if (defender.player !== attacker.player && defender.slot === "active") {
     const types = currentForm(gamestate, getSlot(gamestate, attacker))?.types ?? []
     const defending = currentForm(gamestate, getSlot(gamestate, defender))
+    const weakTo = foldedMatchupType(gamestate, defender, "weakness_type")
+    const resistTo = foldedMatchupType(gamestate, defender, "resistance_type")
     for (const row of defending?.weaknesses ?? []) {
-      if (!types.includes(row.type)) continue
+      if (!types.includes(weakTo ?? row.type)) continue
       damage = applyDamageModifier(damage, row.modifier)
       weakness = true
     }
     for (const row of defending?.resistances ?? []) {
-      if (!types.includes(row.type)) continue
+      if (!types.includes(resistTo ?? row.type)) continue
       damage = applyDamageModifier(damage, row.modifier)
       resistance = true
     }
@@ -334,15 +336,32 @@ export function interpret(
 
     case Op.ApplyModifier: {
       const slot = resolveSlot(primitive.slot, ctx)
+      const card = "card" in primitive && primitive.card ? resolveCard(primitive.card, ctx) : undefined
+      const extra = card ? { card } : {}
+      if (primitive.field === "weakness_type" || primitive.field === "resistance_type") {
+        const raw = primitive.set
+        const set = (raw.startsWith("$") ? String(ctx.bindings[raw] ?? "") : raw) as EnergyType
+        if (!set) return gamestate
+        const leave = { beat: "leave_play" as const }
+        return record(
+          applyModifier(gamestate, slot, { field: primitive.field, set, until: leave, ...extra }),
+          { op: Op.ApplyModifier, slot, field: primitive.field, set, until: leave }
+        )
+      }
       const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
       const until = { beat: primitive.until.beat, player }
-      const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
-      const extra = card ? { card } : {}
       if (primitive.field === "attack_use") {
         const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
         return record(
           applyModifier(gamestate, slot, { field: "attack_use", ...rewrite, until, ...extra }),
           { op: Op.ApplyModifier, slot, field: "attack_use", ...rewrite, until }
+        )
+      }
+      if (primitive.field === "energy_type") {
+        const rewrite = { set: primitive.set }
+        return record(
+          applyModifier(gamestate, slot, { field: "energy_type", ...rewrite, until, ...extra }),
+          { op: Op.ApplyModifier, slot, field: "energy_type", ...rewrite, until }
         )
       }
       const rewrite = rewriteOf(primitive)
@@ -355,6 +374,10 @@ export function interpret(
     case Op.Count: {
       if (primitive.kind === "damage") {
         ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
+        return gamestate
+      }
+      if (primitive.kind === "weakness") {
+        ctx.bindings[primitive.bind] = currentForm(gamestate, getSlot(gamestate, resolveSlot(primitive.slot, ctx)))?.weaknesses?.length ?? 0
         return gamestate
       }
       if (primitive.kind === "hp") {

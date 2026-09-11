@@ -24,6 +24,9 @@
     "serve:gate": "tsx ./tests/attacks/gate.ts",
     "serve:trans": "tsx ./tests/attacks/trans.ts",
     "serve:stretch": "tsx ./tests/attacks/stretch.ts",
+    "serve:energy-burn": "tsx ./tests/attacks/energy-burn.ts",
+    "serve:conversion": "tsx ./tests/attacks/conversion.ts",
+    "serve:leech": "tsx ./tests/attacks/leech.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {

@@ -70,6 +70,7 @@ function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
   if (pokemon.evolution.length === 0) return
   pokemon.status = emptyStatus()
   pokemon.poisonCounters = 1
+  pokemon.modifiers = pokemon.modifiers.filter((m) => m.until.beat !== "leave_play")
 }
 
 // Zone to slot — pile onto a Pokémon (evolution, energy, or tool)

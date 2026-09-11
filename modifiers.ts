@@ -1,6 +1,6 @@
 import { getSlot } from "./board.js"
 import { copy, moveSlotToZone } from "./ops.js"
-import type { AttackDamageRewrite, AttackUseRewrite, GameState, Modifier, Slot, SlotId } from "./types.js"
+import type { AttackDamageRewrite, AttackUseRewrite, EnergyType, GameState, Modifier, Slot, SlotId } from "./types.js"
 
 const PLAYERS = [1, 2] as const
 const BENCH = [0, 1, 2, 3, 4] as const
@@ -33,8 +33,15 @@ export function applyModifier(
   modifier: Omit<Modifier, "phase">
 ): GameState {
   const next = copy(gamestate)
-  const phase = modifier.until.player === gamestate.activePlayer ? "active" : "pending"
-  getSlot(next, slot).modifiers.push({ ...modifier, phase })
+  const phase =
+    modifier.until.beat === "leave_play" || modifier.until.player === gamestate.activePlayer
+      ? "active"
+      : "pending"
+  const seat = getSlot(next, slot)
+  if (modifier.field === "weakness_type" || modifier.field === "resistance_type") {
+    seat.modifiers = seat.modifiers.filter((m) => m.field !== modifier.field)
+  }
+  seat.modifiers.push({ ...modifier, phase })
   return next
 }
 
@@ -85,6 +92,22 @@ export function attackFlipGated(slot: Slot): boolean {
   return activeUse(slot).some((m) => "flip" in m)
 }
 
+export function foldedMatchupType(
+  gamestate: GameState,
+  slot: SlotId,
+  field: "weakness_type" | "resistance_type"
+): EnergyType | undefined {
+  for (const m of getSlot(gamestate, slot).modifiers) {
+    if (m.field === field && m.phase === "active") return m.set
+  }
+}
+
+export function foldedEnergyType(gamestate: GameState, slot: SlotId): EnergyType | undefined {
+  for (const m of getSlot(gamestate, slot).modifiers) {
+    if (m.field === "energy_type" && m.phase === "active") return m.set
+  }
+}
+
 export function useRewriteOf(modifier: { flip: true } | { ban: string | `$${string}` }, bind?: (name: string) => string): AttackUseRewrite {
   if ("flip" in modifier) return { flip: true }
   const raw = modifier.ban
@@ -96,7 +119,9 @@ export function tickModifiersEnter(gamestate: GameState, activePlayer: 1 | 2): G
   const next = copy(gamestate)
   walkSlots(next, (slot) => {
     for (const m of slot.modifiers) {
-      if (m.phase === "pending" && m.until.player === activePlayer) m.phase = "active"
+      if (m.until.beat === "end_of_turn" && m.phase === "pending" && m.until.player === activePlayer) {
+        m.phase = "active"
+      }
     }
   })
   return next
@@ -108,7 +133,7 @@ export function tickModifiersEnd(gamestate: GameState, endingPlayer: 1 | 2): Gam
   eachSeat((id) => {
     const slot = getSlot(next, id)
     slot.modifiers = slot.modifiers.filter((m) => {
-      if (m.phase === "active" && m.until.player === endingPlayer) {
+      if (m.until.beat === "end_of_turn" && m.phase === "active" && m.until.player === endingPlayer) {
         if (m.card) expired.push({ slot: id, card: m.card })
         return false
       }

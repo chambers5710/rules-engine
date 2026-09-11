@@ -87,16 +87,25 @@ export type AttackUseRewrite =
   | { flip: true }
   | { ban: string }
 
+export type EnergyTypeRewrite = { set: EnergyType }
+
+export type ModifierUntil =
+  | { beat: "end_of_turn"; player: 1 | 2 }
+  | { beat: "leave_play" }
+
 type ModifierClock = {
-  until: { beat: "end_of_turn"; player: 1 | 2 }
+  until: ModifierUntil
   phase: "pending" | "active"
   card?: CardInstanceId
 }
 
-// Modifier — on a slot; until.player is set when interpret applies the op
+// Modifier — on a slot; end_of_turn.player is set when interpret applies the op
 export type Modifier =
   | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite)
   | ({ field: "attack_use" } & ModifierClock & AttackUseRewrite)
+  | ({ field: "energy_type" } & ModifierClock & EnergyTypeRewrite)
+  | ({ field: "weakness_type" } & ModifierClock & EnergyTypeRewrite)
+  | ({ field: "resistance_type" } & ModifierClock & EnergyTypeRewrite)
 
 // Status — special conditions; more than one flag may be on
 export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"

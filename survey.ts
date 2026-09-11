@@ -1,3 +1,4 @@
+import { foldedEnergyType } from "./modifiers.js"
 import type {
   CardInstanceId,
   EnergyType,
@@ -31,7 +32,19 @@ export function surveyCards(
   source: ZoneRef | SlotRef,
   filter?: SurveyFilter
 ): CardInstanceId[] {
-  return cardsAt(gamestate, source).filter((card) => cardMatches(gamestate, card, filter))
+  return cardsAt(gamestate, source).filter((card) => cardMatches(gamestate, card, filter, source))
+}
+
+function energyTypeOf(
+  gamestate: GameState,
+  cardId: CardInstanceId,
+  source?: ZoneRef | SlotRef
+): EnergyType | undefined {
+  const printed = gamestate.cardRegistry[cardId]?.energyType
+  if (source && !("zone" in source) && source.attachment === "energy") {
+    return foldedEnergyType(gamestate, source) ?? printed
+  }
+  return printed
 }
 
 export function surveyCount(
@@ -56,9 +69,10 @@ export function surveyEnergyValue(
 // Units on a Pokémon — one entry per energyValue, typed as the card provides
 export function energyUnitsOn(gamestate: GameState, slot: SlotId): EnergyType[] {
   const units: EnergyType[] = []
-  for (const card of cardsAt(gamestate, { ...slot, attachment: "energy" })) {
+  const pile = { ...slot, attachment: "energy" } as const
+  for (const card of cardsAt(gamestate, pile)) {
     const printed = gamestate.cardRegistry[card]
-    const type = printed?.energyType
+    const type = energyTypeOf(gamestate, card, pile)
     const n = printed?.energyValue ?? 0
     if (!type) continue
     for (let i = 0; i < n; i++) units.push(type)
@@ -101,13 +115,14 @@ export function printedAttackDamage(damage?: string | number | null): number {
 function cardMatches(
   gamestate: GameState,
   cardId: CardInstanceId,
-  filter?: SurveyFilter
+  filter?: SurveyFilter,
+  source?: ZoneRef | SlotRef
 ): boolean {
   if (!filter) return true
   switch (filter.kind) {
     case "energy":
       if (!isEnergy(gamestate, cardId)) return false
-      if (filter.type && gamestate.cardRegistry[cardId]?.energyType !== filter.type) return false
+      if (filter.type && energyTypeOf(gamestate, cardId, source) !== filter.type) return false
       return true
     case "basic_pokemon":
       return isBasicPokemon(gamestate, cardId)

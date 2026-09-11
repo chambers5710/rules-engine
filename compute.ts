@@ -35,6 +35,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "types"; name: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "skip" })
   | (ActionBase & { kind: Action.Retreat; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
@@ -66,6 +67,8 @@ function computeSelect(gamestate: GameState): AvailableAction[] {
       return selectCards(gamestate, frame)
     case "attacks":
       return selectAttacks(gamestate, frame)
+    case "types":
+      return selectTypes(frame)
   }
 }
 
@@ -129,6 +132,21 @@ function selectAttacks(
     player: frame.player,
     pick: "attacks" as const,
     name: attack.name,
+    expr: [],
+  }))
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  return actions
+}
+
+const CONVERSION_TYPES = ["Grass", "Fire", "Water", "Lightning", "Psychic", "Fighting"] as const
+
+function selectTypes(frame: Extract<ActionFrame, { pick: "types" }>): AvailableAction[] {
+  const skip = new Set(frame.except)
+  const actions: AvailableAction[] = CONVERSION_TYPES.filter((type) => !skip.has(type)).map((type) => ({
+    kind: Action.Choose,
+    player: frame.player,
+    pick: "types" as const,
+    name: type,
     expr: [],
   }))
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })

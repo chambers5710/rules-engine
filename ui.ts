@@ -60,7 +60,7 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
   if (a.kind === Action.Choose) {
     if (a.pick === "skip") return "select  skip"
     if (a.pick === "cards") return `select  ${cardName(gamestate, a.card)}`
-    if (a.pick === "attacks") return `select  ${a.name}`
+    if (a.pick === "attacks" || a.pick === "types") return `select  ${a.name}`
     const form = currentForm(gamestate, getSlot(gamestate, a.slot))
     const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`
     return `select  ${form?.name ?? dest}  ${dest}`

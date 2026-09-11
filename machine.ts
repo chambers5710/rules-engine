@@ -298,7 +298,7 @@ function chooseBinding(
 ): SlotId | string {
   if (action.pick === "skip") return ""
   if (action.pick === "cards") return action.card
-  if (action.pick === "attacks") return action.name
+  if (action.pick === "attacks" || action.pick === "types") return action.name
   return action.slot
 }
 
@@ -396,6 +396,8 @@ function pauseSelect(
     }
     case "attacks":
       return { ...base, pick: "attacks", slot: resolveSlot(step.slot, ctx) }
+    case "types":
+      return { ...base, pick: "types", except: step.except ?? ["Colorless"] }
   }
 }
 

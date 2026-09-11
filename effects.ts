@@ -208,6 +208,17 @@ export const effects: Record<string, CardEffects | Expr> = {
     },
   },
   "base1-4": {
+    abilities: {
+      "Energy Burn": [
+        {
+          op: Op.ApplyModifier,
+          slot: "$self_slot",
+          field: "energy_type",
+          set: "Fire",
+          until: { beat: "end_of_turn", who: "owner" },
+        },
+      ],
+    },
     attacks: {
       "Fire Spin": [
         {
@@ -510,6 +521,36 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Fury Attack": timesHeads(10),
     },
   },
+  "base1-39": {
+    attacks: {
+      "Conversion 1": [
+        { op: Op.Count, kind: "weakness", slot: "$defending", bind: "$n" },
+        { op: Op.Calc, fn: "min", a: "$n", b: 1, bind: "$has" },
+        {
+          op: Op.If, bind: "$has", equals: 1, then: [
+            { op: Op.Select, pick: "types", bind: "$type", except: ["Colorless"], optional: true },
+            {
+              op: Op.ApplyModifier,
+              slot: "$defending",
+              field: "weakness_type",
+              set: "$type",
+              until: { beat: "leave_play" },
+            },
+          ],
+        },
+      ],
+      "Conversion 2": [
+        { op: Op.Select, pick: "types", bind: "$type", except: ["Colorless"] },
+        {
+          op: Op.ApplyModifier,
+          slot: "$self_slot",
+          field: "resistance_type",
+          set: "$type",
+          until: { beat: "leave_play" },
+        },
+      ],
+    },
+  },
   "base1-55": {
     attacks: {
       "Horn Hazard": [
@@ -625,6 +666,20 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Metronome": [
         { op: Op.Select, pick: "attacks", slot: "$defending", bind: "$copy" },
         { op: Op.RunEffect, attack: "$copy", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-44": {
+    attacks: {
+      "Leech Seed": [
+        { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.Calc, fn: "min", a: "$damage", b: 1, bind: "$hit" },
+        {
+          op: Op.If, bind: "$hit", equals: 1, then: [
+            { op: Op.ApplyDamage, amount: -DAMAGE_COUNTER, slot: "$self_slot" },
+          ],
+        },
       ],
     },
   },
