@@ -1,5 +1,5 @@
 import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
-import { applyModifier, foldAdds, foldDamage, rewriteOf } from "./modifiers.js"
+import { applyModifier, foldAdds, foldDamage, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
@@ -77,7 +77,7 @@ export function pipelineAttackDamage(
   base: number,
   attacker: SlotId,
   defender: SlotId
-): { damage: number; weakness: boolean; resistance: boolean } {
+): { damage: number; weakness: boolean; resistance: boolean; prevented: boolean } {
   let damage = base
   let weakness = false
   let resistance = false
@@ -96,8 +96,14 @@ export function pipelineAttackDamage(
     }
   }
   damage = foldAdds(gamestate, attacker, damage)
-  damage = foldDamage(gamestate, defender, damage)
-  return { damage: Math.max(0, damage), weakness, resistance }
+  const incoming = Math.max(0, damage)
+  damage = foldDamage(gamestate, defender, incoming)
+  return {
+    damage,
+    weakness,
+    resistance,
+    prevented: incoming > 0 && damage === 0,
+  }
 }
 
 function applyDamageModifier(damage: number, modifier: DamageModifier): number {
@@ -194,7 +200,15 @@ export function slotMatches(
         break
       }
       case "has_energy":
-        if (surveyCount(gamestate, { ...slotId, attachment: "energy" }) === 0) return false
+        if (
+          surveyCount(
+            gamestate,
+            { ...slotId, attachment: "energy" },
+            filter.type ? { kind: "energy", type: filter.type } : undefined
+          ) === 0
+        ) {
+          return false
+        }
         break
     }
   }
@@ -268,7 +282,12 @@ export function interpret(
       )
 
     case Op.MoveSlotToSlot:
-      return moveSlotToSlot(gamestate, resolveCard(primitive.card, ctx), primitive.source, primitive.dest)
+      return moveSlotToSlot(
+        gamestate,
+        resolveCard(primitive.card, ctx),
+        resolveSlotPile(primitive.source, ctx, primitive.attachment),
+        resolveSlotPile(primitive.dest, ctx, primitive.attachment)
+      )
 
     case Op.Attack: {
       const attacker = resolveSlot(primitive.attacker, ctx)
@@ -287,7 +306,8 @@ export function interpret(
       return applyDamage(
         gamestate,
         resolveAmount(primitive.amount, ctx),
-        resolveSlot(primitive.slot, ctx)
+        resolveSlot(primitive.slot, ctx),
+        primitive.source
       )
 
     case Op.ApplyStatus:
@@ -316,16 +336,19 @@ export function interpret(
       const slot = resolveSlot(primitive.slot, ctx)
       const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
       const until = { beat: primitive.until.beat, player }
-      const rewrite = rewriteOf(primitive)
       const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+      const extra = card ? { card } : {}
+      if (primitive.field === "attack_use") {
+        const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
+        return record(
+          applyModifier(gamestate, slot, { field: "attack_use", ...rewrite, until, ...extra }),
+          { op: Op.ApplyModifier, slot, field: "attack_use", ...rewrite, until }
+        )
+      }
+      const rewrite = rewriteOf(primitive)
       return record(
-        applyModifier(gamestate, slot, {
-          field: primitive.field,
-          ...rewrite,
-          until,
-          ...(card ? { card } : {}),
-        }),
-        { op: Op.ApplyModifier, slot, field: primitive.field, ...rewrite, until }
+        applyModifier(gamestate, slot, { field: "attack_damage", ...rewrite, until, ...extra }),
+        { op: Op.ApplyModifier, slot, field: "attack_damage", ...rewrite, until }
       )
     }
 

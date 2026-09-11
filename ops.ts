@@ -134,11 +134,17 @@ export const moveSlotToSlot = (
 export const applyDamage = (
   gamestate: GameState,
   value: number,
-  slot: SlotId
+  slot: SlotId,
+  source?: "poison" | "burn"
 ) => {
   const next = copy(gamestate)
   getSlot(next, slot).damage = Math.max(0, getSlot(next, slot).damage + value)
-  return record(next, { op: Op.ApplyDamage, amount: value, slot })
+  return record(next, {
+    op: Op.ApplyDamage,
+    amount: value,
+    slot,
+    ...(source !== undefined ? { source } : {}),
+  })
 }
 
 // Status — set one special-condition flag

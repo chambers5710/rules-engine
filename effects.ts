@@ -1,6 +1,6 @@
 import { Op, type BindingName, type Expr } from "./dsl.js"
 import { printedAttackDamage } from "./survey.js"
-import { DAMAGE_COUNTER } from "./types.js"
+import { DAMAGE_COUNTER, type EnergyType } from "./types.js"
 
 // Pokémon: attacks / abilities by name. Trainers: the expr is the entry (id only).
 export type CardEffects = {
@@ -54,6 +54,47 @@ function optionalEnergy(source: BindingName, dest: BindingName): Expr {
       dest,
       position: "bottom",
     },
+  ]
+}
+
+function timesHeads(per: number): Expr {
+  const addHead: Expr = [
+    { op: Op.FlipCoin, bind: "$coin" },
+    {
+      op: Op.If, bind: "$coin", equals: "heads", then: [
+        { op: Op.Calc, fn: "add", a: "$heads", b: 1, bind: "$heads" },
+      ],
+    },
+  ]
+  return [
+    { op: Op.Calc, fn: "add", a: 0, b: 0, bind: "$heads" },
+    ...addHead,
+    ...addHead,
+    { op: Op.Calc, fn: "mul", a: "$heads", b: per, bind: "$base" },
+    { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+  ]
+}
+
+function recover(type: EnergyType): Expr {
+  return [
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: "$energy",
+      bind: "$pay",
+      filter: { kind: "energy", type },
+    },
+    {
+      op: Op.MoveSlotToZone,
+      card: "$pay",
+      source: "$energy",
+      dest: "$discard",
+      position: "bottom",
+    },
+    { op: Op.Count, kind: "damage", slot: "$self_slot", bind: "$heal" },
+    { op: Op.Calc, fn: "mul", a: "$heal", b: -1, bind: "$heal" },
+    { op: Op.ApplyDamage, amount: "$heal", slot: "$self_slot" },
   ]
 }
 
@@ -273,6 +314,98 @@ export const effects: Record<string, CardEffects | Expr> = {
       "Whirlwind": whirlwind(10),
     },
   },
+  "base1-16": {
+    attacks: {
+      "Thunderbolt": [
+        { op: Op.Count, kind: "cards", slot: "$self_slot", attachment: "energy", bind: "$n" },
+        {
+          op: Op.Loop, bind: "$n", until: 0, then: [
+            { op: Op.Count, kind: "first", slot: "$self_slot", attachment: "energy", bind: "$card" },
+            {
+              op: Op.MoveSlotToZone,
+              card: "$card",
+              source: "$energy",
+              dest: "$discard",
+              position: "bottom",
+            },
+            { op: Op.Count, kind: "cards", slot: "$self_slot", attachment: "energy", bind: "$n" },
+          ],
+        },
+        { op: Op.Attack, base: 100, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+      ],
+    },
+  },
+  "base1-17": {
+    attacks: {
+      "Twineedle": timesHeads(30),
+    },
+  },
+  "base1-18": {
+    attacks: {
+      "Slam": timesHeads(30),
+      "Hyper Beam": [
+        { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.Count, kind: "cards", slot: "$defending", attachment: "energy", bind: "$n" },
+        { op: Op.Calc, fn: "min", a: "$n", b: 1, bind: "$has" },
+        {
+          op: Op.If, bind: "$has", equals: 1, then: [
+            {
+              op: Op.Select,
+              pick: "cards",
+              source: "$defending",
+              attachment: "energy",
+              bind: "$pay",
+            },
+            {
+              op: Op.MoveSlotToZone,
+              card: "$pay",
+              source: "$defending",
+              attachment: "energy",
+              dest: "$opp_discard",
+              position: "bottom",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  "base1-15": {
+    abilities: {
+      "Energy Trans": [
+        {
+          op: Op.Select,
+          pick: "slots",
+          who: "self",
+          bind: "$from",
+          filter: { kind: "has_energy", type: "Grass" },
+        },
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$from",
+          attachment: "energy",
+          bind: "$card",
+          filter: { kind: "energy", type: "Grass" },
+        },
+        {
+          op: Op.Select,
+          pick: "slots",
+          who: "self",
+          bind: "$to",
+          filter: { kind: "other_than", bind: "$from" },
+        },
+        {
+          op: Op.MoveSlotToSlot,
+          card: "$card",
+          source: "$from",
+          dest: "$to",
+          attachment: "energy",
+        },
+      ],
+    },
+  },
   "base1-14": {
     attacks: {
       "Agility": [
@@ -347,6 +480,69 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-38": {
+    attacks: {
+      "Amnesia": [
+        { op: Op.Select, pick: "attacks", slot: "$defending", bind: "$forget" },
+        {
+          op: Op.ApplyModifier,
+          slot: "$defending",
+          field: "attack_use",
+          ban: "$forget",
+          until: { beat: "end_of_turn", who: "owner" },
+        },
+      ],
+      "Doubleslap": timesHeads(30),
+    },
+  },
+  "base1-32": {
+    attacks: {
+      "Recover": recover("Psychic"),
+    },
+  },
+  "base1-37": {
+    attacks: {
+      "Double Kick": timesHeads(30),
+    },
+  },
+  "base1-48": {
+    attacks: {
+      "Fury Attack": timesHeads(10),
+    },
+  },
+  "base1-55": {
+    attacks: {
+      "Horn Hazard": [
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+            { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+          ],
+        },
+      ],
+    },
+  },
+  "base1-64": {
+    attacks: {
+      "Recover": recover("Water"),
+    },
+  },
+  "base1-62": {
+    attacks: {
+      "Sand-attack": [
+        { op: Op.Attack, base: 10, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        {
+          op: Op.ApplyModifier,
+          slot: "$defending",
+          field: "attack_use",
+          flip: true,
+          until: { beat: "end_of_turn", who: "owner" },
+        },
+      ],
+    },
+  },
   "base1-20": {
     attacks: {
       "Thundershock": [
@@ -387,6 +583,7 @@ export const effects: Record<string, CardEffects | Expr> = {
   },
   "base1-31": {
     attacks: {
+      "Doubleslap": timesHeads(10),
       "Meditate": [
         { op: Op.Count, kind: "damage", slot: "$defending", bind: "$slot_damage" },
         { op: Op.Calc, fn: "add", a: 20, b: "$slot_damage", bind: "$base" },

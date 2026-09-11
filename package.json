@@ -21,6 +21,9 @@
     "serve:optional": "tsx ./tests/trainers/optional.ts",
     "serve:tools": "tsx ./tests/trainers/tools.ts",
     "serve:leftover": "tsx ./tests/attacks/leftover.ts",
+    "serve:gate": "tsx ./tests/attacks/gate.ts",
+    "serve:trans": "tsx ./tests/attacks/trans.ts",
+    "serve:stretch": "tsx ./tests/attacks/stretch.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {

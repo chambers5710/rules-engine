@@ -11,6 +11,7 @@ import {
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
 import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
 import { ifPasses, slotMatches } from "./interpret.js"
+import { attackBanned } from "./modifiers.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
@@ -350,7 +351,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   const slot = { player, slot: "active" } as const
   const defending = opponent(player)
   return (form.attacks ?? [])
-    .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []))
+    .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []) && !attackBanned(active, attack.name))
     .flatMap((attack) => {
       const expr = attackExpr(form.sourceId, attack)
       const seed = {

@@ -83,13 +83,20 @@ export type AttackDamageRewrite =
   | { sub: number }
   | { prevent: "all" | number }
 
-// Modifier — on a slot; until.player is set when interpret applies the op
-export type Modifier = {
-  field: "attack_damage"
+export type AttackUseRewrite =
+  | { flip: true }
+  | { ban: string }
+
+type ModifierClock = {
   until: { beat: "end_of_turn"; player: 1 | 2 }
   phase: "pending" | "active"
   card?: CardInstanceId
-} & AttackDamageRewrite
+}
+
+// Modifier — on a slot; until.player is set when interpret applies the op
+export type Modifier =
+  | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite)
+  | ({ field: "attack_use" } & ModifierClock & AttackUseRewrite)
 
 // Status — special conditions; more than one flag may be on
 export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"

@@ -1,6 +1,6 @@
 import { getSlot } from "./board.js"
 import { copy, moveSlotToZone } from "./ops.js"
-import type { AttackDamageRewrite, GameState, Modifier, Slot, SlotId } from "./types.js"
+import type { AttackDamageRewrite, AttackUseRewrite, GameState, Modifier, Slot, SlotId } from "./types.js"
 
 const PLAYERS = [1, 2] as const
 const BENCH = [0, 1, 2, 3, 4] as const
@@ -69,6 +69,27 @@ export function foldAdds(gamestate: GameState, slot: SlotId, base: number): numb
     damage += m.add
   }
   return Math.max(0, damage)
+}
+
+function activeUse(slot: Slot): Extract<Modifier, { field: "attack_use" }>[] {
+  return slot.modifiers.filter((m): m is Extract<Modifier, { field: "attack_use" }> =>
+    m.field === "attack_use" && m.phase === "active"
+  )
+}
+
+export function attackBanned(slot: Slot, name: string): boolean {
+  return activeUse(slot).some((m) => "ban" in m && m.ban === name)
+}
+
+export function attackFlipGated(slot: Slot): boolean {
+  return activeUse(slot).some((m) => "flip" in m)
+}
+
+export function useRewriteOf(modifier: { flip: true } | { ban: string | `$${string}` }, bind?: (name: string) => string): AttackUseRewrite {
+  if ("flip" in modifier) return { flip: true }
+  const raw = modifier.ban
+  if (raw.startsWith("$")) return { ban: bind ? bind(raw) : raw }
+  return { ban: raw }
 }
 
 export function tickModifiersEnter(gamestate: GameState, activePlayer: 1 | 2): GameState {

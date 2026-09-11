@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, AttackDamageRewrite, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, AttackDamageRewrite, AttackUseRewrite, EnergyType, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -52,7 +52,7 @@ export type SelectFilter =
   | { kind: "other_than"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
   | { kind: "has_type"; type: EnergyType }
-  | { kind: "has_energy" }
+  | { kind: "has_energy"; type?: EnergyType }
   | SurveyFilter
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10"
@@ -66,9 +66,9 @@ export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; source: ZoneRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
-  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
+  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef | BindingName; dest: SlotRef | BindingName; attachment?: Attachment }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
-  | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
+  | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
@@ -79,6 +79,10 @@ export type Primitive =
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & AttackDamageRewrite
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_use"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & (
+      | { flip: true }
+      | { ban: string | BindingName }
+    )
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
@@ -103,12 +107,13 @@ export type HistoryEntry =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
-  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; weakness: boolean; resistance: boolean }
-  | { op: Op.ApplyDamage; amount: number; slot: SlotId }
+  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; weakness: boolean; resistance: boolean; prevented: boolean }
+  | { op: Op.ApplyDamage; amount: number; slot: SlotId; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId }
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackDamageRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackUseRewrite
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }

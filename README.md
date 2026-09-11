@@ -157,11 +157,12 @@ A sticky rewrite of a **field** on an event or card — same idea as extracted r
 There is one `Modifier`, on the slot. Card text cannot say “player 2”; the op uses `who: owner | opponent`. Interpret turns that into `until.player` and calls `applyModifier`. Tick only compares `activePlayer`.
 
 ```
-{ field: "attack_damage", set | add | sub | prevent, until: { beat: "end_of_turn", player: 2 }, phase: "pending" | "active" }
+{ field: "attack_damage" | "attack_use", …, until: { beat: "end_of_turn", player: 2 }, phase: "pending" | "active" }
 ```
 
 - **applyModifier** — `pending`, or `active` if `until.player` is already active
 - **foldAdds / foldDamage** — after W/R in the attack pipeline; `apply_damage` does not fold
+- **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name; `flip` is a machine coin after Confused)
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
 `prevent: "all"` or `prevent: 30` (Harden). `set: 0` is still Scrunch.
@@ -184,7 +185,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:init`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -242,4 +243,7 @@ pnpm serve:deck -- oak     # Deck trainers (search | maintenance | oak | imposto
 pnpm serve:energy-pile     # Poliwrath vs Magmar (Whirlpool, Super Potion, Energy Removal)
 pnpm serve:tools           # Magmar vs Hitmonchan (Defender / PlusPower)
 pnpm serve:leftover -- fang  # Super Fang / Toxic / Whirlwind (reset cycles)
+pnpm serve:gate -- sand      # Sand-attack / Amnesia (reset cycles)
+pnpm serve:trans             # Venusaur Energy Trans (Grass seat → any other of yours)
+pnpm serve:stretch -- horn   # Horn / Doubleslap / Hyper Beam / Thunderbolt / Recover
 ```

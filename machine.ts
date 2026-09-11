@@ -13,7 +13,7 @@ import { type AvailableAction } from "./compute.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
 import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
-import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
+import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
 import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
@@ -90,7 +90,10 @@ function turnPhase(
       return onComplete(gamestate, action.kind)
     case Action.Attack:
       if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
-      return confusedAttack(gamestate, action)
+      if (attackBanned(getSlot(gamestate, { player: action.player, slot: "active" }), action.name)) {
+        return gamestate
+      }
+      return gatedAttack(gamestate, action)
     case Action.Promote:
       gamestate = promote(gamestate, action.player, action.index)
       return afterKnockouts(gamestate)
@@ -120,22 +123,31 @@ function attackOrRetreatBlocked(gamestate: GameState, player: 1 | 2): boolean {
   return status.asleep || status.paralyzed
 }
 
-// Confused — flip before the attack expr. Tails: 3 counters on Active, attack does not run.
-function confusedAttack(
+// Confused first, then Sand-attack-style flip. Confused tails: 3 counters, no expr.
+// Flip-gate tails: attack does nothing (no self-damage).
+function gatedAttack(
   gamestate: GameState,
   action: Extract<AvailableAction, { kind: Action.Attack }>
 ): GameState {
   const slot = { player: action.player, slot: "active" } as const
-  if (!getSlot(gamestate, slot).status.confused) return runAction(gamestate, action)
-  const ctx: InterpretCtx = { bindings: {} }
-  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "confused" }, ctx)
-  if (ctx.bindings.$coin === "heads") return runAction(gamestate, action)
-  gamestate = interpret(gamestate, {
-    op: Op.ApplyDamage,
-    amount: 3 * DAMAGE_COUNTER,
-    slot,
-  }, ctx)
-  return onComplete(gamestate, action.kind)
+  if (getSlot(gamestate, slot).status.confused) {
+    const ctx: InterpretCtx = { bindings: {} }
+    gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "confused" }, ctx)
+    if (ctx.bindings.$coin !== "heads") {
+      gamestate = interpret(gamestate, {
+        op: Op.ApplyDamage,
+        amount: 3 * DAMAGE_COUNTER,
+        slot,
+      }, ctx)
+      return onComplete(gamestate, action.kind)
+    }
+  }
+  if (attackFlipGated(getSlot(gamestate, slot))) {
+    const ctx: InterpretCtx = { bindings: {} }
+    gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+    if (ctx.bindings.$coin !== "heads") return onComplete(gamestate, action.kind)
+  }
+  return runAction(gamestate, action)
 }
 
 // Enter Turn — draw only if Active is already filled
@@ -207,6 +219,7 @@ function checkupPoison(gamestate: GameState, player: 1 | 2): GameState {
     op: Op.ApplyDamage,
     amount: counters * DAMAGE_COUNTER,
     slot,
+    source: "poison",
   })
 }
 
@@ -217,6 +230,7 @@ function checkupBurn(gamestate: GameState, player: 1 | 2): GameState {
     op: Op.ApplyDamage,
     amount: BURN_COUNTERS * DAMAGE_COUNTER,
     slot,
+    source: "burn",
   })
   const ctx: InterpretCtx = { bindings: {} }
   gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "burn" }, ctx)
