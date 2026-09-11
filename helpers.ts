@@ -93,6 +93,7 @@ export const emptySlot = (): Slot => ({
   energy: [],
   tools: [],
   modifiers: [],
+  armed: [],
   evolvedThisTurn: false,
   poisonCounters: 1,
 })

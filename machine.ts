@@ -13,7 +13,9 @@ import { type AvailableAction } from "./compute.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
 import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
+import { tickArmedEnd, tickArmedEnter } from "./arm.js"
 import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
+import { fireDamagedByAttack, fireKnockoutBond, snapshotPowerReady } from "./triggers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
 import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
@@ -166,6 +168,7 @@ function enterTurn(
   }
   gamestate = clearEvolvedThisTurn(gamestate, activePlayer)
   gamestate = tickModifiersEnter(gamestate, activePlayer)
+  gamestate = tickArmedEnter(gamestate, activePlayer)
   if (!hasActive(gamestate, activePlayer)) return gamestate
   return turnPhase(gamestate)
 }
@@ -191,6 +194,7 @@ function checkupPhase(gamestate: GameState): GameState {
   gamestate = checkupParalyzed(gamestate, gamestate.activePlayer)
 
   gamestate = resolveKnockouts(gamestate)
+  gamestate = tickArmedEnd(gamestate, gamestate.activePlayer)
   return afterKnockouts(gamestate)
 }
 
@@ -267,6 +271,7 @@ function resolveKnockouts(gamestate: GameState): GameState {
     ]
     for (const ref of refs) {
       if (!isKnockedOut(gamestate, getSlot(gamestate, ref))) continue
+      gamestate = fireKnockoutBond(gamestate, ref)
       gamestate = discardSlot(gamestate, ref)
       for (let i = 0; i < PRIZES_ON_KO; i++) {
         gamestate = takePrize(gamestate, opponent(player))
@@ -305,6 +310,10 @@ function chooseBinding(
 // Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
   const ctx: InterpretCtx = { bindings: { ...(action.seed ?? {}) } }
+  if (action.kind === Action.Attack) {
+    ctx.attacker = { player: action.player, slot: "active" }
+    ctx.powerReady = snapshotPowerReady(gamestate)
+  }
   return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
 }
 
@@ -359,6 +368,12 @@ function runExpr(
       return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind)
     }
     gamestate = interpret(gamestate, step, ctx)
+    if (kind === Action.Attack && step.op === Op.ApplyDamage && !ctx.inTrigger) {
+      const amount = typeof step.amount === "number" ? step.amount : Number(ctx.bindings[step.amount] ?? 0)
+      if (amount > 0 && !step.source) {
+        gamestate = fireDamagedByAttack(gamestate, resolveSlot(step.slot, ctx), ctx)
+      }
+    }
   }
   return gamestate
 }

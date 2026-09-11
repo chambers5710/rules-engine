@@ -136,7 +136,8 @@ export const applyDamage = (
   gamestate: GameState,
   value: number,
   slot: SlotId,
-  source?: "poison" | "burn"
+  source?: "poison" | "burn",
+  from?: SlotId
 ) => {
   const next = copy(gamestate)
   getSlot(next, slot).damage = Math.max(0, getSlot(next, slot).damage + value)
@@ -145,6 +146,7 @@ export const applyDamage = (
     amount: value,
     slot,
     ...(source !== undefined ? { source } : {}),
+    ...(from !== undefined ? { from } : {}),
   })
 }
 

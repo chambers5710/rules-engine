@@ -186,7 +186,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:energy-burn`, `pnpm serve:conversion`, `pnpm serve:leech`, `pnpm serve:init`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:energy-burn`, `pnpm serve:conversion`, `pnpm serve:leech`, `pnpm serve:trigger`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -250,4 +250,5 @@ pnpm serve:stretch -- horn   # Horn / Doubleslap / Hyper Beam / Thunderbolt / Re
 pnpm serve:energy-burn       # Charizard 2 Fire + 2 Lightning; Burn then Fire Spin
 pnpm serve:conversion        # Porygon vs Machop (Conversion 1 / 2)
 pnpm serve:leech             # Bulbasaur Leech Seed (heal 10 if the 20 landed)
+pnpm serve:trigger -- strikes  # Strikes Back / Mirror Move / Destiny Bond
 ```

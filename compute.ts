@@ -335,12 +335,14 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     if (!form) continue
     for (const ability of form.abilities ?? []) {
       if (ability.type === "Pokémon Power" && pokemonPowerBlocked(slot)) continue
+      const expr = cardEffect(form.sourceId, "abilities", ability.name)
+      if (expr.length === 0) continue
       actions.push({
         kind: Action.Ability,
         player,
         name: ability.name,
         slot: slotId,
-        expr: cardEffect(form.sourceId, "abilities", ability.name),
+        expr,
         seed: { $self_slot: slotId, $hand: { player, zone: "hand" } },
       })
     }
@@ -351,7 +353,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
 // Pokémon Power (Base set) — cannot use if Asleep, Confused, or Paralyzed.
 // That was the standard on these cards; later Abilities often do not share it.
 // Do not parse ability text. Per-card evenIf (e.g. still usable while Asleep) comes later.
-function pokemonPowerBlocked(slot: Slot): boolean {
+export function pokemonPowerBlocked(slot: Slot): boolean {
   const s = slot.status
   return s.asleep || s.paralyzed|| s.confused 
 }

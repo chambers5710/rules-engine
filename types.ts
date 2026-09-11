@@ -1,4 +1,4 @@
-import type { ActionFrame, HistoryEntry } from "./dsl.js"
+import type { ActionFrame, ArmedTrigger, HistoryEntry } from "./dsl.js"
 
 // Game — the full snapshot the engine reads and writes
 export type GameState = {
@@ -62,6 +62,7 @@ export type Slot = {
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: Modifier[]
+  armed: ArmedTrigger[]
   evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet
   poisonCounters: number
 }

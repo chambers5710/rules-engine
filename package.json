@@ -27,6 +27,7 @@
     "serve:energy-burn": "tsx ./tests/attacks/energy-burn.ts",
     "serve:conversion": "tsx ./tests/attacks/conversion.ts",
     "serve:leech": "tsx ./tests/attacks/leech.ts",
+    "serve:trigger": "tsx ./tests/attacks/trigger.ts",
     "serve:init": "tsx ./tests/init/play-active.ts"
   },
   "dependencies": {

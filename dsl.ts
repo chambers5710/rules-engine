@@ -22,6 +22,7 @@ export enum Op {
   Draw = "draw",
   Shuffle = "shuffle",
   Reveal = "reveal",
+  Arm = "arm",
   Each = "each",
 }
 
@@ -95,6 +96,7 @@ export type Primitive =
   | { op: Op.Count; kind: "weakness"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
+  | { op: Op.Count; kind: "last_hit" | "last_attacked"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
@@ -102,8 +104,17 @@ export type Primitive =
   | { op: Op.Draw; who: "self" | "opponent"; count: number | BindingName }
   | { op: Op.Shuffle; zone: ZoneRef | BindingName }
   | { op: Op.Reveal; cards: BindingName | BindingName[]; to: RevealTo }
+  | { op: Op.Arm; slot: SlotId | BindingName; when: "ko"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; then: Expr }
 
 export type Expr = Primitive[]
+
+// Armed on-KO (Destiny Bond). Interpret copies `then` onto the seat.
+export type ArmedTrigger = {
+  when: "ko"
+  then: Expr
+  until: { beat: "end_of_turn"; player: 1 | 2 }
+  phase: "pending" | "active"
+}
 
 // Resolved execution — binds already filled; no If/Loop/Select/Count/Calc
 export type HistoryEntry =
@@ -111,8 +122,8 @@ export type HistoryEntry =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
-  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; weakness: boolean; resistance: boolean; prevented: boolean }
-  | { op: Op.ApplyDamage; amount: number; slot: SlotId; source?: "poison" | "burn" }
+  | { op: Op.Attack; attacker: SlotId; defender: SlotId; defenderCard: string; turn: number; damage: number; weakness: boolean; resistance: boolean; prevented: boolean }
+  | { op: Op.ApplyDamage; amount: number; slot: SlotId; source?: "poison" | "burn"; from?: SlotId }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId }
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }

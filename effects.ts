@@ -3,9 +3,12 @@ import { printedAttackDamage } from "./survey.js"
 import { DAMAGE_COUNTER, type EnergyType } from "./types.js"
 
 // Pokémon: attacks / abilities by name. Trainers: the expr is the entry (id only).
+export type StandingTrigger = { when: "damaged_by_attack"; then: Expr }
+
 export type CardEffects = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
+  triggers?: Record<string, StandingTrigger>
 }
 
 function selfdestruct(hit: number, splash: number): Expr {
@@ -303,9 +306,59 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-8": {
+    triggers: {
+      "Strikes Back": {
+        when: "damaged_by_attack",
+        then: [
+          { op: Op.ApplyDamage, amount: DAMAGE_COUNTER, slot: "$attacker" },
+        ],
+      },
+    },
+  },
   "base1-22": {
     attacks: {
       "Whirlwind": whirlwind(20),
+      "Mirror Move": [
+        { op: Op.Count, kind: "last_attacked", slot: "$self_slot", bind: "$n" },
+        {
+          op: Op.If, bind: "$n", equals: 1, then: [
+            { op: Op.Count, kind: "last_hit", slot: "$self_slot", bind: "$base" },
+            { op: Op.Attack, base: "$base", attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+            { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+          ],
+        },
+      ],
+    },
+  },
+  "base1-50": {
+    attacks: {
+      "Destiny Bond": [
+        {
+          op: Op.Select,
+          pick: "cards",
+          source: "$energy",
+          bind: "$pay",
+          filter: { kind: "energy", type: "Psychic" },
+        },
+        {
+          op: Op.MoveSlotToZone,
+          card: "$pay",
+          source: "$energy",
+          dest: "$discard",
+          position: "bottom",
+        },
+        {
+          op: Op.Arm,
+          slot: "$self_slot",
+          when: "ko",
+          until: { beat: "end_of_turn", who: "opponent" },
+          then: [
+            { op: Op.Count, kind: "hp", slot: "$source", bind: "$ko" },
+            { op: Op.ApplyDamage, amount: "$ko", slot: "$source" },
+          ],
+        },
+      ],
     },
   },
   "base1-40": {
@@ -947,12 +1000,20 @@ export const effects: Record<string, CardEffects | Expr> = {
 
 export function cardEffect(
   sourceId: string,
-  bucket: keyof CardEffects,
+  bucket: "attacks" | "abilities",
   name: string
 ): Expr {
   const entry = effects[sourceId]
   if (!entry || Array.isArray(entry)) return []
   return entry[bucket]?.[name] ?? []
+}
+
+export function cardTriggers(sourceId: string, when: StandingTrigger["when"]): { name: string; then: Expr }[] {
+  const entry = effects[sourceId]
+  if (!entry || Array.isArray(entry) || !entry.triggers) return []
+  return Object.entries(entry.triggers)
+    .filter(([, row]) => row.when === when)
+    .map(([name, row]) => ({ name, then: row.then }))
 }
 
 export function trainerEffect(sourceId: string): Expr {

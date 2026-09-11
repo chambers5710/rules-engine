@@ -1,4 +1,6 @@
 import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
+import { applyArm } from "./arm.js"
+import { lastAttackOn } from "./history.js"
 import { applyModifier, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
@@ -66,6 +68,9 @@ export type InterpretScript = {
 export type InterpretCtx = {
   bindings: Record<string, unknown>
   script?: InterpretScript
+  attacker?: SlotId
+  powerReady?: Set<string>
+  inTrigger?: boolean
 }
 
 // Attack damage — attack_damage rewrite, then Weakness, then Resistance.
@@ -301,16 +306,31 @@ export function interpret(
         defender
       )
       ctx.bindings[primitive.bind] = hit.damage
-      return record(gamestate, { op: Op.Attack, attacker, defender, ...hit })
+      const defenderCard = currentForm(gamestate, getSlot(gamestate, defender))?.instanceId ?? ""
+      return record(gamestate, {
+        op: Op.Attack,
+        attacker,
+        defender,
+        defenderCard,
+        turn: gamestate.turnCount,
+        ...hit,
+      })
     }
 
-    case Op.ApplyDamage:
+    case Op.ApplyDamage: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      const from =
+        !primitive.source && !ctx.inTrigger && ctx.attacker && resolveAmount(primitive.amount, ctx) > 0
+          ? ctx.attacker
+          : undefined
       return applyDamage(
         gamestate,
         resolveAmount(primitive.amount, ctx),
-        resolveSlot(primitive.slot, ctx),
-        primitive.source
+        slot,
+        primitive.source,
+        from
       )
+    }
 
     case Op.ApplyStatus:
       return applyStatus(
@@ -392,6 +412,13 @@ export function interpret(
         ctx.bindings[primitive.bind] = printedAttackDamage(attack?.damage)
         return gamestate
       }
+      if (primitive.kind === "last_attacked" || primitive.kind === "last_hit") {
+        const hit = lastAttackOn(gamestate, resolveSlot(primitive.slot, ctx))
+        const lastTurn = hit && hit.turn === gamestate.turnCount - 1
+        ctx.bindings[primitive.bind] =
+          primitive.kind === "last_attacked" ? (lastTurn ? 1 : 0) : lastTurn ? hit.amount : 0
+        return gamestate
+      }
       if (primitive.kind === "slots") {
         const self = resolveSlot("$self_slot", ctx)
         ctx.bindings[primitive.bind] = surveySlots(
@@ -457,6 +484,16 @@ export function interpret(
     case Op.Reveal: {
       const shown = resolveReveal(gamestate, primitive.cards, ctx)
       return record(gamestate, { op: Op.Reveal, ...shown, to: primitive.to })
+    }
+
+    case Op.Arm: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
+      return applyArm(gamestate, slot, {
+        when: primitive.when,
+        then: primitive.then,
+        until: { beat: primitive.until.beat, player },
+      })
     }
 
     case Op.If: {
