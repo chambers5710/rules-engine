@@ -103,13 +103,15 @@ export function pipelineAttackDamage(
     }
   }
   damage = foldAdds(gamestate, attacker, damage)
-  const incoming = Math.max(0, damage)
+  const afterMatchup = damage
+  const incoming = Math.max(0, afterMatchup)
   damage = foldDamage(gamestate, defender, incoming)
+  const resistedToZero = base > 0 && resistance && afterMatchup <= 0
   return {
     damage,
     weakness,
     resistance,
-    prevented: incoming > 0 && damage === 0,
+    prevented: damage === 0 && (incoming > 0 || resistedToZero),
   }
 }
 

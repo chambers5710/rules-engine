@@ -82,18 +82,21 @@ export function board(name: Name): GameState {
     gamestate = toHand(gamestate, 1, "base1-101", 2)
     return liveTurn(gamestate)
   }
-  const machop = printed(set, "base1-52")
+  const charizard = printed(set, "base1-4")
   const champ = printed(set, "base1-8")
+  const fire = printed(set, "base1-98")
   const fighting = printed(set, "base1-97")
   let gamestate = initializeGameState(
-    [machop, machop, ...copies(fighting, 20)],
+    [charizard, charizard, ...copies(fire, 20)],
     [champ, champ, ...copies(fighting, 16)]
   )
-  gamestate = moveToActive(gamestate, 1, "base1-52")
+  gamestate = moveToActive(gamestate, 1, "base1-4")
   gamestate = moveToActive(gamestate, 2, "base1-8")
-  gamestate = attachEnergy(gamestate, 1, "base1-97", 1)
+  gamestate = attachEnergy(gamestate, 1, "base1-98", 4)
   gamestate = attachEnergy(gamestate, 2, "base1-97", 4)
-  gamestate = prizes(gamestate, "base1-97")
+  gamestate = toPrize(gamestate, 1, "base1-98", 6)
+  gamestate = toPrize(gamestate, 2, "base1-97", 6)
+  gamestate = toHand(gamestate, 1, "base1-98", 3)
   return liveTurn(gamestate)
 }
 
@@ -109,7 +112,7 @@ if (!process.argv.includes("--check")) {
   let current: Name = startName()
   console.log("Triggers — Strikes Back / Mirror Move / Destiny Bond")
   console.log(`board: ${current}`)
-  console.log("strikes: Low Kick Machamp → 10 back. mirror: Pidgeotto was hit 20 last turn. bond: discard Psychic, then P2 KO.")
+  console.log("strikes: Fire Spin Machamp → 10 back (Charizard 4 Fire). mirror: Pidgeotto was hit 20 last turn. bond: discard Psychic, then P2 KO.")
   console.log("pnpm serve:trigger -- strikes  (or mirror | bond). POST /reset cycles.")
   listen(session(current), (body) => {
     const asked = body.p1
