@@ -2,16 +2,17 @@ import {
   currentForm,
   getSlot,
   hasActive,
+  needsPromote,
   nextEmptyBench,
   occupiedBench,
   opponent,
   pokemonInPlay,
-  sameSlot,
 } from "./board.js"
-import { Action, Op, type ActionFrame, type Expr, type SelectFilter } from "./dsl.js"
+import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
 import { attackExpr, cardEffect, trainerEffect } from "./effects.js"
+import { ifPasses, slotMatches } from "./interpret.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
-import { DAMAGE_COUNTER, Phase } from "./types.js"
+import { Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
 
 export { Action } from "./dsl.js"
@@ -78,51 +79,6 @@ function selectSlots(
     actions.push({ kind: Action.Choose, player: frame.player, pick: "slots", slot: slotId, expr: [] })
   }
   return actions
-}
-
-// May this SlotId appear as Action.Choose for a paused pick:"slots" Select?
-// Survey filters cards in a zone / slot attachment. This filters in-play slots:
-// read the Slot via getSlot, then each SelectFilter (damage counters, would-KO,
-// other_than a bound SlotId). Compute only; not a board helper.
-function slotMatches(
-  gamestate: GameState,
-  slotId: SlotId,
-  filters: SelectFilter[],
-  bindings: Record<string, unknown>
-): boolean {
-  const slot = getSlot(gamestate, slotId)
-  for (const filter of filters) {
-    switch (filter.kind) {
-      case "has_counters":
-        if (slot.damage < filter.counters * DAMAGE_COUNTER) return false
-        break
-      case "survives_counters": {
-        const hp = Number(currentForm(gamestate, slot)?.hp)
-        const extra = filter.counters * DAMAGE_COUNTER
-        if (!Number.isFinite(hp) || slot.damage + extra >= hp) return false
-        break
-      }
-      case "other_than": {
-        const bound = bindings[filter.bind]
-        if (bound && sameSlot(slotId, bound as SlotId)) return false
-        break
-      }
-      case "pays":
-        break
-      case "has_type": {
-        const types = currentForm(gamestate, slot)?.types ?? []
-        if (!types.includes(filter.type)) return false
-        break
-      }
-      case "energy":
-      case "basic_pokemon":
-      case "evolves_from":
-      case "trainer":
-      case "pokemon":
-        break
-    }
-  }
-  return true
 }
 
 function selectCards(
@@ -202,10 +158,10 @@ function computeInit(gamestate: GameState): AvailableAction[] {
 
 function computeTurn(gamestate: GameState): AvailableAction[] {
   const player = gamestate.activePlayer
+  const other = opponent(player)
 
-  if (!hasActive(gamestate, player)) {
-    return promoteFromBench(gamestate, player)
-  }
+  if (needsPromote(gamestate, player)) return promoteFromBench(gamestate, player)
+  if (needsPromote(gamestate, other)) return promoteFromBench(gamestate, other)
 
   return [
     ...placeBench(gamestate, player),
@@ -379,19 +335,27 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   const defending = opponent(player)
   return (form.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []))
-    .map((attack) => ({
-      kind: Action.Attack,
-      player,
-      name: attack.name,
-      expr: attackExpr(form.sourceId, attack),
-      seed: {
+    .flatMap((attack) => {
+      const expr = attackExpr(form.sourceId, attack)
+      const seed = {
         $self_slot: slot,
         $defending: { player: defending, slot: "active" },
         $energy: { ...slot, attachment: "energy" },
         $discard: { player, zone: "discard" },
         $opp_discard: { player: defending, zone: "discard" },
-      },
-    }))
+      }
+      const gate = statusUseGate(expr)
+      if (gate && !ifPasses(gamestate, gate, { bindings: seed })) return []
+      return [{ kind: Action.Attack, player, name: attack.name, expr, seed }]
+    })
+}
+
+// Whole expr is one status If — "can't use unless" (Dream Eater). Mid-expr If stays a no-op skip.
+function statusUseGate(expr: Expr): Extract<Primitive, { op: Op.If }> | undefined {
+  if (expr.length !== 1) return undefined
+  const step = expr[0]
+  if (step.op !== Op.If || !("status" in step)) return undefined
+  return step
 }
 
 // Retreat — pay energy value on Active, then swap with a benched Pokémon.

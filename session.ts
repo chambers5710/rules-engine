@@ -20,11 +20,18 @@ export type Frame = {
   type: "STATE"
   gamestate: GameState
   choices: Choice[]
+  decks: { p1: string; p2: string }
 }
 
 export type Session = {
   frame: () => Frame
   choose: (index: number) => Frame
+}
+
+let loadedDecks = { p1: DECKS[1], p2: DECKS[2] }
+
+export function lastDecks() {
+  return loadedDecks
 }
 
 export async function fetchDeck(deckId: string): Promise<Card[]> {
@@ -33,9 +40,18 @@ export async function fetchDeck(deckId: string): Promise<Card[]> {
   return (await response.json()) as Card[]
 }
 
+function withDecks(session: Session): Session {
+  const attach = (frame: Frame): Frame => ({ ...frame, decks: loadedDecks })
+  return {
+    frame: () => attach(session.frame()),
+    choose: (index) => attach(session.choose(index)),
+  }
+}
+
 export async function openSession(p1Id: string, p2Id: string): Promise<Session> {
+  loadedDecks = { p1: p1Id, p2: p2Id }
   const [p1, p2] = await Promise.all([fetchDeck(p1Id), fetchDeck(p2Id)])
-  return createSession(p1, p2)
+  return withDecks(createSession(p1, p2))
 }
 
 export async function openDefaultSession(): Promise<Session> {
@@ -53,6 +69,7 @@ export function createSessionFromState(initial: GameState): Session {
   const frame = (): Frame => ({
     type: "STATE",
     gamestate,
+    decks: loadedDecks,
     choices: actions.map((action, index) => ({
       index,
       label: formatAction(gamestate, action),

@@ -3,6 +3,7 @@ import { listen } from "../../index.js"
 import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card } from "../../types.js"
+import { applyStatus } from "../../ops.js"
 import {
   attachEnergy,
   copies,
@@ -31,18 +32,20 @@ function board() {
   gamestate = moveToBench(gamestate, 1, "base1-29", 0)
   gamestate = moveToActive(gamestate, 2, "base1-3")
   gamestate = moveToBench(gamestate, 2, "base1-3", 0)
-  gamestate = attachEnergy(gamestate, 1, "base1-101", 1)
+  gamestate = attachEnergy(gamestate, 1, "base1-101", 2)
   gamestate = attachEnergy(gamestate, 2, "base1-97", 2)
   gamestate = toHand(gamestate, 1, "base1-101", 3)
   gamestate = toHand(gamestate, 2, "base1-97", 3)
   gamestate = toPrize(gamestate, 1, "base1-101", 6)
   gamestate = toPrize(gamestate, 2, "base1-97", 6)
-  return liveTurn(gamestate)
+  gamestate = liveTurn(gamestate)
+  return applyStatus(gamestate, "asleep", { player: 2, slot: "active" })
 }
 
 function session() {
   return createSessionFromState(board())
 }
 
-console.log("Haunter vs Chansey (Hypnosis)")
+console.log("Haunter vs Chansey (Hypnosis / Dream Eater)")
+console.log("Chansey starts Asleep. Dream Eater 50 if Asleep; otherwise the If skips.")
 listen(session(), () => session())

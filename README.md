@@ -136,7 +136,7 @@ Read-only. Compute and card text ask the same questions.
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`
 - **Reduce** — list, count, or sum of `energyValue`
 
-`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. On a zone: `kind: "cards"` (count) or `kind: "first"` (front id). Not “how many Darkness Pokémon on the Bench.” In-play filters for Select (`has_type`, `has_counters`, …) live in compute, not `survey.ts`. See `coverage.md`.
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
@@ -212,7 +212,7 @@ run_effect  $copy
 
 Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `attack.base`. The 3 and the cap 2 live in the effect, not in compute.
 
-`Count` `kind: "damage"` reads `slot.damage` (HP units). It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind or card binds, `to`: self / opponent / both) — no board write, no pause.
+`Count` `kind: "damage"` reads `slot.damage` (HP units). It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind or card binds, `to`: self / opponent / both) — no board write, no pause. `If` is bind `equals` or `slot` + `status` (any special condition).
 
 ## Roadmap
 
@@ -233,7 +233,7 @@ pnpm serve:chansey         # Chansey vs Clefairy (Double-edge)
 pnpm serve:metronome       # Clefairy vs Magmar (Metronome)
 pnpm serve:count-damage    # Flail / Meditate / Karate Chop (reset cycles)
 pnpm serve:poison          # Ivysaur vs Chansey (Poisonpowder)
-pnpm serve:asleep          # Haunter vs Chansey (Hypnosis)
+pnpm serve:asleep          # Haunter vs Chansey (Hypnosis / Dream Eater; Chansey starts Asleep)
 pnpm serve:paralyzed       # Electabuzz vs Chansey (Thundershock)
 pnpm serve:burn            # Rapidash vs Chansey (Super Singe)
 pnpm serve:confuse-ray     # Alakazam vs Machop (Confuse Ray)

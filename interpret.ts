@@ -1,6 +1,6 @@
-import { Op, type BindingName, type CalcFn, type Primitive } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
 import { applyModifier, readModifier } from "./modifiers.js"
-import { currentForm, getSlot, opponent } from "./board.js"
+import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
   applyStatus,
@@ -15,7 +15,7 @@ import {
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
-import type { Attachment, DamageModifier, GameState, SlotId, SlotRef, ZoneName, ZoneRef } from "./types.js"
+import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 function isZoneRef(value: unknown): value is ZoneRef {
   return typeof value === "object" && value !== null && "zone" in value && "player" in value
@@ -160,6 +160,73 @@ function calcFn(fn: CalcFn, a: number, b: number): number {
   }
 }
 
+export function slotMatches(
+  gamestate: GameState,
+  slotId: SlotId,
+  filters: SelectFilter[],
+  bindings: Record<string, unknown>
+): boolean {
+  const slot = getSlot(gamestate, slotId)
+  for (const filter of filters) {
+    switch (filter.kind) {
+      case "has_counters":
+        if (slot.damage < filter.counters * DAMAGE_COUNTER) return false
+        break
+      case "survives_counters": {
+        const hp = Number(currentForm(gamestate, slot)?.hp)
+        const extra = filter.counters * DAMAGE_COUNTER
+        if (!Number.isFinite(hp) || slot.damage + extra >= hp) return false
+        break
+      }
+      case "other_than": {
+        const bound = bindings[filter.bind]
+        if (bound && sameSlot(slotId, bound as SlotId)) return false
+        break
+      }
+      case "has_type": {
+        const types = currentForm(gamestate, slot)?.types ?? []
+        if (!types.includes(filter.type)) return false
+        break
+      }
+    }
+  }
+  return true
+}
+
+export function surveySlots(
+  gamestate: GameState,
+  acting: 1 | 2,
+  who: SeatWho,
+  among: SeatAmong,
+  filters: SelectFilter[] = [],
+  bindings: Record<string, unknown> = {}
+): SlotId[] {
+  const players: Array<1 | 2> =
+    who === "self" ? [acting] : who === "opponent" ? [opponent(acting)] : [acting, opponent(acting)]
+  const seats: SlotId[] = []
+  for (const player of players) {
+    const ids =
+      among === "bench"
+        ? occupiedBench(gamestate, player).map((index) => ({ player, slot: "bench" as const, index }))
+        : pokemonInPlay(gamestate, player)
+    for (const id of ids) {
+      if (slotMatches(gamestate, id, filters, bindings)) seats.push(id)
+    }
+  }
+  return seats
+}
+
+export function ifPasses(
+  gamestate: GameState,
+  primitive: Extract<Primitive, { op: Op.If }>,
+  ctx: InterpretCtx
+): boolean {
+  if ("status" in primitive) {
+    return getSlot(gamestate, resolveSlot(primitive.slot, ctx)).status[primitive.status]
+  }
+  return ctx.bindings[primitive.bind] === primitive.equals
+}
+
 export function interpret(
   gamestate: GameState,
   primitive: Primitive,
@@ -225,7 +292,11 @@ export function interpret(
       const scripted = ctx.script?.coins?.shift()
       const result = scripted ?? flipCoin(1)[0]
       ctx.bindings[primitive.bind] = result
-      return record(gamestate, { op: Op.FlipCoin, result })
+      return record(gamestate, {
+        op: Op.FlipCoin,
+        result,
+        ...(primitive.check ? { check: primitive.check } : {}),
+      })
     }
 
     case Op.ApplyModifier: {
@@ -247,9 +318,24 @@ export function interpret(
         ctx.bindings[primitive.bind] = getSlot(gamestate, resolveSlot(primitive.slot, ctx)).damage
         return gamestate
       }
+      if (primitive.kind === "slots") {
+        const self = resolveSlot("$self_slot", ctx)
+        ctx.bindings[primitive.bind] = surveySlots(
+          gamestate,
+          self.player,
+          primitive.who,
+          primitive.among,
+          [primitive.filter ?? []].flat(),
+          ctx.bindings
+        ).length
+        return gamestate
+      }
       if (primitive.kind === "first") {
-        const zone = resolveZone(primitive.zone, ctx)
-        ctx.bindings[primitive.bind] = surveyCards(gamestate, zone, primitive.filter)[0] ?? ""
+        const source =
+          "zone" in primitive
+            ? resolveZone(primitive.zone, ctx)
+            : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
+        ctx.bindings[primitive.bind] = surveyCards(gamestate, source, primitive.filter)[0] ?? ""
         return gamestate
       }
       if ("zone" in primitive) {
@@ -300,9 +386,7 @@ export function interpret(
     }
 
     case Op.If: {
-      if (ctx.bindings[primitive.bind] !== primitive.equals) {
-        return gamestate
-      }
+      if (!ifPasses(gamestate, primitive, ctx)) return gamestate
       for (const step of primitive.then) {
         gamestate = interpret(gamestate, step, ctx)
       }

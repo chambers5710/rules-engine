@@ -53,6 +53,10 @@ export function hasPokemonInPlay(gamestate: GameState, player: 1 | 2): boolean {
   return hasActive(gamestate, player) || occupiedBench(gamestate, player).length > 0
 }
 
+export function needsPromote(gamestate: GameState, player: 1 | 2): boolean {
+  return !hasActive(gamestate, player) && occupiedBench(gamestate, player).length > 0
+}
+
 // Slot — resolve Active or a bench slot by id, with data
 export function getSlot(gamestate: GameState, slotId: SlotId): Slot {
   const player = gamestate.players[slotId.player]

@@ -37,6 +37,7 @@ Attack / EndTurn completes
          3. Asleep
          4. Paralyzed
        then KO / prizes / win-lose
+       then Promote if an Active is empty
   → enterTurn (next player)
 ```
 
@@ -46,7 +47,7 @@ An extra turn skips Checkup entirely. When extra turns exist, skip this block fo
 
 Status damage is `ApplyDamage`, not `Attack`. No weakness / resistance.
 
-Coins (Burn recover, Asleep wake, Confused attack) are `FlipCoin` and go on `history` like Scrunch.
+Coins (Burn recover, Asleep wake, Confused attack) are `FlipCoin` and go on `history` like Scrunch. Those three write `check` on the history entry so the UI can label the overlay.
 
 ## Overlap
 

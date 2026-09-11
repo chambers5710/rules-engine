@@ -7,6 +7,19 @@ export type CardEffects = {
   abilities?: Record<string, Expr>
 }
 
+function selfdestruct(hit: number, splash: number): Expr {
+  return [
+    { op: Op.Attack, base: hit, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+    {
+      op: Op.Each, who: "both", among: "bench", bind: "$seat", then: [
+        { op: Op.ApplyDamage, amount: splash, slot: "$seat" },
+      ],
+    },
+    { op: Op.ApplyDamage, amount: hit, slot: "$self_slot" },
+  ]
+}
+
 function trainersIntoDeck(hand: BindingName, deck: BindingName): Expr {
   return [
     { op: Op.Count, kind: "cards", zone: hand, filter: { kind: "trainer" }, bind: "$n" },
@@ -150,6 +163,39 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-9": {
+    attacks: {
+      "Thunder Wave": [
+        { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        { op: Op.FlipCoin, bind: "$coin" },
+        {
+          op: Op.If, bind: "$coin", equals: "heads", then: [
+            { op: Op.ApplyStatus, status: "paralyzed", slot: "$defending" }
+          ]
+        },
+      ],
+      "Selfdestruct": selfdestruct(80, 20),
+    },
+  },
+  "base1-19": {
+    attacks: {
+      "Earthquake": [
+        { op: Op.Attack, base: 70, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+        { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+        {
+          op: Op.Each, who: "self", among: "bench", bind: "$seat", then: [
+            { op: Op.ApplyDamage, amount: 10, slot: "$seat" },
+          ],
+        },
+      ],
+    },
+  },
+  "base1-53": {
+    attacks: {
+      "Selfdestruct": selfdestruct(40, 10),
+    },
+  },
   "base1-13": {
     attacks: {
       "Whirlpool": [
@@ -191,6 +237,14 @@ export const effects: Record<string, CardEffects | Expr> = {
     attacks: {
       "Hypnosis": [
         { op: Op.ApplyStatus, status: "asleep", slot: "$defending" },
+      ],
+      "Dream Eater": [
+        {
+          op: Op.If, slot: "$defending", status: "asleep", then: [
+            { op: Op.Attack, base: 50, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+            { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
+          ],
+        },
       ],
     },
   },
@@ -263,6 +317,35 @@ export const effects: Record<string, CardEffects | Expr> = {
       ],
     },
   },
+  "base1-85": [
+    {
+      op: Op.Each,
+      who: "self",
+      among: "in_play",
+      filter: { kind: "has_counters", counters: 1 },
+      bind: "$seat",
+      then: [
+        { op: Op.Count, kind: "damage", slot: "$seat", bind: "$heal" },
+        { op: Op.Calc, fn: "mul", a: "$heal", b: -1, bind: "$heal" },
+        { op: Op.ApplyDamage, amount: "$heal", slot: "$seat" },
+        { op: Op.Count, kind: "cards", slot: "$seat", attachment: "energy", bind: "$n" },
+        {
+          op: Op.Loop, bind: "$n", until: 0, then: [
+            { op: Op.Count, kind: "first", slot: "$seat", attachment: "energy", bind: "$card" },
+            {
+              op: Op.MoveSlotToZone,
+              card: "$card",
+              source: "$seat",
+              attachment: "energy",
+              dest: "$discard",
+              position: "bottom",
+            },
+            { op: Op.Count, kind: "cards", slot: "$seat", attachment: "energy", bind: "$n" },
+          ],
+        },
+      ],
+    },
+  ],
   "base1-82": [
     { op: Op.RemoveStatus, status: "asleep", slot: "$self_slot" },
     { op: Op.RemoveStatus, status: "confused", slot: "$self_slot" },

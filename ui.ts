@@ -26,8 +26,9 @@ function cardName(gamestate: GameState, id: string): string {
 export function formatAction(gamestate: GameState, a: AvailableAction): string {
   if (a.kind === Action.Ready || a.kind === Action.EndTurn || a.kind === Action.Retreat) return `${a.kind}`
   if (a.kind === Action.Promote) {
+    const dest = `bench[${a.index}]`
     const form = currentForm(gamestate, gamestate.players[a.player].bench[a.index])
-    return `${a.kind}  ${form ? form.name : `bench[${a.index}]`}`
+    return `${a.kind}  ${form ? form.name : dest}  ${dest}`
   }
   if (a.kind === Action.AttachEnergy || a.kind === Action.Evolve) {
     const dest = a.slot.slot === "active" ? "Active" : `bench[${a.slot.index}]`

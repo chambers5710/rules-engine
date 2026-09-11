@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { pathToFileURL } from "node:url"
-import { openDefaultSession, openSession, type Session } from "./session.js"
+import { lastDecks, openDefaultSession, openSession, type Session } from "./session.js"
 
 const PORT = 8788
 
@@ -79,8 +79,9 @@ const main = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1
 if (main) {
   console.log("Initializing...")
   listen(await openDefaultSession(), (body) => {
-    const p1 = String(body.p1 ?? "")
-    const p2 = String(body.p2 ?? "")
+    const last = lastDecks()
+    const p1 = String(body.p1 || last.p1)
+    const p2 = String(body.p2 || last.p2)
     if (!p1 || !p2) throw new Error("p1 and p2 deck ids required")
     return openSession(p1, p2)
   })

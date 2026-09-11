@@ -30,7 +30,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
   }
 
   const gamestate: GameState = {
-    id: "game-1",
+    id: `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     phase: Phase.Init,
     players: {
       1: instantiatePlayer(1, decks[1].map((c) => c.instanceId)),
@@ -129,13 +129,9 @@ function instantiateCard(cardData: Card): CardInstance {
   let energyType: EnergyType | undefined
   let energyValue: number | undefined
   if (cardData.supertype === "Energy") {
-    if (cardData.name === "Double Colorless Energy") { // this clearly ain't gonna fucking work lmao
-      energyType = "Colorless"
-      energyValue = 2
-    } else {
-      energyType = asEnergyType(cardData.name.replace(/ Energy$/, ""))
-      energyValue = 1
-    }
+    const parsed = energyFromPrinted(cardData.name)
+    energyType = parsed.type
+    energyValue = parsed.value
   }
 
   const cardInstance: CardInstance = {
@@ -178,6 +174,18 @@ function asEnergyType(value: string): EnergyType {
     return value as EnergyType
   }
   throw new Error(`Unknown energy type: ${value}`)
+}
+
+function isEnergyType(value: string): value is EnergyType {
+  return (EnergyTypes as readonly string[]).includes(value)
+}
+
+// Basic "{Type} Energy" and Double Colorless. Other Energy (Potion, Rainbow, …) pays Colorless 1.
+function energyFromPrinted(name: string): { type: EnergyType; value: number } {
+  if (name === "Double Colorless Energy") return { type: "Colorless", value: 2 }
+  const stripped = name.replace(/ Energy$/, "")
+  if (isEnergyType(stripped)) return { type: stripped, value: 1 }
+  return { type: "Colorless", value: 1 }
 }
 
 // Damage modifier — "×2" → multiply, "-30" → add

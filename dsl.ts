@@ -22,6 +22,7 @@ export enum Op {
   Draw = "draw",
   Shuffle = "shuffle",
   Reveal = "reveal",
+  Each = "each",
 }
 
 // Action — every top-level choice the client can make
@@ -55,6 +56,9 @@ export type SelectFilter =
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max"
 
+export type SeatWho = "self" | "opponent" | "both"
+export type SeatAmong = "bench" | "in_play"
+
 export type RevealTo = "self" | "opponent" | "both"
 
 export type Primitive =
@@ -66,17 +70,21 @@ export type Primitive =
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
-  | { op: Op.FlipCoin; bind: BindingName }
+  | { op: Op.FlipCoin; bind: BindingName; check?: Status }
   | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[] }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
+  | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; who: "owner" | "opponent" } }
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "first"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
+  | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
+  | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
   | { op: Op.RunEffect; attack: BindingName; slot: SlotId | BindingName }
@@ -96,7 +104,7 @@ export type HistoryEntry =
   | { op: Op.ApplyDamage; amount: number; slot: SlotId }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId }
-  | { op: Op.FlipCoin; result: "heads" | "tails" }
+  | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; set: number; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }

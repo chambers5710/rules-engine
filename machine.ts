@@ -5,6 +5,7 @@ import {
   hasActive,
   hasPokemonInPlay,
   isKnockedOut,
+  needsPromote,
   occupiedBench,
   opponent,
 } from "./board.js"
@@ -13,7 +14,7 @@ import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.j
 import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
-import { interpret, resolveSlot, type InterpretCtx } from "./interpret.js"
+import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { copy } from "./ops.js"
 import type { GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 import { DAMAGE_COUNTER, Phase } from "./types.js"
@@ -92,7 +93,7 @@ function turnPhase(
       return confusedAttack(gamestate, action)
     case Action.Promote:
       gamestate = promote(gamestate, action.player, action.index)
-      return drawOrLose(gamestate)
+      return afterKnockouts(gamestate)
     case Action.AttachEnergy:
       return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
     case Action.PlayBench:
@@ -127,7 +128,7 @@ function confusedAttack(
   const slot = { player: action.player, slot: "active" } as const
   if (!getSlot(gamestate, slot).status.confused) return runAction(gamestate, action)
   const ctx: InterpretCtx = { bindings: {} }
-  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "confused" }, ctx)
   if (ctx.bindings.$coin === "heads") return runAction(gamestate, action)
   gamestate = interpret(gamestate, {
     op: Op.ApplyDamage,
@@ -178,12 +179,18 @@ function checkupPhase(gamestate: GameState): GameState {
   gamestate = checkupParalyzed(gamestate, gamestate.activePlayer)
 
   gamestate = resolveKnockouts(gamestate)
+  return afterKnockouts(gamestate)
+}
 
+// After KO: win, then fill empty Actives before the next player's turn starts
+function afterKnockouts(gamestate: GameState): GameState {
   for (const player of PLAYERS) {
     if (gamestate.players[player].prize.length === 0) return endGame(gamestate)
     if (!hasPokemonInPlay(gamestate, player)) return endGame(gamestate)
   }
-
+  if (needsPromote(gamestate, 1) || needsPromote(gamestate, 2)) {
+    return { ...gamestate, phase: Phase.Turn }
+  }
   return enterTurn(
     gamestate,
     opponent(gamestate.activePlayer),
@@ -210,7 +217,7 @@ function checkupBurn(gamestate: GameState, player: 1 | 2): GameState {
     slot,
   })
   const ctx: InterpretCtx = { bindings: {} }
-  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "burn" }, ctx)
   if (ctx.bindings.$coin !== "heads") return gamestate
   return interpret(gamestate, { op: Op.RemoveStatus, status: "burn", slot })
 }
@@ -219,7 +226,7 @@ function checkupAsleep(gamestate: GameState, player: 1 | 2): GameState {
   const slot = { player, slot: "active" } as const
   if (!getSlot(gamestate, slot).status.asleep) return gamestate
   const ctx: InterpretCtx = { bindings: {} }
-  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin" }, ctx)
+  gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "asleep" }, ctx)
   if (ctx.bindings.$coin !== "heads") return gamestate
   return interpret(gamestate, { op: Op.RemoveStatus, status: "asleep", slot })
 }
@@ -303,13 +310,28 @@ function runExpr(
       }
     }
     if (step.op === Op.If) {
-      if (ctx.bindings[step.bind] !== step.equals) continue
+      if (!ifPasses(gamestate, step, ctx)) continue
       return runExpr(gamestate, [...step.then, ...expr.slice(i + 1)], ctx, player, kind)
     }
     if (step.op === Op.Loop) {
       const until = typeof step.until === "number" ? step.until : ctx.bindings[step.until]
       if (ctx.bindings[step.bind] === until) continue
       return runExpr(gamestate, [...step.then, step, ...expr.slice(i + 1)], ctx, player, kind)
+    }
+    if (step.op === Op.Each) {
+      const self = resolveSlot("$self_slot", ctx)
+      for (const seat of surveySlots(
+        gamestate,
+        self.player,
+        step.who,
+        step.among,
+        [step.filter ?? []].flat(),
+        ctx.bindings
+      )) {
+        ctx.bindings[step.bind] = seat
+        gamestate = runExpr(gamestate, step.then, ctx, player, kind)
+      }
+      continue
     }
     if (step.op === Op.RunEffect) {
       const copied = copiedAttack(
