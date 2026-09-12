@@ -43,6 +43,16 @@ export enum Action {
 
 export type BindingName = `$${string}`
 
+// Durable interpret context — pause stores this, resume restores it
+export type InterpretScript = {
+  coins?: Array<"heads" | "tails">
+}
+
+export type InterpretCtx = {
+  bindings: Record<string, unknown>
+  script?: InterpretScript
+}
+
 // Select pick — what the paused menu lists
 export type SelectPick = "cards" | "attacks" | "slots" | "types"
 
@@ -128,7 +138,7 @@ type ActionFrameBase = {
   player: 1 | 2
   kind: Action
   remaining: Expr
-  bindings: Record<string, unknown>
+  ctx: InterpretCtx
   bind: BindingName
   filter?: SelectFilter | SelectFilter[]
   optional?: true

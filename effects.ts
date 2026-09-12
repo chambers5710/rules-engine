@@ -779,7 +779,6 @@ export const effects: Record<string, CardEffects | Expr> = {
       source: "$discard",
       bind: "$a",
       filter: [{ kind: "energy" }, { kind: "other_than", bind: "$pay" }],
-      optional: true,
     },
     { op: Op.MoveZoneToZone, card: "$a", source: "$discard", dest: "$hand", position: "bottom" },
     {
@@ -817,7 +816,7 @@ export const effects: Record<string, CardEffects | Expr> = {
     { op: Op.RemoveStatus, status: "poison", slot: "$self_slot" },
   ],
   "base1-90": [
-    { op: Op.Select, pick: "slots", who: "self", bind: "$to", filter: { kind: "has_energy" } },
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to", filter: [{ kind: "has_energy" }, { kind: "has_counters", counters: 1 }] },
     {
       op: Op.Select,
       pick: "cards",
@@ -894,7 +893,7 @@ export const effects: Record<string, CardEffects | Expr> = {
     { op: Op.Draw, who: "self", count: 2 },
   ],
   "base1-92": [
-    { op: Op.Select, pick: "slots", who: "opponent", bind: "$to" },
+    { op: Op.Select, pick: "slots", who: "opponent", bind: "$to", filter: { kind: "has_energy" } },
     {
       op: Op.Select,
       pick: "cards",
@@ -922,7 +921,7 @@ export const effects: Record<string, CardEffects | Expr> = {
     { op: Op.SwapActive, slot: "$to" },
   ],
   "base1-94": [
-    { op: Op.Select, pick: "slots", who: "self", bind: "$to" },
+    { op: Op.Select, pick: "slots", who: "self", bind: "$to", filter: { kind: "has_counters", counters: 1 } },
     { op: Op.ApplyDamage, amount: -2 * DAMAGE_COUNTER, slot: "$to" },
   ],
   "base1-95": [

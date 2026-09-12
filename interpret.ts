@@ -1,4 +1,4 @@
-import { Op, type BindingName, type CalcFn, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
 import { applyModifier, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
@@ -16,6 +16,8 @@ import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
+
+export type { InterpretCtx, InterpretScript } from "./dsl.js"
 
 function isZoneRef(value: unknown): value is ZoneRef {
   return typeof value === "object" && value !== null && "zone" in value && "player" in value
@@ -65,15 +67,6 @@ function resolveReveal(
   }
   const self = ctx.bindings["$self_slot"] as SlotId | undefined
   return { cards: ids, from: from ?? self?.player ?? 1, zone }
-}
-
-export type InterpretScript = {
-  coins?: Array<"heads" | "tails">
-}
-
-export type InterpretCtx = {
-  bindings: Record<string, unknown>
-  script?: InterpretScript
 }
 
 // Attack damage — attack_damage rewrite, then Weakness, then Resistance.
@@ -505,14 +498,6 @@ export function interpret(
     case Op.Reveal: {
       const shown = resolveReveal(gamestate, primitive.cards, ctx)
       return record(gamestate, { op: Op.Reveal, ...shown, to: primitive.to })
-    }
-
-    case Op.If: {
-      if (!ifPasses(gamestate, primitive, ctx)) return gamestate
-      for (const step of primitive.then) {
-        gamestate = interpret(gamestate, step, ctx)
-      }
-      return gamestate
     }
 
     default:

@@ -202,7 +202,7 @@ run_effect  $copy
 `$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost. Recoil (`ApplyDamage` a positive literal onto `$self_slot`) is stripped from the copy.
 
 1. **Widen Select** — `pick` says what the menu is; the source type follows `pick` (`among` / `source` / `slot`). See Nouns. Do not add a `From` union. The answer binds a name, same style as `$coin`.
-2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `bindings`. Select last → `remaining` is `[]`.
+2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `ctx` (`InterpretCtx`). Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.
 5. **Metronome** — Select defending attacks, `run_effect`. Recoil on `$self_slot` is dropped. No special case in `attacksFromActive`.

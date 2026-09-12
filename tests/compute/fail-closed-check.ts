@@ -93,4 +93,10 @@ function stage(
   expect(!abilities.includes("Damage Swap"), "Damage Swap with no legal destination must not list")
 }
 
+{
+  const gamestate = toHand(stage("base1-36", "base1-36", "base1-98", 0, ["base1-85"]), 1, "base1-85", 1)
+  const trainers = names(gamestate, Action.PlayTrainer)
+  expect(!trainers.includes("base1-85"), "Pokémon Center with no damage must not list")
+}
+
 console.log("fail-closed-check assertions passed")

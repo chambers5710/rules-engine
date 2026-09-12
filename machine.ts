@@ -24,6 +24,7 @@ const PRIZE_COUNT = 6
 const PRIZES_ON_KO = 1
 const POISON_COUNTERS = 1
 const BURN_COUNTERS = 2
+const EXPR_STEP_BUDGET = 256
 const PLAYERS = [1, 2] as const
 
 // Apply one client-chosen action (or null when the phase runs with no input).
@@ -288,7 +289,8 @@ function resumeSelect(
   const frame = gamestate.actionStack.at(-1)
   if (!frame) return gamestate
   const ctx: InterpretCtx = {
-    bindings: { ...frame.bindings, [frame.bind]: chooseBinding(action) },
+    ...frame.ctx,
+    bindings: { ...frame.ctx.bindings, [frame.bind]: chooseBinding(action) },
   }
   gamestate = { ...gamestate, actionStack: gamestate.actionStack.slice(0, -1) }
   return onComplete(runExpr(gamestate, frame.remaining, ctx, frame.player, frame.kind), frame.kind)
@@ -314,9 +316,12 @@ function runExpr(
   expr: Expr,
   ctx: InterpretCtx,
   player: 1 | 2,
-  kind: Action
+  kind: Action,
+  budget: { left: number } = { left: EXPR_STEP_BUDGET }
 ): GameState {
   for (let i = 0; i < expr.length; i++) {
+    if (budget.left <= 0) return gamestate
+    budget.left -= 1
     const step = expr[i]
     if (step.op === Op.Select) {
       const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1))
@@ -329,16 +334,17 @@ function runExpr(
     }
     if (step.op === Op.If) {
       if (!ifPasses(gamestate, step, ctx)) continue
-      return runExpr(gamestate, [...step.then, ...expr.slice(i + 1)], ctx, player, kind)
+      return runExpr(gamestate, [...step.then, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
     if (step.op === Op.Loop) {
       const until = typeof step.until === "number" ? step.until : ctx.bindings[step.until]
       if (ctx.bindings[step.bind] === until) continue
-      return runExpr(gamestate, [...step.then, step, ...expr.slice(i + 1)], ctx, player, kind)
+      return runExpr(gamestate, [...step.then, step, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
     if (step.op === Op.Each) {
       const self = resolveSlot("$self_slot", ctx)
       if (!self) continue
+      const paused = gamestate.actionStack.length
       for (const seat of surveySlots(
         gamestate,
         self.player,
@@ -348,7 +354,8 @@ function runExpr(
         ctx.bindings
       )) {
         ctx.bindings[step.bind] = seat
-        gamestate = runExpr(gamestate, step.then, ctx, player, kind)
+        gamestate = runExpr(gamestate, step.then, ctx, player, kind, budget)
+        if (gamestate.actionStack.length > paused) return gamestate
       }
       continue
     }
@@ -357,7 +364,7 @@ function runExpr(
       const copied = slot
         ? copiedAttack(gamestate, slot, String(ctx.bindings[step.attack] ?? ""))
         : []
-      return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind)
+      return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
     gamestate = interpret(gamestate, step, ctx)
   }

@@ -1,6 +1,6 @@
 import { pokemonInPlay, opponent, getSlot, currentForm } from "./board.js"
 import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
-import { interpret, resolveSlot, slotMatches, type InterpretCtx } from "./interpret.js"
+import { interpret, resolveSlot, slotMatches, surveySlots, type InterpretCtx } from "./interpret.js"
 import { surveyCards } from "./survey.js"
 import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
 
@@ -41,7 +41,7 @@ export function selectFrame(
 ): ActionFrame | undefined {
   const base = {
     remaining,
-    bindings: ctx.bindings,
+    ctx: { ...ctx, bindings: { ...ctx.bindings } },
     player,
     bind: step.bind,
     optional: step.optional,
@@ -93,7 +93,7 @@ function selectSlots(
   const filters = [frame.filter ?? []].flat()
   const actions: SelectChoice[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
-    if (!slotMatches(gamestate, slotId, filters, frame.bindings)) continue
+    if (!slotMatches(gamestate, slotId, filters, frame.ctx.bindings)) continue
     actions.push({ kind: Action.Choose, player: frame.chooser, pick: "slots", slot: slotId, expr: [] })
   }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
@@ -106,7 +106,7 @@ function selectCards(
 ): SelectChoice[] {
   const filters = [frame.filter ?? []].flat()
   const pays = filters.find((filter) => filter.kind === "pays")
-  const need = pays ? frame.bindings[pays.bind] : undefined
+  const need = pays ? frame.ctx.bindings[pays.bind] : undefined
   const survey = filters.find(
     (filter) =>
       filter.kind === "energy" ||
@@ -126,7 +126,7 @@ function selectCards(
       if (!canSum(rest, need - value)) continue
     }
     const excluded = filters.some(
-      (filter) => filter.kind === "other_than" && frame.bindings[filter.bind] === cards[i]
+      (filter) => filter.kind === "other_than" && frame.ctx.bindings[filter.bind] === cards[i]
     )
     if (excluded) continue
     actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
@@ -210,7 +210,22 @@ function walkPlayable(
 ): boolean {
   for (let i = index; i < expr.length; i++) {
     const step = expr[i]
-    if (step.op === Op.If || step.op === Op.Loop || step.op === Op.Each || step.op === Op.RunEffect) {
+    if (step.op === Op.If || step.op === Op.Loop || step.op === Op.RunEffect) {
+      continue
+    }
+    if (step.op === Op.Each) {
+      if (step.filter == null) continue
+      const self = resolveSlot("$self_slot", ctx)
+      if (!self) return false
+      const seats = surveySlots(
+        gamestate,
+        self.player,
+        step.who,
+        step.among,
+        [step.filter].flat(),
+        ctx.bindings
+      )
+      if (seats.length === 0) return false
       continue
     }
     if (step.op === Op.Select) {
@@ -222,6 +237,7 @@ function walkPlayable(
       if (!laterRequiredSelect(expr, i + 1)) return true
       for (const choice of answers) {
         const next: InterpretCtx = {
+          ...ctx,
           bindings: { ...ctx.bindings, [step.bind]: chooseBinding(choice) },
         }
         if (walkPlayable(gamestate, expr, next, player, kind, i + 1)) return true
