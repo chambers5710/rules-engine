@@ -1,4 +1,18 @@
-import type { ActionFrame, HistoryEntry } from "./dsl.js"
+import type { ActionFrame, Expr, HistoryEntry } from "./dsl.js"
+
+// Printed card id (catalog `Card.id`, instance `sourceId`) — e.g. "base1-1"
+export type SourceId = string
+
+// Unique per copy; also the cardRegistry key
+export type CardInstanceId = string
+
+export type EffectEntry = {
+  attacks?: Record<string, Expr>
+  abilities?: Record<string, Expr>
+  trainer?: Record<string, Expr>
+}
+
+export type EffectRegistry = Record<SourceId, EffectEntry>
 
 // Game — the full snapshot the engine reads and writes
 export type GameState = {
@@ -9,6 +23,7 @@ export type GameState = {
   firstPlayer: 1 | 2
   activePlayer: 1 | 2
   cardRegistry: CardRegistry
+  effectRegistry: EffectRegistry
   mulligans: { 1: number; 2: number }
   setupReady: { 1: boolean; 2: boolean }
   energyAttachedThisTurn: boolean
@@ -37,7 +52,7 @@ export type Player = {
 }
 
 // Card registry — every copy in this game, keyed by instanceId
-export type CardRegistry = Record<string, CardInstance>
+export type CardRegistry = Record<CardInstanceId, CardInstance>
 
 // Zone — an ordered list of instance ids (index 0 is top)
 export type Zone = CardInstanceId[]
@@ -116,7 +131,7 @@ export type StatusFlags = Record<Status, boolean>
 // Card instance — one physical copy in this game
 export type CardInstance = {
   instanceId: CardInstanceId
-  sourceId: string // printed card id, e.g. "base1-1"
+  sourceId: SourceId
   name: string
   supertype: CardSupertype
   subtypes?: string[] | null
@@ -144,9 +159,6 @@ export type PrintedAttack = {
   damage: string
 }
 
-// Card instance id — unique per copy; also the registry key
-export type CardInstanceId = string
-
 // Card supertype — printed category, Title Case from card data
 type CardSupertype = "Pokémon" | "Trainer" | "Energy"
 
@@ -168,7 +180,7 @@ export type EnergyType = typeof EnergyTypes[number]
 
 // Card — static row from the card database, not a copy in play
 export type Card = {
-  id: string // e.g. "sv8-161"
+  id: SourceId
   name: string
   supertype: "Pokémon" | "Trainer" | "Energy"
   number: string

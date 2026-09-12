@@ -375,7 +375,7 @@ function copiedAttack(gamestate: GameState, slot: SlotId, name: string): Expr {
   const form = currentForm(gamestate, getSlot(gamestate, slot))
   const attack = form?.attacks?.find((row) => row.name === name)
   if (!form || !attack) return []
-  return attackExpr(form.sourceId, attack).filter((step) => {
+  return attackExpr(gamestate.effectRegistry, form.sourceId, attack).filter((step) => {
     if (step.op !== Op.ApplyDamage) return true
     if (step.slot !== "$self_slot") return true
     return typeof step.amount !== "number" || step.amount <= 0

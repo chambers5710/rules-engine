@@ -6,16 +6,23 @@ import type {
   CardInstance,
   CardRegistry,
   DamageModifier,
+  EffectRegistry,
   EnergyType,
   GameState,
   Player,
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
+import authoredEffects from "../effect-author/effects/effects.json" with { type: "json" }
 
 const OPENING_HAND = 7
 
 // Game — coin flip, hydrate decks, opening hands + mulligans, assemble snapshot
-export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): GameState {
+export function initializeGameState(
+  p1DeckData: Card[],
+  p2DeckData: Card[],
+  effectRegistry?: EffectRegistry
+): GameState {
+  effectRegistry ??= authoredEffects as EffectRegistry
   const firstPlayer: 1 | 2 = flipCoin(1)[0] === "heads" ? 1 : 2
   const deckData = { 1: p1DeckData, 2: p2DeckData }
 
@@ -40,6 +47,7 @@ export function initializeGameState(p1DeckData: Card[], p2DeckData: Card[]): Gam
     firstPlayer,
     activePlayer: firstPlayer,
     cardRegistry,
+    effectRegistry,
     mulligans: { 1: 0, 2: 0 },
     setupReady: { 1: false, 2: false },
     energyAttachedThisTurn: false,

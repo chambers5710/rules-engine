@@ -200,9 +200,9 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const card of surveyCards(gamestate, hand, { kind: "trainer" })) {
     const sourceId = gamestate.cardRegistry[card].sourceId
-    const effect = trainerEffect(sourceId)
+    const effect = trainerEffect(gamestate.effectRegistry, sourceId)
     if (effect.length === 0) continue
-    const expr: Expr = trainerAttaches(sourceId)
+    const expr: Expr = trainerAttaches(gamestate.effectRegistry, sourceId)
       ? effect
       : [
           { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
@@ -234,7 +234,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     if (!form) continue
     for (const ability of form.abilities ?? []) {
       if (ability.type === "Pokémon Power" && pokemonPowerBlocked(slot)) continue
-      const expr = cardEffect(form.sourceId, "abilities", ability.name)
+      const expr = cardEffect(gamestate.effectRegistry, form.sourceId, "abilities", ability.name)
       if (expr.length === 0) continue
       const seed = { $self_slot: slotId, $hand: { player, zone: "hand" } }
       if (!exprPlayable(gamestate, expr, seed, player, Action.Ability)) continue
@@ -274,7 +274,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   return (form.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []) && !attackBanned(active, attack.name))
     .flatMap((attack) => {
-      const expr = attackExpr(form.sourceId, attack)
+      const expr = attackExpr(gamestate.effectRegistry, form.sourceId, attack)
       if (expr.length === 0) return []
       const seed = {
         $self_slot: slot,

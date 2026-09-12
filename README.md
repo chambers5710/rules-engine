@@ -144,7 +144,7 @@ Read-only. Compute and card text ask the same questions.
 
 ## Effects
 
-Pure `Expr`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: the entry **is** the expr (`trainerEffect(id)`). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers still list; play discards them and runs nothing else. A trainer whose expr moves `$played` onto `tools` skips that discard.
+Pure `Expr` on `GameState.effectRegistry`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: `trainer` is a name→expr map (`trainerEffect(registry, id)` uses the first value). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers do not list. A trainer whose expr moves `$played` onto `tools` skips the discard. `effects.ts` is lookup only. Hand-authored rows live in `effect-author/effects/effects.json`.
 
 Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr — unless the card attaches as a tool).
 
