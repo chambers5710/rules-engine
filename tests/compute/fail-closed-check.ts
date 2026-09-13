@@ -58,7 +58,7 @@ function stage(
   expect(attacks.includes("Thunderpunch"), "authored Thunderpunch should list")
   expect(attacks.includes("Thundershock"), "authored Thundershock should list")
   const trainers = names(toHand(gamestate, 1, "base1-70", 1), Action.PlayTrainer)
-  expect(!trainers.includes("base1-70"), "unauthored Clefairy Doll must not list")
+  expect(trainers.includes("base1-70"), "Clefairy Doll lists when a bench seat is empty")
 }
 
 {

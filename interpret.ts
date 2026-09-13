@@ -13,12 +13,13 @@ import {
   moveZoneToSlot,
   moveZoneToZone,
   removeStatus,
+  reorderZone,
   shuffle,
 } from "./ops.js"
-import { discardSlot, draw, swapActive } from "./helpers.js"
+import { discardSlot, draw, mayEvolve, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
-import { isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
+import { cardsAt, isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { applyDamageVia } from "./triggers.js"
 import { DAMAGE_COUNTER, type Attachment, type CardFieldOverrides, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
@@ -135,9 +136,11 @@ function resolveReveal(
       ids.push(...surveyCards(gamestate, bound))
       continue
     }
-    if (typeof bound === "string" && bound) {
-      ids.push(bound)
-      const at = zoneOf(gamestate, bound)
+    const listed = Array.isArray(bound) ? bound : typeof bound === "string" && bound ? [bound] : []
+    for (const id of listed) {
+      if (typeof id !== "string" || !id) continue
+      ids.push(id)
+      const at = zoneOf(gamestate, id)
       if (at) {
         from ??= at.player
         zone ??= at.zone
@@ -329,7 +332,7 @@ export function slotMatches(
         break
       case "breeder": {
         const evo = bindings[filter.bind]
-        if (typeof evo !== "string" || slot.evolvedThisTurn) return false
+        if (typeof evo !== "string" || !mayEvolve(gamestate, slotId.player, slot)) return false
         const basic = stage2BasicName(gamestate, evo)
         const form = currentForm(gamestate, slot)
         if (!basic || !form || form.name !== basic) return false
@@ -657,6 +660,12 @@ export function interpret(
           : 0
         return gamestate
       }
+      if (primitive.kind === "prefix") {
+        const zone = resolveZone(primitive.zone, ctx)
+        const n = Math.max(0, resolveAmount(primitive.n, ctx))
+        ctx.bindings[primitive.bind] = zone ? cardsAt(gamestate, zone).slice(0, n) : []
+        return gamestate
+      }
       if (primitive.kind === "first" || primitive.kind === "last") {
         const source =
           "zone" in primitive
@@ -726,7 +735,26 @@ export function interpret(
 
     case Op.Reveal: {
       const shown = resolveReveal(gamestate, primitive.cards, ctx)
+      if (shown.cards.length === 0) return gamestate
       return record(gamestate, { op: Op.Reveal, ...shown, to: primitive.to })
+    }
+
+    case Op.Push: {
+      const item = resolveCard(primitive.value, ctx)
+      const bound = ctx.bindings[primitive.bind]
+      const list = Array.isArray(bound) ? bound.filter((id): id is string => typeof id === "string") : []
+      ctx.bindings[primitive.bind] = item ? [...list, item] : list
+      return gamestate
+    }
+
+    case Op.Reorder: {
+      const zone = resolveZone(primitive.zone, ctx)
+      const bound = ctx.bindings[primitive.cards]
+      const cards = Array.isArray(bound)
+        ? bound.filter((id): id is string => typeof id === "string" && id !== "")
+        : []
+      if (!zone || cards.length === 0) return gamestate
+      return reorderZone(gamestate, zone, cards)
     }
 
     default:

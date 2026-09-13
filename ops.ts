@@ -1,4 +1,4 @@
-import { getSlot } from "./board.js"
+import { currentForm, getSlot } from "./board.js"
 import { clearFieldOverrides } from "./card.js"
 import { Op } from "./dsl.js"
 import { record } from "./history.js"
@@ -229,6 +229,8 @@ export const applyStatus = (
   slot: SlotId,
   counters?: number
 ) => {
+  const form = currentForm(gamestate, getSlot(gamestate, slot))
+  if (form?.blocksStatus && status !== "burn") return gamestate
   const next = copy(gamestate, slot.player)
   const pokemon = getSlot(next, slot)
   pokemon.status = withStatus(pokemon.status, status)
@@ -249,6 +251,23 @@ export const removeStatus = (
   pokemon.status[status] = false
   if (status === "poison") pokemon.poisonCounters = 1
   return record(next, { op: Op.RemoveStatus, status, slot })
+}
+
+/** Put `cards` on top in that order. They must already be in the zone; the rest keep relative order. */
+export const reorderZone = (
+  gamestate: GameState,
+  zone: ZoneRef,
+  cards: CardInstanceId[]
+) => {
+  const pile = gamestate.players[zone.player][zone.zone]
+  if (cards.length === 0 || cards.some((card) => !pile.includes(card))) return gamestate
+  const keep = new Set(cards)
+  const next = copy(gamestate, zone.player)
+  next.players[zone.player][zone.zone] = [
+    ...cards,
+    ...pile.filter((card) => !keep.has(card)),
+  ]
+  return record(next, { op: Op.Reorder, zone, cards: [...cards] })
 }
 
 // Shuffle — copy, then Fisher–Yates one of a player's zones

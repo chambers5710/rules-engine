@@ -80,10 +80,9 @@ export type Slot = {
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: Modifier[]
-  evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet
+  evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet. First-turn evolve is `mayEvolve`, not this flag.
   poisonCounters: number
 }
-
 // Slot id — which Pokémon in play
 export type SlotId =
   | { player: 1 | 2; slot: "active" }
@@ -215,6 +214,9 @@ export type CardInstance = {
   energyType?: EnergyType
   energyValue?: number
   rules?: string[]
+  cannotRetreat?: boolean
+  blocksStatus?: boolean
+  prizesOnKo?: boolean
   images: { small: string; large: string }
   fieldOverrides: CardFieldOverrides
 }

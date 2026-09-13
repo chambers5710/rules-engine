@@ -19,6 +19,7 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "pokemon",
   "stage_2",
   "other_than",
+  "among",
   "pays",
 ])
 
@@ -169,7 +170,10 @@ function reads(step: Primitive, have: Set<string>): string | null {
         return null
       }
       if (step.kind === "attack_damage") return read(have, step.slot, at) ?? read(have, step.attack, at)
-      if ("zone" in step) return read(have, step.zone, at)
+      if ("zone" in step) {
+        const n = "n" in step ? read(have, step.n, at) : null
+        return read(have, step.zone, at) ?? n
+      }
       if ("slot" in step) return read(have, step.slot, at)
       return null
     case Op.Each:
@@ -186,6 +190,10 @@ function reads(step: Primitive, have: Set<string>): string | null {
       return read(have, step.count, at)
     case Op.Shuffle:
       return read(have, step.zone, at)
+    case Op.Reorder:
+      return read(have, step.zone, at) ?? read(have, step.cards, at)
+    case Op.Push:
+      return need(have, step.bind, at) ?? read(have, step.value, at)
     case Op.Reveal:
       if (Array.isArray(step.cards)) {
         for (const card of step.cards) {

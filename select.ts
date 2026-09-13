@@ -117,7 +117,13 @@ function cardPasses(
   for (const filter of filters) {
     if (filter.kind === "pays") continue
     if (filter.kind === "other_than") {
-      if (bindings[filter.bind] === card) return false
+      const bound = bindings[filter.bind]
+      if (Array.isArray(bound) ? bound.includes(card) : bound === card) return false
+      continue
+    }
+    if (filter.kind === "among") {
+      const bound = bindings[filter.bind]
+      if (Array.isArray(bound) ? !bound.includes(card) : bound !== card) return false
       continue
     }
     if (!cardMatches(gamestate, card, filter, source)) return false
@@ -140,9 +146,9 @@ function selectCards(
   for (let i = 0; i < cards.length; i++) {
     const value = values[i]
     if (typeof need === "number") {
-      if (value <= 0 || value > need) continue
+      if (value <= 0) continue
       const rest = values.filter((_, j) => j !== i)
-      if (!canSum(rest, need - value)) continue
+      if (!canCover(rest, need - value)) continue
     }
     actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
   }
@@ -179,16 +185,9 @@ function selectTypes(frame: Extract<ActionFrame, { pick: "types" }>): SelectChoi
   return actions
 }
 
-function canSum(values: number[], target: number): boolean {
-  if (target === 0) return true
-  const ok = new Set([0])
-  for (const value of values) {
-    for (const sum of [...ok]) {
-      if (sum + value === target) return true
-      if (sum + value < target) ok.add(sum + value)
-    }
-  }
-  return ok.has(target)
+function canCover(values: number[], target: number): boolean {
+  if (target <= 0) return true
+  return values.reduce((sum, value) => sum + value, 0) >= target
 }
 
 function chooseBinding(action: SelectChoice): SlotId | string {

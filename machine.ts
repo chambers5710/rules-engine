@@ -273,8 +273,11 @@ function resolveKnockouts(gamestate: GameState): GameState {
       })),
     ]
     for (const ref of refs) {
-      if (!isKnockedOut(gamestate, getSlot(gamestate, ref))) continue
+      const seat = getSlot(gamestate, ref)
+      if (!isKnockedOut(gamestate, seat)) continue
+      const form = currentForm(gamestate, seat)
       gamestate = discardSlot(gamestate, ref)
+      if (form?.prizesOnKo === false) continue
       for (let i = 0; i < PRIZES_ON_KO; i++) {
         gamestate = takePrize(gamestate, opponent(player))
       }

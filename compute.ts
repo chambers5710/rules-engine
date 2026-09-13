@@ -13,6 +13,7 @@ import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effect
 import { ifPasses } from "./interpret.js"
 import { attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
+import { mayEvolve } from "./helpers.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, Slot, SlotId } from "./types.js"
@@ -172,12 +173,12 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   )
 }
 
-// Evolve — hand card whose evolvesFrom matches the current form; skip slots that evolved this turn
+// Evolve — hand card whose evolvesFrom matches the current form; not first turn; skip seats played or evolved this turn
 function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
     const slot = getSlot(gamestate, slotId)
-    if (slot.evolvedThisTurn) continue
+    if (!mayEvolve(gamestate, player, slot)) continue
     const form = currentForm(gamestate, slot)
     const name = form?.name
     if (!name) continue
@@ -202,7 +203,7 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
-// Trainer — one play per copy in hand. Discard is the play unless the text attaches as a tool.
+// Trainer — one play per copy in hand. Discard is the play unless the expr MoveZoneToSlots the card (tool / play-as-Pokémon).
 function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const hand = { player, zone: "hand" } as const
   const discard = { player, zone: "discard" } as const
@@ -317,6 +318,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   const slot = { player, slot: "active" } as const
   const form = currentForm(gamestate, active)
   if (!form) return []
+  if (form.cannotRetreat) return []
   const cost = form.retreatCost ?? []
   if (!canPayEnergyCost(gamestate, slot, cost)) return []
   const need = cost.length
@@ -350,6 +352,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
     { op: Op.Count, kind: "energy_value", slot: "$self_slot", attachment: "energy", bind: "$after" },
     { op: Op.Calc, fn: "sub", a: "$before", b: "$after", bind: "$paid" },
     { op: Op.Calc, fn: "sub", a: "$need", b: "$paid", bind: "$need" },
+    { op: Op.Calc, fn: "max", a: "$need", b: 0, bind: "$need" },
   ]
   const expr: Expr = need > 0
     ? [{ op: Op.Loop, bind: "$need", until: 0, then: pay }, ...switchIn]

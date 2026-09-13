@@ -135,9 +135,7 @@ export function liveTurn(gamestate: GameState): GameState {
   const next: GameState = {
     ...gamestate,
     phase: Phase.Turn,
-    turnCount: 1,
-    firstPlayer: 1,
-    activePlayer: 1,
+    turnCount: 3, // P1's second turn — first turn of each player cannot evolve
     setupReady: { 1: true, 2: true },
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,

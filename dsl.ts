@@ -23,6 +23,8 @@ export enum Op {
   Draw = "draw",
   Shuffle = "shuffle",
   Reveal = "reveal",
+  Push = "push",
+  Reorder = "reorder",
   Each = "each",
   Arm = "arm",
   DiscardSlot = "discard_slot",
@@ -75,6 +77,7 @@ export type SlotFilter =
 export type CardFilter =
   | SurveyFilter
   | { kind: "other_than"; bind: BindingName }
+  | { kind: "among"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10" | "half_down_10"
@@ -119,6 +122,7 @@ export type Primitive =
   | { op: Op.ApplyFieldOverrides; card: string | BindingName; set: CardFieldOverrideSet }
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "prefix"; n: number | BindingName; zone: ZoneRef | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "first" | "last"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "first" | "last"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
@@ -137,6 +141,8 @@ export type Primitive =
   | { op: Op.Draw; who: "self" | "opponent"; count: number | BindingName }
   | { op: Op.Shuffle; zone: ZoneRef | BindingName }
   | { op: Op.Reveal; cards: BindingName | BindingName[]; to: RevealTo }
+  | { op: Op.Push; bind: BindingName; value: BindingName | string }
+  | { op: Op.Reorder; zone: ZoneRef | BindingName; cards: BindingName }
 
 export type Expr = Primitive[]
 
@@ -160,6 +166,7 @@ export type HistoryEntry =
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }
+  | { op: Op.Reorder; zone: ZoneRef; cards: string[] }
 
 type ActionFrameBase = {
   player: 1 | 2

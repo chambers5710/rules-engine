@@ -138,7 +138,7 @@ Read-only. Compute and card text ask the same questions.
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`, `stage_2`
 - **Reduce** — list, count, or sum of `energyValue`
 
-`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). Zone `kind: "prefix"` binds the top `n` ids. `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
@@ -146,7 +146,7 @@ Read-only. Compute and card text ask the same questions.
 
 Pure `Expr` on `GameState.effectRegistry`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: `trainer` is a name→expr map (`trainerEffect(registry, id)` uses the first value). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers do not list. A trainer whose expr moves `$played` onto `tools` skips the discard. `effects.ts` is lookup only. Hand-authored rows live in `effect-author/effects/effects.json`.
 
-Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr — unless the card attaches as a tool).
+Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr — unless the expr `MoveZoneToSlot`s the card).
 
 Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not.
 
@@ -217,7 +217,7 @@ run_effect  $copy
 
 Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `attack.base`. The 3 and the cap 2 live in the effect, not in compute.
 
-`Count` `kind: "damage"` reads `slot.damage` (HP units). `kind: "hp"` is printed HP. `Calc` `half_up_10` is Super Fang. It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind or card binds, `to`: self / opponent / both) — no board write, no pause. `If` is bind `equals` or `slot` + `status` (any special condition). Slot Select may set `chooser: "opponent"`.
+`Count` `kind: "damage"` reads `slot.damage` (HP units). `kind: "hp"` is printed HP. `Calc` `half_up_10` is Super Fang. It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind, list bind, or card binds, `to`: self / opponent / both) — no board write, no pause. `Reorder` puts a list of ids already in a zone on top. `If` is bind `equals` or `slot` + `status` (any special condition). Slot Select may set `chooser: "opponent"`.
 
 ## Roadmap
 
