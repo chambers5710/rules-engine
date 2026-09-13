@@ -28,7 +28,7 @@ export type Session = {
   choose: (index: number) => Frame
 }
 
-let loadedDecks = { p1: DECKS[1], p2: DECKS[2] }
+let loadedDecks: { p1: string; p2: string } = { p1: DECKS[1], p2: DECKS[2] }
 
 export function lastDecks() {
   return loadedDecks
@@ -52,6 +52,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
     attacks?: EffectRegistry[string]["attacks"] | null
     abilities?: EffectRegistry[string]["abilities"] | null
     trainer?: EffectRegistry[string]["trainer"] | null
+    triggers?: EffectRegistry[string]["triggers"] | null
   }>
   const registry: EffectRegistry = {}
   for (const row of rows) {
@@ -59,6 +60,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
       ...(row.attacks ? { attacks: row.attacks } : {}),
       ...(row.abilities ? { abilities: row.abilities } : {}),
       ...(row.trainer ? { trainer: row.trainer } : {}),
+      ...(row.triggers ? { triggers: row.triggers } : {}),
     }
   }
   return registry

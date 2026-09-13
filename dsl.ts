@@ -59,14 +59,17 @@ export type InterpretCtx = {
 // Select pick — what the paused menu lists
 export type SelectPick = "cards" | "attacks" | "slots" | "types"
 
-export type SelectFilter =
+export type SlotFilter =
   | { kind: "has_counters"; counters: number }
   | { kind: "survives_counters"; counters: number }
   | { kind: "other_than"; bind: BindingName }
-  | { kind: "pays"; bind: BindingName }
   | { kind: "has_type"; type: EnergyType }
   | { kind: "has_energy"; type?: EnergyType }
+
+export type CardFilter =
   | SurveyFilter
+  | { kind: "other_than"; bind: BindingName }
+  | { kind: "pays"; bind: BindingName }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10"
 
@@ -85,9 +88,9 @@ export type Primitive =
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
-  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; chooser?: "self" | "opponent"; filter?: SelectFilter | SelectFilter[]; optional?: true }
-  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: SelectFilter | SelectFilter[]; optional?: true }
-  | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; filter?: SelectFilter | SelectFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; chooser?: "self" | "opponent"; filter?: SlotFilter | SlotFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: CardFilter | CardFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "types"; except?: EnergyType[]; optional?: true }
   | { op: Op.If; bind: BindingName; equals: unknown; then: Expr }
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
@@ -109,9 +112,9 @@ export type Primitive =
   | { op: Op.Count; kind: "weakness"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "last_attacked" | "last_hit"; slot: SlotId | BindingName; bind: BindingName }
-  | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
+  | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName }
   | { op: Op.Arm; who: "owner" | "opponent"; when: "pokemon_knocked_out"; via: DamageVia[]; blockedByStatus: boolean; then: Expr }
-  | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
+  | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
   | { op: Op.RunEffect; attack: BindingName; slot: SlotId | BindingName }
@@ -147,13 +150,12 @@ type ActionFrameBase = {
   remaining: Expr
   ctx: InterpretCtx
   bind: BindingName
-  filter?: SelectFilter | SelectFilter[]
   optional?: true
 }
 
 // Paused expr — Select stopped here; remaining runs after the bind is written
 export type ActionFrame =
-  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; chooser: 1 | 2 })
-  | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef })
+  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; chooser: 1 | 2; filter?: SlotFilter | SlotFilter[] })
+  | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef; filter?: CardFilter | CardFilter[] })
   | (ActionFrameBase & { pick: "attacks"; slot: SlotId })
   | (ActionFrameBase & { pick: "types"; except: EnergyType[] })

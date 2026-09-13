@@ -426,13 +426,13 @@ function onComplete(gamestate: GameState, kind: Action): GameState {
 }
 
 function markEvolvedThisTurn(gamestate: GameState, slotId: SlotId): GameState {
-  const next = copy(gamestate)
+  const next = copy(gamestate, slotId.player)
   getSlot(next, slotId).evolvedThisTurn = true
   return next
 }
 
 function clearEvolvedThisTurn(gamestate: GameState, player: 1 | 2): GameState {
-  const next = copy(gamestate)
+  const next = copy(gamestate, player)
   next.players[player].active.evolvedThisTurn = false
   for (const slot of next.players[player].bench) slot.evolvedThisTurn = false
   return next

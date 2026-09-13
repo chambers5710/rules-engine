@@ -33,7 +33,7 @@ function board() {
   gamestate = toHand(gamestate, 2, "base1-101", 3)
   gamestate = toPrize(gamestate, 1, "base1-101", 6)
   gamestate = toPrize(gamestate, 2, "base1-101", 6)
-  return { ...liveTurn(gamestate), activePlayer: 2 }
+  return { ...liveTurn(gamestate), activePlayer: 2 as const }
 }
 
 function session() {

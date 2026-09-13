@@ -1,7 +1,7 @@
 import { getSlot } from "./board.js"
 import { emptyStatus } from "./status.js"
 import type { GameState, Slot, SlotId } from "./types.js"
-import { copy, moveSlotToZone, moveZoneToZone } from "./ops.js"
+import { copy, copySlot, moveSlotToZone, moveZoneToZone } from "./ops.js"
 
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
   for (let i = 0; i < count; i++) {
@@ -28,10 +28,6 @@ export function placePrize(gamestate: GameState, playerId: 1 | 2, cardId: string
   )
 }
 
-function copySlot(slot: Slot): Slot {
-  return structuredClone(slot)
-}
-
 // Left Active — conditions are Active-only; poison amount resets with the flag
 function leaveActive(slot: Slot): Slot {
   const next = copySlot(slot)
@@ -46,7 +42,7 @@ export function promote(
   player: 1 | 2,
   index: 0 | 1 | 2 | 3 | 4
 ): GameState {
-  const next = copy(gamestate)
+  const next = copy(gamestate, player)
   const p = next.players[player]
   p.active = copySlot(p.bench[index])
   p.bench[index] = emptySlot()
@@ -59,7 +55,7 @@ export function swapActive(
   player: 1 | 2,
   index: 0 | 1 | 2 | 3 | 4
 ): GameState {
-  const next = copy(gamestate)
+  const next = copy(gamestate, player)
   const p = next.players[player]
   const bench = p.bench[index]
   if (bench.evolution.length === 0) return gamestate
@@ -97,7 +93,7 @@ export function discardSlot(gamestate: GameState, ref: SlotId): GameState {
   for (const card of tools) {
     gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "tools" }, dest, "bottom")
   }
-  const next = copy(gamestate)
+  const next = copy(gamestate, ref.player)
   if (ref.slot === "active") next.players[ref.player].active = emptySlot()
   else next.players[ref.player].bench[ref.index] = emptySlot()
   return next

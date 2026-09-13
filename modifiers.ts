@@ -37,7 +37,7 @@ export function applyModifier(
   slot: SlotId,
   modifier: ModifierWrite
 ): GameState {
-  const next = copy(gamestate)
+  const next = copy(gamestate, slot.player)
   const phase =
     modifier.until.beat === "leave_play" || modifier.until.player === gamestate.activePlayer
       ? "active"
@@ -46,13 +46,14 @@ export function applyModifier(
   if (modifier.field === "weakness_type" || modifier.field === "resistance_type") {
     seat.modifiers = seat.modifiers.filter((m) => m.field !== modifier.field)
   }
-  seat.modifiers.push({ ...modifier, phase })
+  seat.modifiers.push({ ...modifier, phase } as Modifier)
   return next
 }
 
 export function foldDamage(gamestate: GameState, slot: SlotId, base: number): number {
   const mods = getSlot(gamestate, slot).modifiers.filter(
-    (m) => m.field === "attack_damage" && m.phase === "active"
+    (m): m is Extract<Modifier, { field: "attack_damage" }> =>
+      m.field === "attack_damage" && m.phase === "active"
   )
   let damage = base
   for (const m of mods) {

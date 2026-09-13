@@ -1,7 +1,7 @@
 import { pokemonInPlay, opponent, getSlot, currentForm } from "./board.js"
-import { Action, Op, type ActionFrame, type Expr, type Primitive } from "./dsl.js"
+import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
 import { interpret, resolveSlot, slotMatches, surveySlots, type InterpretCtx } from "./interpret.js"
-import { surveyCards } from "./survey.js"
+import { cardMatches, cardsAt } from "./survey.js"
 import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
 
 type SelectChoice =
@@ -65,7 +65,7 @@ export function selectFrame(
     case "attacks": {
       const slot = resolveSlot(step.slot, ctx)
       if (!slot) return undefined
-      return { ...base, pick: "attacks", slot, filter: step.filter }
+      return { ...base, pick: "attacks", slot }
     }
     case "types":
       return { ...base, pick: "types", except: step.except ?? [] }
@@ -100,6 +100,24 @@ function selectSlots(
   return actions
 }
 
+function cardPasses(
+  gamestate: GameState,
+  card: string,
+  filters: CardFilter[],
+  source: Extract<ActionFrame, { pick: "cards" }>["source"],
+  bindings: Record<string, unknown>
+): boolean {
+  for (const filter of filters) {
+    if (filter.kind === "pays") continue
+    if (filter.kind === "other_than") {
+      if (bindings[filter.bind] === card) return false
+      continue
+    }
+    if (!cardMatches(gamestate, card, filter, source)) return false
+  }
+  return true
+}
+
 function selectCards(
   gamestate: GameState,
   frame: Extract<ActionFrame, { pick: "cards" }>
@@ -107,15 +125,9 @@ function selectCards(
   const filters = [frame.filter ?? []].flat()
   const pays = filters.find((filter) => filter.kind === "pays")
   const need = pays ? frame.ctx.bindings[pays.bind] : undefined
-  const survey = filters.find(
-    (filter) =>
-      filter.kind === "energy" ||
-      filter.kind === "basic_pokemon" ||
-      filter.kind === "evolves_from" ||
-      filter.kind === "trainer" ||
-      filter.kind === "pokemon"
+  const cards = cardsAt(gamestate, frame.source).filter((card) =>
+    cardPasses(gamestate, card, filters, frame.source, frame.ctx.bindings)
   )
-  const cards = surveyCards(gamestate, frame.source, survey)
   const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
   const actions: SelectChoice[] = []
   for (let i = 0; i < cards.length; i++) {
@@ -125,10 +137,6 @@ function selectCards(
       const rest = values.filter((_, j) => j !== i)
       if (!canSum(rest, need - value)) continue
     }
-    const excluded = filters.some(
-      (filter) => filter.kind === "other_than" && frame.ctx.bindings[filter.bind] === cards[i]
-    )
-    if (excluded) continue
     actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
   }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })

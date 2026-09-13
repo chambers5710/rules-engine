@@ -5,6 +5,8 @@ import { emptyStatus, withStatus } from "./status.js"
 import type {
   CardInstanceId,
   GameState,
+  Player,
+  Slot,
   SlotId,
   SlotRef,
   Status,
@@ -14,8 +16,38 @@ import type {
   ZoneRef,
 } from "./types.js"
 
-// Copy — snapshot we can mutate; never write the object we were given
-export const copy = (gamestate: GameState): GameState => structuredClone(gamestate)
+export function copySlot(slot: Slot): Slot {
+  return {
+    ...slot,
+    evolution: [...slot.evolution],
+    energy: [...slot.energy],
+    tools: [...slot.tools],
+    modifiers: slot.modifiers.map((modifier) => ({ ...modifier })),
+    status: { ...slot.status },
+  }
+}
+
+function copyPlayer(player: Player): Player {
+  return {
+    ...player,
+    deck: [...player.deck],
+    discard: [...player.discard],
+    hand: [...player.hand],
+    prize: [...player.prize],
+    active: copySlot(player.active),
+    bench: player.bench.map(copySlot),
+  }
+}
+
+/** Clone listed players (both if omitted). Registry and other top-level maps stay shared. */
+export function copy(gamestate: GameState, ...who: Array<1 | 2>): GameState {
+  const ids = who.length === 0 ? ([1, 2] as const) : who
+  const players = { ...gamestate.players }
+  for (const id of new Set(ids)) {
+    players[id] = copyPlayer(gamestate.players[id])
+  }
+  return { ...gamestate, players }
+}
 
 // Shuffle — Fisher–Yates in place; used by placeInZone("shuffle")
 const shuffleZone = (zone: Zone) => {
@@ -50,7 +82,7 @@ export const moveZoneToZone = (
     return gamestate
   }
 
-  const next = copy(gamestate)
+  const next = copy(gamestate, source.player, dest.player)
   const sourceZone = next.players[source.player][source.zone]
   const destZone = next.players[dest.player][dest.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
@@ -85,7 +117,7 @@ export const moveZoneToSlot = (
     return gamestate
   }
 
-  const next = copy(gamestate)
+  const next = copy(gamestate, source.player, dest.player)
   const sourceZone = next.players[source.player][source.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
   clearStatusOnEvolve(next, dest)
@@ -105,7 +137,7 @@ export const moveSlotToZone = (
     return gamestate
   }
 
-  const next = copy(gamestate)
+  const next = copy(gamestate, source.player, dest.player)
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   placeInZone(next.players[dest.player][dest.zone], position, cardId)
@@ -123,7 +155,7 @@ export const moveSlotToSlot = (
     return gamestate
   }
 
-  const next = copy(gamestate)
+  const next = copy(gamestate, source.player, dest.player)
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   clearStatusOnEvolve(next, dest)
@@ -141,7 +173,7 @@ export const applyDamage = (
   if (!slot || typeof slot.player !== "number" || (slot.slot !== "active" && slot.slot !== "bench")) {
     return gamestate
   }
-  const next = copy(gamestate)
+  const next = copy(gamestate, slot.player)
   getSlot(next, slot).damage = Math.max(0, getSlot(next, slot).damage + value)
   return record(next, {
     op: Op.ApplyDamage,
@@ -158,7 +190,7 @@ export const applyStatus = (
   slot: SlotId,
   counters?: number
 ) => {
-  const next = copy(gamestate)
+  const next = copy(gamestate, slot.player)
   const pokemon = getSlot(next, slot)
   pokemon.status = withStatus(pokemon.status, status)
   if (status === "poison") {
@@ -173,7 +205,7 @@ export const removeStatus = (
   status: Status,
   slot: SlotId
 ) => {
-  const next = copy(gamestate)
+  const next = copy(gamestate, slot.player)
   const pokemon = getSlot(next, slot)
   pokemon.status[status] = false
   if (status === "poison") pokemon.poisonCounters = 1
@@ -186,7 +218,7 @@ export const shuffle = (
   player: 1 | 2,
   zone: ZoneName
 ) => {
-  const next = copy(gamestate)
+  const next = copy(gamestate, player)
   shuffleZone(next.players[player][zone])
   return next
 }

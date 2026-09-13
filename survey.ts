@@ -113,7 +113,7 @@ export function printedAttackDamage(damage?: string | number | null): number {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
-function cardMatches(
+export function cardMatches(
   gamestate: GameState,
   cardId: CardInstanceId,
   filter?: SurveyFilter,

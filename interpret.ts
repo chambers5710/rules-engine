@@ -1,4 +1,4 @@
-import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
 import { applyModifier, effectsPrevented, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
@@ -265,7 +265,7 @@ function calcFn(fn: CalcFn, a: number, b: number): number {
 export function slotMatches(
   gamestate: GameState,
   slotId: SlotId,
-  filters: SelectFilter[],
+  filters: SlotFilter[],
   bindings: Record<string, unknown>
 ): boolean {
   const slot = getSlot(gamestate, slotId)
@@ -311,7 +311,7 @@ export function surveySlots(
   acting: 1 | 2,
   who: SeatWho,
   among: SeatAmong,
-  filters: SelectFilter[] = [],
+  filters: SlotFilter[] = [],
   bindings: Record<string, unknown> = {}
 ): SlotId[] {
   const players: Array<1 | 2> =
@@ -399,7 +399,7 @@ export function interpret(
       ctx.bindings.$raw = hit.raw
       let next = gamestate
       if (damage > 0) {
-        next = copy(gamestate)
+        next = copy(gamestate, defender.player)
         getSlot(next, defender).damage = Math.max(0, getSlot(next, defender).damage + damage)
       }
       next = record(next, {
@@ -524,7 +524,7 @@ export function interpret(
       const form = slot ? currentForm(gamestate, getSlot(gamestate, slot)) : undefined
       if (!slot || !form) return gamestate
       const player = primitive.who === "owner" ? slot.player : opponent(slot.player)
-      const next = copy(gamestate)
+      const next = { ...gamestate }
       next.subscriptions = [
         ...next.subscriptions.filter((sub) => sub.sourceCard !== form.instanceId),
         {

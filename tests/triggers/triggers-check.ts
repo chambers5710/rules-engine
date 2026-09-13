@@ -112,7 +112,13 @@ function gastly(): GameState {
 }
 
 function armBond(gamestate: GameState): GameState {
-  return runExpr(gamestate, bondThen, { bindings: { $self_slot: defending } }, 2, Action.Attack)
+  return runExpr(
+    { ...gamestate, activePlayer: 2 },
+    bondThen,
+    { bindings: { $self_slot: defending } },
+    2,
+    Action.Attack
+  )
 }
 
 {
