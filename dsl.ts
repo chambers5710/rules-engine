@@ -24,6 +24,8 @@ export enum Op {
   Reveal = "reveal",
   Each = "each",
   Arm = "arm",
+  DiscardSlot = "discard_slot",
+  Devolve = "devolve",
 }
 
 // Action — every top-level choice the client can make
@@ -65,13 +67,16 @@ export type SlotFilter =
   | { kind: "other_than"; bind: BindingName }
   | { kind: "has_type"; type: EnergyType }
   | { kind: "has_energy"; type?: EnergyType }
+  | { kind: "empty" }
+  | { kind: "evolved" }
+  | { kind: "breeder"; bind: BindingName }
 
 export type CardFilter =
   | SurveyFilter
   | { kind: "other_than"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
 
-export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10"
+export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10" | "half_down_10"
 
 export type SeatWho = "self" | "opponent" | "both"
 export type SeatAmong = "bench" | "in_play"
@@ -88,7 +93,7 @@ export type Primitive =
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
-  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; chooser?: "self" | "opponent"; filter?: SlotFilter | SlotFilter[]; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "slots"; who: "self" | "opponent"; among?: SeatAmong; chooser?: "self" | "opponent"; filter?: SlotFilter | SlotFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: CardFilter | CardFilter[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "types"; except?: EnergyType[]; optional?: true }
@@ -97,7 +102,7 @@ export type Primitive =
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & AttackDamageRewrite
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_effects"; prevent: "all"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName }
-  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_use"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & (
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_use"; until: { beat: "end_of_turn"; who: "owner" | "opponent" } | { beat: "leave_play" }; card?: string | BindingName } & (
       | { flip: true }
       | { ban: string | BindingName }
     )
@@ -114,6 +119,8 @@ export type Primitive =
   | { op: Op.Count; kind: "last_attacked" | "last_hit"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName }
   | { op: Op.Arm; who: "owner" | "opponent"; when: "pokemon_knocked_out"; via: DamageVia[]; blockedByStatus: boolean; then: Expr }
+  | { op: Op.DiscardSlot; slot: SlotId | BindingName }
+  | { op: Op.Devolve; slot: SlotId | BindingName; from: string | BindingName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }
@@ -137,7 +144,7 @@ export type HistoryEntry =
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackDamageRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_effects"; prevent: "all"; until: { beat: "end_of_turn"; player: 1 | 2 } }
-  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackUseRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } | { beat: "leave_play" } } & AttackUseRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "energy_type"; until: { beat: "end_of_turn"; player: 1 | 2 } } & EnergyTypeRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "weakness_type" | "resistance_type"; until: { beat: "leave_play" } } & EnergyTypeRewrite
   | { op: Op.SwapActive; slot: SlotId }
@@ -155,7 +162,7 @@ type ActionFrameBase = {
 
 // Paused expr — Select stopped here; remaining runs after the bind is written
 export type ActionFrame =
-  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; chooser: 1 | 2; filter?: SlotFilter | SlotFilter[] })
+  | (ActionFrameBase & { pick: "slots"; who: "self" | "opponent"; among: SeatAmong; chooser: 1 | 2; filter?: SlotFilter | SlotFilter[] })
   | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef; filter?: CardFilter | CardFilter[] })
   | (ActionFrameBase & { pick: "attacks"; slot: SlotId })
   | (ActionFrameBase & { pick: "types"; except: EnergyType[] })

@@ -33,6 +33,10 @@ export function occupiedBench(
   )
 }
 
+export function benchSeats(player: 1 | 2): Array<Extract<SlotId, { slot: "bench" }>> {
+  return BENCH.map((index) => ({ player, slot: "bench" as const, index }))
+}
+
 // Pokémon in play — Returns in-play SlotIds
 export function pokemonInPlay(gamestate: GameState, player: 1 | 2): SlotId[] {
   const slots: SlotId[] = []

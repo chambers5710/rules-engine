@@ -135,7 +135,7 @@ Names on the interpret context. Every real attack uses them, not just tests.
 Read-only. Compute and card text ask the same questions.
 
 - **Where** — `ZoneRef` or `SlotRef` (zone vs slot attachment)
-- **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`
+- **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`, `stage_2`
 - **Reduce** — list, count, or sum of `energyValue`
 
 `Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
@@ -164,7 +164,7 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 
 - **applyModifier** — `pending`, or `active` if `until.player` is already active
 - **foldAdds / foldDamage** — after W/R in the attack pipeline; `apply_damage` does not fold
-- **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name; `flip` is a machine coin after Confused)
+- **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused)
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
@@ -188,7 +188,7 @@ while not Ended:
 - Attack ends the turn; empty deck on draw ends the game
 - Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
-- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:energy-burn`, `pnpm serve:conversion`, `pnpm serve:leech`, `pnpm serve:init`
+- HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:authored`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:energy-burn`, `pnpm serve:conversion`, `pnpm serve:leech`, `pnpm serve:init`
 
 ## Select → bind → run
 
@@ -205,7 +205,7 @@ run_effect  $copy
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `ctx` (`InterpretCtx`). Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.
-5. **Metronome** — Select defending attacks, `run_effect`. Recoil on `$self_slot` is dropped. No special case in `attacksFromActive`.
+5. **Metronome** — Select defending attacks, `run_effect`. Recoil on `$self_slot` and leading self-Energy pay are dropped. No special case in `attacksFromActive`.
 6. **Later** — strip “requirements to use” on the copy (discard Energy, etc.). Weakness uses Clefairy because `$self_slot` is still Clefairy.
 
 **Done:** (1)–(5). **Not done:** (6).
@@ -246,6 +246,7 @@ pnpm serve:deck -- oak     # Deck trainers (search | maintenance | oak | imposto
 pnpm serve:energy-pile     # Poliwrath vs Magmar (Whirlpool, Super Potion, Energy Removal)
 pnpm serve:tools           # Magmar vs Hitmonchan (Defender / PlusPower)
 pnpm serve:leftover -- fang  # Super Fang / Toxic / Whirlwind (reset cycles)
+pnpm serve:authored -- trainers  # Flute / Revive / Scoop / Spray / Breeder + Leek / Metronome / reprints (reset cycles)
 pnpm serve:gate -- sand      # Sand-attack / Amnesia (reset cycles)
 pnpm serve:trans             # Venusaur Energy Trans (Grass seat → any other of yours)
 pnpm serve:stretch -- horn   # Horn / Doubleslap / Hyper Beam / Thunderbolt / Recover

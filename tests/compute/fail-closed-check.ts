@@ -55,7 +55,7 @@ function stage(
 {
   const gamestate = stage("base1-20", "base1-36", "base1-100", 2, ["base1-70"])
   const attacks = names(gamestate, Action.Attack)
-  expect(!attacks.includes("Thunderpunch"), "Thunderpunch (30+ with text) must not list")
+  expect(attacks.includes("Thunderpunch"), "authored Thunderpunch should list")
   expect(attacks.includes("Thundershock"), "authored Thundershock should list")
   const trainers = names(toHand(gamestate, 1, "base1-70", 1), Action.PlayTrainer)
   expect(!trainers.includes("base1-70"), "unauthored Clefairy Doll must not list")
@@ -64,7 +64,7 @@ function stage(
 {
   const gamestate = stage("base1-27", "base1-36", "base1-97", 1)
   const attacks = names(gamestate, Action.Attack)
-  expect(!attacks.includes("Leek Slap"), "Leek Slap (integer damage + text) must not list")
+  expect(attacks.includes("Leek Slap"), "authored Leek Slap should list")
 }
 
 {

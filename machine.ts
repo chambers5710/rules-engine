@@ -11,7 +11,7 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr } from "./effects.js"
+import { attackExpr, honestCopy } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
@@ -44,7 +44,10 @@ export function stateMachine(
     case Phase.Turn:
       return turnPhase(gamestate, action)
     case Phase.Checkup:
-      return checkupPhase(gamestate)
+      if (action?.kind === Action.Promote) {
+        return afterKnockouts(promote(gamestate, action.player, action.index))
+      }
+      return gamestate
     case Phase.Ended:
     default:
       return gamestate
@@ -98,8 +101,7 @@ function turnPhase(
       }
       return gatedAttack(gamestate, action)
     case Action.Promote:
-      gamestate = promote(gamestate, action.player, action.index)
-      return afterKnockouts(gamestate)
+      return promote(gamestate, action.player, action.index)
     case Action.AttachEnergy:
       return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
     case Action.PlayBench:
@@ -206,7 +208,7 @@ function afterKnockouts(gamestate: GameState): GameState {
     if (!hasPokemonInPlay(gamestate, player)) return endGame(gamestate)
   }
   if (needsPromote(gamestate, 1) || needsPromote(gamestate, 2)) {
-    return { ...gamestate, phase: Phase.Turn }
+    return { ...gamestate, phase: Phase.Checkup }
   }
   return enterTurn(
     gamestate,
@@ -368,7 +370,7 @@ export function runExpr(
     if (step.op === Op.RunEffect) {
       const slot = resolveSlot(step.slot, ctx)
       const copied = slot
-        ? copiedAttack(gamestate, slot, String(ctx.bindings[step.attack] ?? ""))
+        ? copiedAttackExpr(gamestate, slot, String(ctx.bindings[step.attack] ?? ""))
         : []
       return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
@@ -407,15 +409,12 @@ function drainEvents(
   return gamestate
 }
 
-function copiedAttack(gamestate: GameState, slot: SlotId, name: string): Expr {
+/** Seat + name → honest copy. Shape rewrite lives in `honestCopy`. */
+export function copiedAttackExpr(gamestate: GameState, slot: SlotId, name: string): Expr {
   const form = currentForm(gamestate, getSlot(gamestate, slot))
   const attack = form?.attacks?.find((row) => row.name === name)
   if (!form || !attack) return []
-  return attackExpr(gamestate.effectRegistry, form.sourceId, attack).filter((step) => {
-    if (step.op !== Op.ApplyDamage) return true
-    if (step.slot !== "$self_slot") return true
-    return typeof step.amount !== "number" || step.amount <= 0
-  })
+  return honestCopy(attackExpr(gamestate.effectRegistry, form.sourceId, attack))
 }
 
 // Action finished — paused Select is not done; Attack / EndTurn then Checkup

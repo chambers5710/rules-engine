@@ -132,7 +132,7 @@ export function toPrize(gamestate: GameState, player: 1 | 2, sourceId: string, n
 }
 
 export function liveTurn(gamestate: GameState): GameState {
-  return {
+  const next: GameState = {
     ...gamestate,
     phase: Phase.Turn,
     turnCount: 1,
@@ -142,4 +142,10 @@ export function liveTurn(gamestate: GameState): GameState {
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
   }
+  // Placement via moveZoneToSlot marks evolvedThisTurn. A new turn clears that, same as the machine.
+  for (const player of [1, 2] as const) {
+    next.players[player].active.evolvedThisTurn = false
+    for (const slot of next.players[player].bench) slot.evolvedThisTurn = false
+  }
+  return next
 }

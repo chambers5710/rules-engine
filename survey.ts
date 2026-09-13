@@ -1,3 +1,4 @@
+import { isStage2Pokemon } from "./lineage.js"
 import { foldedEnergyType } from "./modifiers.js"
 import type {
   CardInstanceId,
@@ -16,6 +17,7 @@ export type SurveyFilter =
   | { kind: "evolves_from"; name: string }
   | { kind: "trainer" }
   | { kind: "pokemon" }
+  | { kind: "stage_2" }
 
 // Cards at — ids in that zone or slot attachment, top-first
 export function cardsAt(gamestate: GameState, source: ZoneRef | SlotRef): CardInstanceId[] {
@@ -133,5 +135,7 @@ export function cardMatches(
       return gamestate.cardRegistry[cardId]?.supertype === "Trainer"
     case "pokemon":
       return gamestate.cardRegistry[cardId]?.supertype === "Pokémon"
+    case "stage_2":
+      return isStage2Pokemon(gamestate, cardId)
   }
 }

@@ -1,10 +1,11 @@
 import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
 import { applyModifier, effectsPrevented, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
-import { currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
+import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
   applyStatus,
   copy,
+  devolve,
   flipCoin,
   moveSlotToSlot,
   moveSlotToZone,
@@ -13,9 +14,10 @@ import {
   removeStatus,
   shuffle,
 } from "./ops.js"
-import { draw, swapActive } from "./helpers.js"
+import { discardSlot, draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
-import { printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
+import { stage2BasicName } from "./lineage.js"
+import { isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { applyDamageVia } from "./triggers.js"
 import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
@@ -259,6 +261,9 @@ function calcFn(fn: CalcFn, a: number, b: number): number {
     case "half_up_10":
       if (a <= 0) return 0
       return Math.ceil(a / 2 / (b || 10)) * (b || 10)
+    case "half_down_10":
+      if (a <= 0) return 0
+      return Math.floor(a / 2 / (b || 10)) * (b || 10)
   }
 }
 
@@ -301,6 +306,21 @@ export function slotMatches(
           return false
         }
         break
+      case "empty":
+        if (slot.evolution.length > 0) return false
+        break
+      case "evolved":
+        if (slot.evolution.length < 2) return false
+        break
+      case "breeder": {
+        const evo = bindings[filter.bind]
+        if (typeof evo !== "string" || slot.evolvedThisTurn) return false
+        const basic = stage2BasicName(gamestate, evo)
+        const form = currentForm(gamestate, slot)
+        if (!basic || !form || form.name !== basic) return false
+        if (!isBasicPokemon(gamestate, form.instanceId)) return false
+        break
+      }
     }
   }
   return true
@@ -318,10 +338,15 @@ export function surveySlots(
     who === "self" ? [acting] : who === "opponent" ? [opponent(acting)] : [acting, opponent(acting)]
   const seats: SlotId[] = []
   for (const player of players) {
+    const includeEmpty = filters.some((filter) => filter.kind === "empty")
     const ids =
       among === "bench"
-        ? occupiedBench(gamestate, player).map((index) => ({ player, slot: "bench" as const, index }))
-        : pokemonInPlay(gamestate, player)
+        ? includeEmpty
+          ? benchSeats(player)
+          : occupiedBench(gamestate, player).map((index) => ({ player, slot: "bench" as const, index }))
+        : includeEmpty
+          ? [{ player, slot: "active" as const }, ...benchSeats(player)]
+          : pokemonInPlay(gamestate, player)
     for (const id of ids) {
       if (slotMatches(gamestate, id, filters, bindings)) seats.push(id)
     }
@@ -477,8 +502,13 @@ export function interpret(
           )
         }
         case "attack_use": {
-          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-          const until = { beat: "end_of_turn" as const, player }
+          const until =
+            primitive.until.beat === "leave_play"
+              ? { beat: "leave_play" as const }
+              : {
+                  beat: "end_of_turn" as const,
+                  player: primitive.until.who === "owner" ? slot.player : opponent(slot.player),
+                }
           const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
@@ -636,6 +666,19 @@ export function interpret(
       const next = swapActive(gamestate, slot.player, slot.index)
       if (next === gamestate) return gamestate
       return record(next, { op: Op.SwapActive, slot })
+    }
+
+    case Op.DiscardSlot: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      if (!slot) return gamestate
+      return discardSlot(gamestate, slot)
+    }
+
+    case Op.Devolve: {
+      const slot = resolveSlot(primitive.slot, ctx)
+      const from = resolveCard(primitive.from, ctx)
+      if (!slot || !from) return gamestate
+      return devolve(gamestate, slot, from)
     }
 
     case Op.Draw: {

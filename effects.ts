@@ -1,4 +1,4 @@
-import { Op, type Expr } from "./dsl.js"
+import { Op, type Expr, type Primitive } from "./dsl.js"
 import { printedAttackDamage } from "./survey.js"
 import { type EffectRegistry, type SourceId } from "./types.js"
 
@@ -49,4 +49,47 @@ export function attackExpr(
   return [
     { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ]
+}
+
+function isSelfEnergySelect(step: Primitive): boolean {
+  return step.op === Op.Select && step.pick === "cards" && step.source === "$energy"
+}
+
+function isSelfEnergyDiscard(step: Primitive): boolean {
+  return step.op === Op.MoveSlotToZone && step.source === "$energy"
+}
+
+function isSelfEnergyCount(step: Primitive): boolean {
+  return (
+    step.op === Op.Count &&
+    step.kind === "cards" &&
+    "slot" in step &&
+    step.slot === "$self_slot" &&
+    step.attachment === "energy"
+  )
+}
+
+function isStripEnergyLoop(step: Primitive): boolean {
+  return step.op === Op.Loop && step.then.some(isSelfEnergyDiscard)
+}
+
+/** Metronome honesty: drop leading self-Energy pay and literal self recoil. */
+export function honestCopy(expr: Expr): Expr {
+  let i = 0
+  while (i < expr.length) {
+    if (isSelfEnergySelect(expr[i]) && expr[i + 1] && isSelfEnergyDiscard(expr[i + 1])) {
+      i += 2
+      continue
+    }
+    if (isSelfEnergyCount(expr[i]) && expr[i + 1] && isStripEnergyLoop(expr[i + 1])) {
+      i += 2
+      continue
+    }
+    break
+  }
+  return expr.slice(i).filter((step) => {
+    if (step.op !== Op.ApplyDamage) return true
+    if (step.slot !== "$self_slot") return true
+    return typeof step.amount !== "number" || step.amount <= 0
+  })
 }

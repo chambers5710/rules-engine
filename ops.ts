@@ -95,14 +95,20 @@ const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[]
   return getSlot(gamestate, ref)[ref.attachment]
 }
 
-// A card landing on an already occupied evolution attachment is an evolve — all five flags off.
-function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
-  if (dest.attachment !== "evolution") return
-  const pokemon = getSlot(gamestate, dest)
+/** Same as evolving: all five flags off, `leave_play` mods drop. Mutates the copied seat. */
+export function asIfEvolved(gamestate: GameState, slotId: SlotId) {
+  const pokemon = getSlot(gamestate, slotId)
   if (pokemon.evolution.length === 0) return
   pokemon.status = emptyStatus()
   pokemon.poisonCounters = 1
   pokemon.modifiers = pokemon.modifiers.filter((m) => m.until.beat !== "leave_play")
+}
+
+// A card landing on an already occupied evolution attachment is an evolve — all five flags off.
+function clearStatusOnEvolve(gamestate: GameState, dest: SlotRef) {
+  if (dest.attachment !== "evolution") return
+  asIfEvolved(gamestate, dest)
+  getSlot(gamestate, dest).evolvedThisTurn = true
 }
 
 // Zone to slot — onto a Pokémon attachment (evolution, energy, or tool)
@@ -142,6 +148,26 @@ export const moveSlotToZone = (
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   placeInZone(next.players[dest.player][dest.zone], position, cardId)
   return record(next, { op: Op.MoveSlotToZone, card: cardId, source, dest, position })
+}
+
+/** Discard `from` and every later evolution card, then evolve-cleanup. */
+export const devolve = (
+  gamestate: GameState,
+  slotId: SlotId,
+  from: CardInstanceId
+) => {
+  const pile = getSlot(gamestate, slotId).evolution
+  const start = pile.indexOf(from)
+  if (start <= 0) return gamestate
+  const dest = { player: slotId.player, zone: "discard" as const }
+  const source = { ...slotId, attachment: "evolution" as const }
+  const drop = pile.slice(start)
+  for (const card of [...drop].reverse()) {
+    gamestate = moveSlotToZone(gamestate, card, source, dest, "bottom")
+  }
+  const next = copy(gamestate, slotId.player)
+  asIfEvolved(next, slotId)
+  return next
 }
 
 // Slot to slot — between Pokémon attachments (retreat, attach, evolve)

@@ -6,6 +6,9 @@ const SLOT_KINDS = new Set<SlotFilter["kind"]>([
   "other_than",
   "has_type",
   "has_energy",
+  "empty",
+  "evolved",
+  "breeder",
 ])
 
 const CARD_KINDS = new Set<CardFilter["kind"]>([
@@ -14,6 +17,7 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "evolves_from",
   "trainer",
   "pokemon",
+  "stage_2",
   "other_than",
   "pays",
 ])
@@ -100,7 +104,10 @@ function reads(step: Primitive, have: Set<string>): string | null {
     case Op.ApplyStatus:
     case Op.RemoveStatus:
     case Op.SwapActive:
+    case Op.DiscardSlot:
       return read(have, step.slot, at)
+    case Op.Devolve:
+      return read(have, step.slot, at) ?? read(have, step.from, at)
     case Op.Select: {
       if (step.pick === "slots") {
         for (const filter of asFilters(step.filter)) {

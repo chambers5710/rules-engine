@@ -52,6 +52,8 @@ export function computeAvailableActions(gamestate: GameState): AvailableAction[]
       return computeInit(gamestate)
     case Phase.Turn:
       return computeTurn(gamestate)
+    case Phase.Checkup:
+      return computePromote(gamestate)
     default:
       return []
   }
@@ -84,12 +86,20 @@ function computeInit(gamestate: GameState): AvailableAction[] {
 }
 
 function computeTurn(gamestate: GameState): AvailableAction[] {
+  const filling = computePromote(gamestate)
+  if (filling.length > 0) return filling
+  return computePlay(gamestate, gamestate.activePlayer)
+}
+
+function computePromote(gamestate: GameState): AvailableAction[] {
   const player = gamestate.activePlayer
   const other = opponent(player)
-
   if (needsPromote(gamestate, player)) return promoteFromBench(gamestate, player)
   if (needsPromote(gamestate, other)) return promoteFromBench(gamestate, other)
+  return []
+}
 
+function computePlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return [
     ...placeBench(gamestate, player),
     ...placeEnergy(gamestate, player),
@@ -352,7 +362,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   }]
 }
 
-// Promote — only listed when Active is empty (after KO)
+// Promote — only listed when Active is empty (mid-turn Scoop Up, or Checkup after KO)
 function promoteFromBench(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return occupiedBench(gamestate, player).map((index) => ({
     kind: Action.Promote,

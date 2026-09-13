@@ -1,6 +1,6 @@
-import { pokemonInPlay, opponent, getSlot, currentForm } from "./board.js"
+import { opponent, getSlot, currentForm } from "./board.js"
 import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
-import { interpret, resolveSlot, slotMatches, surveySlots, type InterpretCtx } from "./interpret.js"
+import { interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { cardMatches, cardsAt } from "./survey.js"
 import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
 
@@ -53,6 +53,7 @@ export function selectFrame(
         ...base,
         pick: "slots",
         who: step.who,
+        among: step.among ?? "in_play",
         chooser: step.chooser === "opponent" ? opponent(player) : player,
         filter: step.filter,
       }
@@ -89,11 +90,16 @@ function selectSlots(
   gamestate: GameState,
   frame: Extract<ActionFrame, { pick: "slots" }>
 ): SelectChoice[] {
-  const player = frame.who === "self" ? frame.player : opponent(frame.player)
   const filters = [frame.filter ?? []].flat()
   const actions: SelectChoice[] = []
-  for (const slotId of pokemonInPlay(gamestate, player)) {
-    if (!slotMatches(gamestate, slotId, filters, frame.ctx.bindings)) continue
+  for (const slotId of surveySlots(
+    gamestate,
+    frame.player,
+    frame.who,
+    frame.among,
+    filters,
+    frame.ctx.bindings
+  )) {
     actions.push({ kind: Action.Choose, player: frame.chooser, pick: "slots", slot: slotId, expr: [] })
   }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
@@ -252,7 +258,7 @@ function walkPlayable(
       }
       return false
     }
-    if (isMove(step)) {
+    if (isMove(step) || step.op === Op.Count || step.op === Op.Calc) {
       gamestate = interpret(gamestate, step, ctx)
     }
   }
