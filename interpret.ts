@@ -1,4 +1,5 @@
-import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
+import { applyFieldOverrides } from "./card.js"
 import { applyModifier, effectsPrevented, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
@@ -19,7 +20,7 @@ import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
 import { isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { applyDamageVia } from "./triggers.js"
-import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
+import { DAMAGE_COUNTER, type Attachment, type CardFieldOverrides, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 export type { InterpretCtx, InterpretScript } from "./dsl.js"
 
@@ -217,6 +218,20 @@ function resolveCard(card: string, ctx: InterpretCtx): string {
   return typeof bound === "string" ? bound : ""
 }
 
+function resolveOverrideSet(set: CardFieldOverrideSet, ctx: InterpretCtx): CardFieldOverrides | undefined {
+  const out: CardFieldOverrides = {}
+  for (const [key, value] of Object.entries(set)) {
+    if (typeof value === "string" && value.startsWith("$")) {
+      const bound = ctx.bindings[value]
+      if (typeof bound !== "string" || bound === "") return
+      Object.assign(out, { [key]: bound })
+      continue
+    }
+    Object.assign(out, { [key]: value })
+  }
+  return out
+}
+
 function resolveZone(source: ZoneRef | BindingName, ctx: InterpretCtx): ZoneRef | undefined {
   if (typeof source !== "string") return source
   const bound = ctx.bindings[source]
@@ -399,7 +414,11 @@ export function interpret(
     }
 
     case Op.MoveSlotToSlot: {
-      const source = resolveSlotAttachment(primitive.source, ctx, primitive.attachment)
+      const source = resolveSlotAttachment(
+        primitive.source,
+        ctx,
+        primitive.sourceAttachment ?? primitive.attachment
+      )
       const dest = resolveSlotAttachment(primitive.dest, ctx, primitive.attachment)
       const card = resolveCard(primitive.card, ctx)
       if (!source || !dest || !card) return gamestate
@@ -549,6 +568,17 @@ export function interpret(
       }
     }
 
+    case Op.ApplyFieldOverrides: {
+      const card = resolveCard(primitive.card, ctx)
+      const set = resolveOverrideSet(primitive.set, ctx)
+      if (!card || !gamestate.cardRegistry[card] || !set) return gamestate
+      return record(applyFieldOverrides(gamestate, card, set), {
+        op: Op.ApplyFieldOverrides,
+        card,
+        set,
+      })
+    }
+
     case Op.Arm: {
       const slot = resolveSlot("$self_slot", ctx)
       const form = slot ? currentForm(gamestate, getSlot(gamestate, slot)) : undefined
@@ -627,14 +657,14 @@ export function interpret(
           : 0
         return gamestate
       }
-      if (primitive.kind === "first") {
+      if (primitive.kind === "first" || primitive.kind === "last") {
         const source =
           "zone" in primitive
             ? resolveZone(primitive.zone, ctx)
             : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
-        ctx.bindings[primitive.bind] = source
-          ? surveyCards(gamestate, source, primitive.filter)[0] ?? ""
-          : ""
+        const cards = source ? surveyCards(gamestate, source, primitive.filter) : []
+        ctx.bindings[primitive.bind] =
+          primitive.kind === "last" ? cards.at(-1) ?? "" : cards[0] ?? ""
         return gamestate
       }
       if (primitive.kind !== "cards" && primitive.kind !== "energy_value") return gamestate

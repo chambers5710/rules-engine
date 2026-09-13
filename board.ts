@@ -1,3 +1,4 @@
+import { foldedCard } from "./card.js"
 import type { CardInstance, GameState, Slot, SlotId } from "./types.js"
 
 const BENCH = [0, 1, 2, 3, 4] as const
@@ -71,7 +72,7 @@ export function getSlot(gamestate: GameState, slotId: SlotId): Slot {
 export function currentForm(gamestate: GameState, slot: Slot): CardInstance | undefined {
   const id = slot.evolution.at(-1)
   if (!id) return undefined
-  return gamestate.cardRegistry[id]
+  return foldedCard(gamestate, id)
 }
 
 // KO — damage has reached printed HP on the current form

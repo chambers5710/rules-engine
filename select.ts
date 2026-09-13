@@ -1,6 +1,7 @@
 import { opponent, getSlot, currentForm } from "./board.js"
 import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
 import { interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
+import { foldedCard } from "./card.js"
 import { cardMatches, cardsAt } from "./survey.js"
 import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
 
@@ -134,7 +135,7 @@ function selectCards(
   const cards = cardsAt(gamestate, frame.source).filter((card) =>
     cardPasses(gamestate, card, filters, frame.source, frame.ctx.bindings)
   )
-  const values = cards.map((card) => gamestate.cardRegistry[card]?.energyValue ?? 0)
+  const values = cards.map((card) => foldedCard(gamestate, card)?.energyValue ?? 0)
   const actions: SelectChoice[] = []
   for (let i = 0; i < cards.length; i++) {
     const value = values[i]

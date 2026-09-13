@@ -190,6 +190,12 @@ export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"
 // Status flags — healthy is all false
 export type StatusFlags = Record<Status, boolean>
 
+// Printed fields a later write may replace (Buzzap: supertype / energyType / energyValue).
+// Identity (`instanceId`, `sourceId`, `images`) is not overridable.
+export type CardFieldOverrides = Partial<
+  Omit<CardInstance, "instanceId" | "sourceId" | "images" | "fieldOverrides">
+>
+
 // Card instance — one physical copy in this game
 export type CardInstance = {
   instanceId: CardInstanceId
@@ -210,7 +216,7 @@ export type CardInstance = {
   energyValue?: number
   rules?: string[]
   images: { small: string; large: string }
-  fieldOverrides: []
+  fieldOverrides: CardFieldOverrides
 }
 
 // Printed attack — cost normalized to EnergyType for the survey

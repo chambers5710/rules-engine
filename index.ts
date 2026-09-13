@@ -1,10 +1,16 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { pathToFileURL } from "node:url"
-import { lastDecks, openDefaultSession, openSession, type Session } from "./session.js"
+import {
+  lastDecks,
+  openDefaultSession,
+  openSession,
+  type CompactDeck,
+  type Session,
+} from "./session.js"
 
 const PORT = 8788
 
-export type ResetBody = { p1?: string; p2?: string }
+export type ResetBody = { p1?: string; p2?: string; custom?: CompactDeck[] }
 
 export function listen(
   session: Session,
@@ -83,6 +89,6 @@ if (main) {
     const p1 = String(body.p1 || last.p1)
     const p2 = String(body.p2 || last.p2)
     if (!p1 || !p2) throw new Error("p1 and p2 deck ids required")
-    return openSession(p1, p2)
+    return openSession(p1, p2, Array.isArray(body.custom) ? body.custom : [])
   })
 }

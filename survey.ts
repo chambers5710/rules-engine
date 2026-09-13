@@ -1,3 +1,4 @@
+import { foldedCard } from "./card.js"
 import { isStage2Pokemon } from "./lineage.js"
 import { foldedEnergyType } from "./modifiers.js"
 import type {
@@ -42,7 +43,7 @@ function energyTypeOf(
   cardId: CardInstanceId,
   source?: ZoneRef | SlotRef
 ): EnergyType | undefined {
-  const printed = gamestate.cardRegistry[cardId]?.energyType
+  const printed = foldedCard(gamestate, cardId)?.energyType
   if (source && !("zone" in source) && source.attachment === "energy") {
     return foldedEnergyType(gamestate, source) ?? printed
   }
@@ -64,7 +65,7 @@ export function surveyEnergyValue(
   filter?: SurveyFilter
 ): number {
   return surveyCards(gamestate, source, filter).reduce((sum, card) => {
-    return sum + (gamestate.cardRegistry[card]?.energyValue ?? 0)
+    return sum + (foldedCard(gamestate, card)?.energyValue ?? 0)
   }, 0)
 }
 
@@ -73,7 +74,7 @@ export function energyUnitsOn(gamestate: GameState, slot: SlotId): EnergyType[] 
   const units: EnergyType[] = []
   const energy = { ...slot, attachment: "energy" } as const
   for (const card of cardsAt(gamestate, energy)) {
-    const printed = gamestate.cardRegistry[card]
+    const printed = foldedCard(gamestate, card)
     const type = energyTypeOf(gamestate, card, energy)
     const n = printed?.energyValue ?? 0
     if (!type) continue
@@ -100,12 +101,12 @@ export function canPayEnergyCost(
 
 // Basic Pokémon — Energy's printed "Basic" subtype does not count
 export function isBasicPokemon(gamestate: GameState, cardId: string): boolean {
-  const printed = gamestate.cardRegistry[cardId]
+  const printed = foldedCard(gamestate, cardId)
   return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Basic") === true
 }
 
 export function isEnergy(gamestate: GameState, cardId: string): boolean {
-  return gamestate.cardRegistry[cardId]?.supertype === "Energy"
+  return foldedCard(gamestate, cardId)?.supertype === "Energy"
 }
 
 export function printedAttackDamage(damage?: string | number | null): number {
@@ -130,11 +131,11 @@ export function cardMatches(
     case "basic_pokemon":
       return isBasicPokemon(gamestate, cardId)
     case "evolves_from":
-      return gamestate.cardRegistry[cardId]?.evolvesFrom === filter.name
+      return foldedCard(gamestate, cardId)?.evolvesFrom === filter.name
     case "trainer":
-      return gamestate.cardRegistry[cardId]?.supertype === "Trainer"
+      return foldedCard(gamestate, cardId)?.supertype === "Trainer"
     case "pokemon":
-      return gamestate.cardRegistry[cardId]?.supertype === "Pokémon"
+      return foldedCard(gamestate, cardId)?.supertype === "Pokémon"
     case "stage_2":
       return isStage2Pokemon(gamestate, cardId)
   }

@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, AttackDamageRewrite, AttackUseRewrite, DamageVia, EnergyType, EnergyTypeRewrite, GameEvent, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, AttackDamageRewrite, AttackUseRewrite, CardFieldOverrides, DamageVia, EnergyType, EnergyTypeRewrite, GameEvent, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -15,6 +15,7 @@ export enum Op {
   If = "if",
   Loop = "loop",
   ApplyModifier = "apply_modifier",
+  ApplyFieldOverrides = "apply_field_overrides",
   Count = "count",
   Calc = "calc",
   SwapActive = "swap_active",
@@ -83,11 +84,18 @@ export type SeatAmong = "bench" | "in_play"
 
 export type RevealTo = "self" | "opponent" | "both"
 
+// Authored `set` — string fields may be a bind (Buzzap `energyType: "$type"`)
+export type CardFieldOverrideSet = {
+  [K in keyof CardFieldOverrides]?: NonNullable<CardFieldOverrides[K]> extends string
+    ? NonNullable<CardFieldOverrides[K]> | BindingName
+    : CardFieldOverrides[K]
+}
+
 export type Primitive =
   | { op: Op.MoveZoneToZone; card: string; source: ZoneRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
-  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef | BindingName; dest: SlotRef | BindingName; attachment?: Attachment }
+  | { op: Op.MoveSlotToSlot; card: string; source: SlotRef | BindingName; dest: SlotRef | BindingName; attachment?: Attachment; sourceAttachment?: Attachment }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
@@ -108,10 +116,11 @@ export type Primitive =
     )
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "energy_type"; set: EnergyType; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "weakness_type" | "resistance_type"; set: EnergyType | BindingName; until: { beat: "leave_play" } }
+  | { op: Op.ApplyFieldOverrides; card: string | BindingName; set: CardFieldOverrideSet }
   | { op: Op.Count; kind: "cards" | "energy_value"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "cards"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
-  | { op: Op.Count; kind: "first"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
-  | { op: Op.Count; kind: "first"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "first" | "last"; zone: ZoneRef | BindingName; filter?: SurveyFilter; bind: BindingName }
+  | { op: Op.Count; kind: "first" | "last"; slot: SlotId | BindingName; attachment: Attachment; filter?: SurveyFilter; bind: BindingName }
   | { op: Op.Count; kind: "damage"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "hp"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "weakness"; slot: SlotId | BindingName; bind: BindingName }
@@ -147,6 +156,7 @@ export type HistoryEntry =
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } | { beat: "leave_play" } } & AttackUseRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "energy_type"; until: { beat: "end_of_turn"; player: 1 | 2 } } & EnergyTypeRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "weakness_type" | "resistance_type"; until: { beat: "leave_play" } } & EnergyTypeRewrite
+  | { op: Op.ApplyFieldOverrides; card: string; set: CardFieldOverrides }
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }

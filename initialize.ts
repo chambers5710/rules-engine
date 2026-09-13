@@ -172,7 +172,7 @@ function instantiateCard(cardData: Card): CardInstance {
     energyValue: energyValue,
     rules: cardData.rules,
     images: cardData.images,
-    fieldOverrides: [],
+    fieldOverrides: {},
   }
 
   return cardInstance

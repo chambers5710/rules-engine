@@ -138,7 +138,7 @@ Read-only. Compute and card text ask the same questions.
 - **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `trainer`, `pokemon`, `stage_2`
 - **Reduce** — list, count, or sum of `energyValue`
 
-`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (front id). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
+`Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
 
 `canPayEnergyCost` spends typed units first; leftovers pay Colorless. Paying a Water cost is not the same query as “Water Energy attached.”
 
@@ -166,6 +166,7 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 - **foldAdds / foldDamage** — after W/R in the attack pipeline; `apply_damage` does not fold
 - **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused)
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
+- **foldedCard** / **applyFieldOverrides** / **clearFieldOverrides** (`card.ts`) — printed `CardInstance` plus `fieldOverrides`. Survey / `currentForm` / lineage read the fold. `apply_field_overrides` writes the map; zone moves clear it. Seat `energy_type` still folds on top.
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
 `attack_effects` `prevent: "all"` (Barrier / Agility). `attack_damage` `prevent: 30` (Harden). `set: 0` is still Scrunch. `Op.Attack` writes the hit.

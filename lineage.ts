@@ -1,3 +1,4 @@
+import { foldedCard } from "./card.js"
 import catalog from "./data/cards/base1.json" with { type: "json" }
 import type { Card, CardInstanceId, GameState } from "./types.js"
 
@@ -8,12 +9,12 @@ for (const card of catalog as Card[]) {
 
 /** Basic name a Stage 2 can Breeder onto (Venusaur → Bulbasaur). */
 export function stage2BasicName(gamestate: GameState, cardId: CardInstanceId): string | undefined {
-  const printed = gamestate.cardRegistry[cardId]
+  const printed = foldedCard(gamestate, cardId)
   if (!printed?.subtypes?.includes("Stage 2") || !printed.evolvesFrom) return
   const mid = byName.get(printed.evolvesFrom)
   return mid?.evolvesFrom ?? undefined
 }
 
 export function isStage2Pokemon(gamestate: GameState, cardId: CardInstanceId): boolean {
-  return gamestate.cardRegistry[cardId]?.subtypes?.includes("Stage 2") === true
+  return foldedCard(gamestate, cardId)?.subtypes?.includes("Stage 2") === true
 }

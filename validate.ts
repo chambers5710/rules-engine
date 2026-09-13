@@ -146,6 +146,10 @@ function reads(step: Primitive, have: Set<string>): string | null {
       return read(have, step.bind, at)
     case Op.Loop:
       return read(have, step.bind, at) ?? read(have, step.until, at)
+    case Op.ApplyFieldOverrides: {
+      const fromSet = Object.values(step.set).map((value) => read(have, value, at)).find(Boolean)
+      return read(have, step.card, at) ?? fromSet ?? null
+    }
     case Op.ApplyModifier: {
       const extra =
         "ban" in step

@@ -1,4 +1,5 @@
 import { getSlot } from "./board.js"
+import { clearFieldOverrides } from "./card.js"
 import { Op } from "./dsl.js"
 import { record } from "./history.js"
 import { emptyStatus, withStatus } from "./status.js"
@@ -87,7 +88,13 @@ export const moveZoneToZone = (
   const destZone = next.players[dest.player][dest.zone]
   sourceZone.splice(sourceZone.indexOf(cardId), 1)
   placeInZone(destZone, position, cardId)
-  return record(next, { op: Op.MoveZoneToZone, card: cardId, source, dest, position })
+  return record(clearFieldOverrides(next, cardId), {
+    op: Op.MoveZoneToZone,
+    card: cardId,
+    source,
+    dest,
+    position,
+  })
 }
 
 // Slot attachment — evolution, energy, or tools on that seat
@@ -147,7 +154,13 @@ export const moveSlotToZone = (
   const sourceCards = getSlotAttachment(next, source)
   sourceCards.splice(sourceCards.indexOf(cardId), 1)
   placeInZone(next.players[dest.player][dest.zone], position, cardId)
-  return record(next, { op: Op.MoveSlotToZone, card: cardId, source, dest, position })
+  return record(clearFieldOverrides(next, cardId), {
+    op: Op.MoveSlotToZone,
+    card: cardId,
+    source,
+    dest,
+    position,
+  })
 }
 
 /** Discard `from` and every later evolution card, then evolve-cleanup. */
