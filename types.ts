@@ -10,6 +10,7 @@ export type EffectEntry = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
   trainer?: Record<string, Expr>
+  triggers?: Record<string, TriggerSpec>
 }
 
 export type EffectRegistry = Record<SourceId, EffectEntry>
@@ -30,6 +31,8 @@ export type GameState = {
   retreatedThisTurn: boolean
   actionStack: ActionFrame[]
   history: HistoryEntry[]
+  subscriptions: TriggerSubscription[]
+  lastHit: Record<CardInstanceId, LastHit>
 }
 
 // Phase — what kind of step is legal right now
@@ -106,13 +109,20 @@ export type AttackUseRewrite =
 
 export type EnergyTypeRewrite = { set: EnergyType }
 
-export type ModifierUntil =
-  | { beat: "end_of_turn"; player: 1 | 2 }
-  | { beat: "leave_play" }
+export type ClockPhase = "pending" | "active"
+
+export type EndOfTurnUntil = { beat: "end_of_turn"; player: 1 | 2 }
+
+export type TurnClock = {
+  until: EndOfTurnUntil
+  phase: ClockPhase
+}
+
+export type ModifierUntil = EndOfTurnUntil | { beat: "leave_play" }
 
 type ModifierClock = {
   until: ModifierUntil
-  phase: "pending" | "active"
+  phase: ClockPhase
   card?: CardInstanceId
 }
 
@@ -124,6 +134,55 @@ export type Modifier =
   | ({ field: "energy_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "weakness_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "resistance_type" } & ModifierClock & EnergyTypeRewrite)
+
+// Damage via — why counters changed; matcher filters on this (not history)
+export type DamageVia =
+  | "attack"
+  | "recoil"
+  | "splash"
+  | "poison"
+  | "burn"
+  | "effect"
+  | "trigger"
+
+export type GameEvent = {
+  kind: "damage_applied" | "pokemon_knocked_out"
+  targetCard: CardInstanceId
+  target: SlotId
+  sourceCard?: CardInstanceId
+  source?: SlotId
+  via: DamageVia
+  applied?: number
+}
+
+export type TriggerSpec =
+  | {
+      when: "damage_applied"
+      via: DamageVia[]
+      minApplied?: number
+      blockedByStatus: boolean
+      then: Expr
+    }
+  | {
+      when: "pokemon_knocked_out"
+      via: DamageVia[]
+      blockedByStatus: boolean
+      then: Expr
+    }
+
+// Temporary registration; standing specs stay on EffectEntry
+export type TriggerSubscription = TurnClock & {
+  id: string
+  sourceCard: CardInstanceId
+  trigger: TriggerSpec
+}
+
+// Compact Mirror Move memory — keyed by defender instance on GameState.lastHit
+export type LastHit = {
+  turn: number
+  sourceCard: CardInstanceId
+  applied: number
+}
 
 // Status — special conditions; more than one flag may be on
 export type Status = "poison" | "burn" | "paralyzed" | "asleep" | "confused"

@@ -1,6 +1,6 @@
 import { Op, type BindingName, type CalcFn, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SelectFilter } from "./dsl.js"
 import { applyModifier, effectsPrevented, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
-import { currentForm, getSlot, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
+import { currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
   applyStatus,
@@ -16,7 +16,8 @@ import {
 import { draw, swapActive } from "./helpers.js"
 import { record } from "./history.js"
 import { printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
-import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
+import { applyDamageVia } from "./triggers.js"
+import { DAMAGE_COUNTER, type Attachment, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 export type { InterpretCtx, InterpretScript } from "./dsl.js"
 
@@ -34,6 +35,77 @@ function isSlotRef(value: unknown): value is SlotRef {
 
 function attackBlocked(gamestate: GameState, slot: SlotId | undefined, ctx: InterpretCtx): boolean {
   return ctx.via === "attack" && !!slot && effectsPrevented(gamestate, slot)
+}
+
+function emitDamage(
+  ctx: InterpretCtx,
+  gamestate: GameState,
+  source: SlotId | undefined,
+  target: SlotId,
+  applied: number,
+  via: GameEvent["via"]
+) {
+  const targetCard = currentForm(gamestate, getSlot(gamestate, target))?.instanceId
+  if (!targetCard) return
+  ctx.events ??= []
+  ctx.events.push({
+    kind: "damage_applied",
+    targetCard,
+    target,
+    applied,
+    via,
+    ...(source
+      ? {
+          source,
+          sourceCard: currentForm(gamestate, getSlot(gamestate, source))?.instanceId,
+        }
+      : {}),
+  })
+}
+
+function emitKo(
+  ctx: InterpretCtx,
+  before: GameState,
+  after: GameState,
+  source: SlotId | undefined,
+  target: SlotId,
+  via: GameEvent["via"]
+) {
+  if (isKnockedOut(before, getSlot(before, target))) return
+  if (!isKnockedOut(after, getSlot(after, target))) return
+  const targetCard = currentForm(after, getSlot(after, target))?.instanceId
+  if (!targetCard) return
+  ctx.events ??= []
+  ctx.events.push({
+    kind: "pokemon_knocked_out",
+    targetCard,
+    target,
+    via,
+    ...(source
+      ? {
+          source,
+          sourceCard: currentForm(after, getSlot(after, source))?.instanceId,
+        }
+      : {}),
+  })
+}
+
+function stampLastHit(
+  gamestate: GameState,
+  attacker: SlotId,
+  defender: SlotId,
+  applied: number
+): GameState {
+  const targetCard = currentForm(gamestate, getSlot(gamestate, defender))?.instanceId
+  const sourceCard = currentForm(gamestate, getSlot(gamestate, attacker))?.instanceId
+  if (!targetCard || !sourceCard) return gamestate
+  return {
+    ...gamestate,
+    lastHit: {
+      ...gamestate.lastHit,
+      [targetCard]: { turn: gamestate.turnCount, sourceCard, applied },
+    },
+  }
 }
 
 function zoneOf(gamestate: GameState, card: string): ZoneRef | undefined {
@@ -330,7 +402,7 @@ export function interpret(
         next = copy(gamestate)
         getSlot(next, defender).damage = Math.max(0, getSlot(next, defender).damage + damage)
       }
-      return record(next, {
+      next = record(next, {
         op: Op.Attack,
         attacker,
         defender,
@@ -340,12 +412,24 @@ export function interpret(
         resistance: hit.resistance,
         prevented,
       })
+      if (!blocked) {
+        emitDamage(ctx, next, attacker, defender, damage, "attack")
+        emitKo(ctx, gamestate, next, attacker, defender, "attack")
+        next = stampLastHit(next, attacker, defender, damage)
+      }
+      return next
     }
 
     case Op.ApplyDamage: {
       const slot = resolveSlot(primitive.slot, ctx)
       if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
-      return applyDamage(gamestate, resolveAmount(primitive.amount, ctx), slot, primitive.source)
+      const amount = resolveAmount(primitive.amount, ctx)
+      const source = resolveSlot("$self_slot", ctx)
+      const via = applyDamageVia(ctx, slot, primitive.source)
+      const next = applyDamage(gamestate, amount, slot, primitive.source)
+      emitDamage(ctx, next, source, slot, amount, via)
+      emitKo(ctx, gamestate, next, source, slot, via)
+      return next
     }
 
     case Op.ApplyStatus: {
@@ -435,7 +519,40 @@ export function interpret(
       }
     }
 
+    case Op.Arm: {
+      const slot = resolveSlot("$self_slot", ctx)
+      const form = slot ? currentForm(gamestate, getSlot(gamestate, slot)) : undefined
+      if (!slot || !form) return gamestate
+      const player = primitive.who === "owner" ? slot.player : opponent(slot.player)
+      const next = copy(gamestate)
+      next.subscriptions = [
+        ...next.subscriptions.filter((sub) => sub.sourceCard !== form.instanceId),
+        {
+          id: form.instanceId,
+          sourceCard: form.instanceId,
+          trigger: {
+            when: primitive.when,
+            via: primitive.via,
+            blockedByStatus: primitive.blockedByStatus,
+            then: primitive.then,
+          },
+          until: { beat: "end_of_turn", player },
+          phase: player === gamestate.activePlayer ? "active" : "pending",
+        },
+      ]
+      return next
+    }
+
     case Op.Count: {
+      if (primitive.kind === "last_attacked" || primitive.kind === "last_hit") {
+        const slot = resolveSlot(primitive.slot, ctx)
+        const id = slot ? currentForm(gamestate, getSlot(gamestate, slot))?.instanceId : undefined
+        const hit = id ? gamestate.lastHit[id] : undefined
+        const lastTurn = hit && hit.turn === gamestate.turnCount - 1
+        ctx.bindings[primitive.bind] =
+          primitive.kind === "last_attacked" ? (lastTurn ? 1 : 0) : lastTurn ? hit.applied : 0
+        return gamestate
+      }
       if (primitive.kind === "damage") {
         const slot = resolveSlot(primitive.slot, ctx)
         ctx.bindings[primitive.bind] = slot ? getSlot(gamestate, slot).damage : 0
@@ -490,6 +607,7 @@ export function interpret(
           : ""
         return gamestate
       }
+      if (primitive.kind !== "cards" && primitive.kind !== "energy_value") return gamestate
       if ("zone" in primitive) {
         const zone = resolveZone(primitive.zone, ctx)
         ctx.bindings[primitive.bind] = zone ? surveyCount(gamestate, zone, primitive.filter) : 0

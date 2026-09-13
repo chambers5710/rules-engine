@@ -1,5 +1,5 @@
 import type { SurveyFilter } from "./survey.js"
-import type { Attachment, AttackDamageRewrite, AttackUseRewrite, EnergyType, EnergyTypeRewrite, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
+import type { Attachment, AttackDamageRewrite, AttackUseRewrite, DamageVia, EnergyType, EnergyTypeRewrite, GameEvent, SlotId, SlotRef, Status, ZoneName, ZonePosition, ZoneRef } from "./types.js"
 
 export enum Op {
   MoveZoneToZone = "move_zone_to_zone",
@@ -23,6 +23,7 @@ export enum Op {
   Shuffle = "shuffle",
   Reveal = "reveal",
   Each = "each",
+  Arm = "arm",
 }
 
 // Action — every top-level choice the client can make
@@ -51,7 +52,8 @@ export type InterpretScript = {
 export type InterpretCtx = {
   bindings: Record<string, unknown>
   script?: InterpretScript
-  via?: "attack"
+  via?: "attack" | "trigger"
+  events?: GameEvent[]
 }
 
 // Select pick — what the paused menu lists
@@ -106,7 +108,9 @@ export type Primitive =
   | { op: Op.Count; kind: "hp"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "weakness"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
+  | { op: Op.Count; kind: "last_attacked" | "last_hit"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName }
+  | { op: Op.Arm; who: "owner" | "opponent"; when: "pokemon_knocked_out"; via: DamageVia[]; blockedByStatus: boolean; then: Expr }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SelectFilter | SelectFilter[]; bind: BindingName; then: Expr }
   | { op: Op.Calc; fn: CalcFn; a: number | BindingName; b: number | BindingName; bind: BindingName }
   | { op: Op.SwapActive; slot: SlotId | BindingName }

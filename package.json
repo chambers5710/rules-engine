@@ -28,7 +28,11 @@
     "serve:conversion": "tsx ./tests/attacks/conversion.ts",
     "serve:leech": "tsx ./tests/attacks/leech.ts",
     "serve:init": "tsx ./tests/init/play-active.ts",
-    "serve:fail-closed": "tsx ./tests/compute/fail-closed-check.ts"
+    "serve:fail-closed": "tsx ./tests/compute/fail-closed-check.ts",
+    "check:triggers": "tsx ./tests/triggers/triggers-check.ts",
+    "serve:triggers": "tsx ./tests/triggers/strikes-back.ts",
+    "serve:bond": "tsx ./tests/triggers/destiny-bond.ts",
+    "serve:mirror": "tsx ./tests/triggers/mirror-move.ts"
   },
   "dependencies": {
     "tsx": "^4.23.13",

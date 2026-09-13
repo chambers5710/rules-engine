@@ -15,6 +15,7 @@ import { attackExpr } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
+import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter } from "./triggers.js"
 import { copy } from "./ops.js"
 import { selectChoices, selectFrame } from "./select.js"
 import type { GameState, SlotId } from "./types.js"
@@ -168,6 +169,7 @@ function enterTurn(
   }
   gamestate = clearEvolvedThisTurn(gamestate, activePlayer)
   gamestate = tickModifiersEnter(gamestate, activePlayer)
+  gamestate = tickSubscriptionsEnter(gamestate, activePlayer)
   if (!hasActive(gamestate, activePlayer)) return gamestate
   return turnPhase(gamestate)
 }
@@ -182,6 +184,7 @@ function drawOrLose(gamestate: GameState): GameState {
 // Enter Checkup from the end of a turn
 function enterCheckup(gamestate: GameState): GameState {
   gamestate = tickModifiersEnd(gamestate, gamestate.activePlayer)
+  gamestate = tickSubscriptionsEnd(gamestate, gamestate.activePlayer)
   return checkupPhase({ ...gamestate, phase: Phase.Checkup })
 }
 
@@ -314,7 +317,7 @@ function runAction(gamestate: GameState, action: AvailableAction): GameState {
   return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
 }
 
-function runExpr(
+export function runExpr(
   gamestate: GameState,
   expr: Expr,
   ctx: InterpretCtx,
@@ -370,6 +373,36 @@ function runExpr(
       return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
     gamestate = interpret(gamestate, step, ctx)
+    gamestate = drainEvents(gamestate, ctx, kind, budget)
+  }
+  return gamestate
+}
+
+function drainEvents(
+  gamestate: GameState,
+  ctx: InterpretCtx,
+  kind: Action,
+  budget: { left: number }
+): GameState {
+  const events = ctx.events ?? []
+  ctx.events = []
+  for (const event of events) {
+    for (const job of matchTriggers(gamestate, event)) {
+      const tctx: InterpretCtx = {
+        bindings: {
+          $self_slot: job.seat,
+          ...(event.source ? { $attacker: event.source } : {}),
+        },
+        via: "trigger",
+      }
+      gamestate = runExpr(gamestate, job.then, tctx, job.seat.player, kind, budget)
+      if (job.drop) {
+        gamestate = {
+          ...gamestate,
+          subscriptions: gamestate.subscriptions.filter((sub) => sub.id !== job.drop),
+        }
+      }
+    }
   }
   return gamestate
 }

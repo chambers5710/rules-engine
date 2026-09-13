@@ -14,7 +14,6 @@ Plain numbered damage with empty text is automatic (`attack` → `apply_damage`)
 
 | Hole | Blocks |
 |---|---|
-| Triggers (on-hit, on-KO, last attack) | Strikes Back, Destiny Bond, Mirror Move |
 | Become Energy | Buzzap |
 | Empty Select / devolve / play-as-Pokémon (optional card Select is done) | Flute, Revive, Scoop Up, Devolution, Doll, Pokédex, Breeder |
 
@@ -22,11 +21,11 @@ Metronome copies the attack expr and drops recoil (`ApplyDamage` a positive lite
 
 ## Attacks not authorable
 
-Pidgeotto Mirror Move; Gastly Destiny Bond; Farfetch'd Leek Slap.
+Farfetch'd Leek Slap.
 
 ## Powers not authorable
 
-Strikes Back, Buzzap. (Damage Swap, Rain Dance, Energy Trans, and Energy Burn are in.)
+Buzzap. (Strikes Back, Damage Swap, Rain Dance, Energy Trans, and Energy Burn are in.)
 
 ## Trainers not authorable
 

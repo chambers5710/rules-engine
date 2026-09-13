@@ -54,6 +54,8 @@ export function initializeGameState(
     retreatedThisTurn: false,
     actionStack: [],
     history: [],
+    subscriptions: [],
+    lastHit: {},
   }
 
   return dealOpeningHands(gamestate)

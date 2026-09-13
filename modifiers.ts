@@ -1,4 +1,5 @@
 import { getSlot } from "./board.js"
+import { clockActivates, clockExpires } from "./clock.js"
 import { copy, moveSlotToZone } from "./ops.js"
 import type { AttackDamageRewrite, AttackUseRewrite, EnergyType, GameState, Modifier, Slot, SlotId } from "./types.js"
 
@@ -128,9 +129,7 @@ export function tickModifiersEnter(gamestate: GameState, activePlayer: 1 | 2): G
   const next = copy(gamestate)
   walkSlots(next, (slot) => {
     for (const m of slot.modifiers) {
-      if (m.until.beat === "end_of_turn" && m.phase === "pending" && m.until.player === activePlayer) {
-        m.phase = "active"
-      }
+      if (clockActivates(m, activePlayer)) m.phase = "active"
     }
   })
   return next
@@ -142,7 +141,7 @@ export function tickModifiersEnd(gamestate: GameState, endingPlayer: 1 | 2): Gam
   eachSeat((id) => {
     const slot = getSlot(next, id)
     slot.modifiers = slot.modifiers.filter((m) => {
-      if (m.until.beat === "end_of_turn" && m.phase === "active" && m.until.player === endingPlayer) {
+      if (clockExpires(m, endingPlayer)) {
         if (m.card) expired.push({ slot: id, card: m.card })
         return false
       }
