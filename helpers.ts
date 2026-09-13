@@ -28,6 +28,18 @@ export function placePrize(gamestate: GameState, playerId: 1 | 2, cardId: string
   )
 }
 
+function copySlot(slot: Slot): Slot {
+  return structuredClone(slot)
+}
+
+// Left Active — conditions are Active-only; poison amount resets with the flag
+function leaveActive(slot: Slot): Slot {
+  const next = copySlot(slot)
+  next.status = emptyStatus()
+  next.poisonCounters = 1
+  return next
+}
+
 // Promote — whole bench slot becomes Active; bench slot cleared
 export function promote(
   gamestate: GameState,
@@ -36,22 +48,12 @@ export function promote(
 ): GameState {
   const next = copy(gamestate)
   const p = next.players[player]
-  const from = p.bench[index]
-  p.active = {
-    evolution: [...from.evolution],
-    damage: from.damage,
-    status: { ...from.status },
-    energy: [...from.energy],
-    tools: [...from.tools],
-    modifiers: [...from.modifiers],
-    evolvedThisTurn: from.evolvedThisTurn,
-    poisonCounters: from.poisonCounters,
-  }
+  p.active = copySlot(p.bench[index])
   p.bench[index] = emptySlot()
   return next
 }
 
-// Retreat — Active and that bench Pokémon switch places
+// Retreat / Switch / Gust — seats trade; the Pokémon that left Active drops status
 export function swapActive(
   gamestate: GameState,
   player: 1 | 2,
@@ -61,27 +63,9 @@ export function swapActive(
   const p = next.players[player]
   const bench = p.bench[index]
   if (bench.evolution.length === 0) return gamestate
-  const active = p.active
-  p.active = {
-    evolution: [...bench.evolution],
-    damage: bench.damage,
-    status: { ...bench.status },
-    energy: [...bench.energy],
-    tools: [...bench.tools],
-    modifiers: [...bench.modifiers],
-    evolvedThisTurn: bench.evolvedThisTurn,
-    poisonCounters: bench.poisonCounters,
-  }
-  p.bench[index] = {
-    evolution: [...active.evolution],
-    damage: active.damage,
-    status: emptyStatus(),
-    energy: [...active.energy],
-    tools: [...active.tools],
-    modifiers: [...active.modifiers],
-    evolvedThisTurn: active.evolvedThisTurn,
-    poisonCounters: 1,
-  }
+  const outgoing = leaveActive(p.active)
+  p.active = copySlot(bench)
+  p.bench[index] = outgoing
   return next
 }
 

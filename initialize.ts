@@ -12,7 +12,7 @@ import type {
   Player,
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
-import authoredEffects from "../effect-author/effects/effects.json" with { type: "json" }
+import authoredEffects from "../tcg-effect-author/effects/effects.json" with { type: "json" }
 
 const OPENING_HAND = 7
 
