@@ -168,7 +168,7 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
-`prevent: "all"` or `prevent: 30` (Harden). `set: 0` is still Scrunch.
+`attack_effects` `prevent: "all"` (Barrier / Agility). `attack_damage` `prevent: 30` (Harden). `set: 0` is still Scrunch. `Op.Attack` writes the hit.
 
 ## Loop
 

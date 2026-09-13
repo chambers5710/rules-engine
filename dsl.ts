@@ -51,6 +51,7 @@ export type InterpretScript = {
 export type InterpretCtx = {
   bindings: Record<string, unknown>
   script?: InterpretScript
+  via?: "attack"
 }
 
 // Select pick — what the paused menu lists
@@ -90,6 +91,7 @@ export type Primitive =
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & AttackDamageRewrite
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_effects"; prevent: "all"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_use"; until: { beat: "end_of_turn"; who: "owner" | "opponent" }; card?: string | BindingName } & (
       | { flip: true }
       | { ban: string | BindingName }
@@ -121,12 +123,13 @@ export type HistoryEntry =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
-  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; weakness: boolean; resistance: boolean; prevented: boolean }
+  | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean }
   | { op: Op.ApplyDamage; amount: number; slot: SlotId; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId }
   | { op: Op.FlipCoin; result: "heads" | "tails"; check?: Status }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackDamageRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "attack_effects"; prevent: "all"; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } } & AttackUseRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "energy_type"; until: { beat: "end_of_turn"; player: 1 | 2 } } & EnergyTypeRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "weakness_type" | "resistance_type"; until: { beat: "leave_play" } } & EnergyTypeRewrite

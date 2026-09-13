@@ -48,6 +48,5 @@ export function attackExpr(
   if (String(attack.text ?? "").trim() !== "") return []
   return [
     { op: Op.Attack, base, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
-    { op: Op.ApplyDamage, amount: "$damage", slot: "$defending" },
   ]
 }

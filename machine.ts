@@ -307,7 +307,10 @@ function chooseBinding(
 
 // Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
-  const ctx: InterpretCtx = { bindings: { ...(action.seed ?? {}) } }
+  const ctx: InterpretCtx = {
+    bindings: { ...(action.seed ?? {}) },
+    ...(action.kind === Action.Attack ? { via: "attack" as const } : {}),
+  }
   return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
 }
 

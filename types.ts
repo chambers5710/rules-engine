@@ -96,7 +96,9 @@ export type AttackDamageRewrite =
   | { set: number }
   | { add: number }
   | { sub: number }
-  | { prevent: "all" | number }
+  | { prevent: number }
+
+export type AttackEffectsRewrite = { prevent: "all" }
 
 export type AttackUseRewrite =
   | { flip: true }
@@ -117,6 +119,7 @@ type ModifierClock = {
 // Modifier — on a slot; end_of_turn.player is set when interpret applies the op
 export type Modifier =
   | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite)
+  | ({ field: "attack_effects" } & ModifierClock & AttackEffectsRewrite)
   | ({ field: "attack_use" } & ModifierClock & AttackUseRewrite)
   | ({ field: "energy_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "weakness_type" } & ModifierClock & EnergyTypeRewrite)

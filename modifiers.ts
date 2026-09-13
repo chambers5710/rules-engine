@@ -61,14 +61,13 @@ export function foldDamage(gamestate: GameState, slot: SlotId, base: number): nu
   }
   for (const m of mods) {
     const rewrite = rewriteOf(m)
-    if ("prevent" in rewrite && rewrite.prevent !== "all" && damage <= rewrite.prevent) {
+    if ("prevent" in rewrite && damage <= rewrite.prevent) {
       damage = 0
     }
   }
   for (const m of mods) {
     const rewrite = rewriteOf(m)
     if ("set" in rewrite) damage = rewrite.set
-    if ("prevent" in rewrite && rewrite.prevent === "all") damage = 0
   }
   return Math.max(0, damage)
 }
@@ -85,6 +84,12 @@ export function foldAdds(gamestate: GameState, slot: SlotId, base: number): numb
 function activeUse(slot: Slot): Extract<Modifier, { field: "attack_use" }>[] {
   return slot.modifiers.filter((m): m is Extract<Modifier, { field: "attack_use" }> =>
     m.field === "attack_use" && m.phase === "active"
+  )
+}
+
+export function effectsPrevented(gamestate: GameState, slot: SlotId): boolean {
+  return getSlot(gamestate, slot).modifiers.some(
+    (m) => m.field === "attack_effects" && m.phase === "active" && m.prevent === "all"
   )
 }
 
