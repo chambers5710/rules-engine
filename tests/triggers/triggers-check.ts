@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { Action, Op, type InterpretCtx } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { runExpr } from "../../machine.js"
 import { applyModifier } from "../../modifiers.js"
 import { tickSubscriptionsEnd, tickSubscriptionsEnter } from "../../triggers.js"
 import type { Card, GameState } from "../../types.js"
-import { copies, liveTurn, moveToActive, printed } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, moveToActive, printed } from "../fixture.js"
 
 const set = cards as Card[]
 const attacker = { player: 1, slot: "active" } as const
@@ -19,11 +19,11 @@ function expect(ok: boolean, message: string) {
   if (!ok) fail(message)
 }
 
-function stage(): GameState {
+async function stage(): GameState {
   const hit = printed(set, "base1-58")
   const champ = printed(set, "base1-8")
   const energy = printed(set, "base1-100")
-  let gamestate = initializeGameState([hit, ...copies(energy, 17)], [champ, ...copies(energy, 17)])
+  let gamestate = await initBoard([hit, ...copies(energy, 17)], [champ, ...copies(energy, 17)])
   gamestate = moveToActive(gamestate, 1, "base1-58")
   gamestate = moveToActive(gamestate, 2, "base1-8")
   return liveTurn(gamestate)
@@ -41,7 +41,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  const gamestate = play(stage(), [
+  const gamestate = play(await stage(), [
     { op: Op.Attack, base: 10, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ], attackCtx())
   expect(gamestate.players[2].active.damage === 10, "attack damages Machamp")
@@ -49,7 +49,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  const next = stage()
+  const next = await stage()
   next.players[2].active.status.confused = true
   const gamestate = play(next, [
     { op: Op.Attack, base: 10, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
@@ -59,7 +59,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  const gamestate = play(stage(), [
+  const gamestate = play(await stage(), [
     { op: Op.ApplyDamage, amount: 10, slot: "$defending" },
   ], attackCtx())
   expect(gamestate.players[2].active.damage === 10, "splash damages Machamp")
@@ -67,7 +67,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  const gamestate = play(stage(), [
+  const gamestate = play(await stage(), [
     { op: Op.ApplyDamage, amount: 10, slot: "$defending", source: "poison" },
   ], { bindings: { $self_slot: attacker, $defending: defending } })
   expect(gamestate.players[2].active.damage === 10, "poison damages Machamp")
@@ -75,7 +75,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  const gamestate = play(stage(), [
+  const gamestate = play(await stage(), [
     { op: Op.ApplyDamage, amount: 10, slot: "$self_slot" },
   ], attackCtx())
   expect(gamestate.players[1].active.damage === 10, "recoil hits the attacker")
@@ -83,7 +83,7 @@ function play(gamestate: GameState, expr: Parameters<typeof runExpr>[1], ctx: In
 }
 
 {
-  let gamestate = applyModifier(stage(), defending, {
+  let gamestate = applyModifier(await stage(), defending, {
     field: "attack_effects",
     prevent: "all",
     until: { beat: "end_of_turn", player: 1 },
@@ -101,11 +101,11 @@ const bondThen: Parameters<typeof runExpr>[1] = [
   ] },
 ]
 
-function gastly(): GameState {
+async function gastly(): GameState {
   const hit = printed(set, "base1-58")
   const ghost = printed(set, "base1-50")
   const energy = printed(set, "base1-100")
-  let gamestate = initializeGameState([hit, ...copies(energy, 17)], [ghost, ...copies(energy, 17)])
+  let gamestate = await initBoard([hit, ...copies(energy, 17)], [ghost, ...copies(energy, 17)])
   gamestate = moveToActive(gamestate, 1, "base1-58")
   gamestate = moveToActive(gamestate, 2, "base1-50")
   return liveTurn(gamestate)
@@ -122,7 +122,7 @@ function armBond(gamestate: GameState): GameState {
 }
 
 {
-  let gamestate = tickSubscriptionsEnter(armBond(gastly()), 1)
+  let gamestate = tickSubscriptionsEnter(armBond(await gastly()), 1)
   gamestate = play(gamestate, [
     { op: Op.Attack, base: 40, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ], attackCtx())
@@ -131,14 +131,14 @@ function armBond(gamestate: GameState): GameState {
 }
 
 {
-  const gamestate = play(armBond(gastly()), [
+  const gamestate = play(armBond(await gastly()), [
     { op: Op.Attack, base: 40, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ], attackCtx())
   expect(gamestate.players[1].active.damage === 0, "pending Bond does not fire")
 }
 
 {
-  let gamestate = tickSubscriptionsEnter(armBond(gastly()), 1)
+  let gamestate = tickSubscriptionsEnter(armBond(await gastly()), 1)
   gamestate = tickSubscriptionsEnd(gamestate, 1)
   gamestate = play(gamestate, [
     { op: Op.Attack, base: 40, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
@@ -147,25 +147,25 @@ function armBond(gamestate: GameState): GameState {
 }
 
 {
-  let gamestate = tickSubscriptionsEnter(armBond(gastly()), 1)
+  let gamestate = tickSubscriptionsEnter(armBond(await gastly()), 1)
   gamestate = play(gamestate, [
     { op: Op.ApplyDamage, amount: 40, slot: "$defending", source: "poison" },
   ], { bindings: { $self_slot: attacker, $defending: defending } })
   expect(gamestate.players[1].active.damage === 0, "poison KO does not Bond")
 }
 
-function pidgeotto(): GameState {
+async function pidgeotto(): GameState {
   const hit = printed(set, "base1-58")
   const bird = printed(set, "base1-22")
   const energy = printed(set, "base1-100")
-  let gamestate = initializeGameState([hit, ...copies(energy, 17)], [bird, ...copies(energy, 17)])
+  let gamestate = await initBoard([hit, ...copies(energy, 17)], [bird, ...copies(energy, 17)])
   gamestate = moveToActive(gamestate, 1, "base1-58")
   gamestate = moveToActive(gamestate, 2, "base1-22")
   return liveTurn(gamestate)
 }
 
 {
-  let gamestate = play(pidgeotto(), [
+  let gamestate = play(await pidgeotto(), [
     { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ], attackCtx())
   const applied = gamestate.players[2].active.damage
@@ -182,14 +182,14 @@ function pidgeotto(): GameState {
 
 {
   const ctx: InterpretCtx = { bindings: { $self_slot: defending } }
-  runExpr(pidgeotto(), [
+  runExpr(await pidgeotto(), [
     { op: Op.Count, kind: "last_attacked", slot: "$self_slot", bind: "$was" },
   ], ctx, 2, Action.Attack)
   expect(ctx.bindings.$was === 0, "same-turn Mirror Move has no last hit")
 }
 
 {
-  const gamestate = play(pidgeotto(), [
+  const gamestate = play(await pidgeotto(), [
     { op: Op.Attack, base: 20, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
   ], attackCtx())
   const id = gamestate.players[2].active.evolution.at(-1)

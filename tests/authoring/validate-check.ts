@@ -1,4 +1,4 @@
-import authored from "../../../tcg-effect-author/effects/effects.json" with { type: "json" }
+import authored from "../../../effect-author/effects/effects.json" with { type: "json" }
 import { Op, type Expr } from "../../dsl.js"
 import { CATALOG_SEEDS, validateExpr } from "../../validate.js"
 import type { EffectRegistry } from "../../types.js"

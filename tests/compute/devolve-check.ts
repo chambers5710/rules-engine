@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
 import { Action, Op } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { runExpr } from "../../machine.js"
 import { applyStatus, moveZoneToSlot } from "../../ops.js"
 import type { Card, GameState } from "../../types.js"
-import { copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -24,12 +24,12 @@ function listsSpray(gamestate: GameState): boolean {
   )
 }
 
-function stage(evolved: boolean): GameState {
+async function stage(evolved: boolean): GameState {
   const spray = printed(set, "base1-72")
   const ivy = printed(set, "base1-30")
   const bulb = printed(set, "base1-44")
   const energy = printed(set, "base1-98")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [spray, ivy, bulb, printed(set, "base1-58"), ...copies(energy, 14)],
     [printed(set, "base1-58"), ...copies(energy, 17)]
   )
@@ -50,12 +50,12 @@ function stage(evolved: boolean): GameState {
 }
 
 {
-  expect(!listsSpray(stage(false)), "Spray is omitted when every Pokémon is Basic")
-  expect(listsSpray(stage(true)), "Spray lists when a Stage is in play")
+  expect(!listsSpray(await stage(false)), "Spray is omitted when every Pokémon is Basic")
+  expect(listsSpray(await stage(true)), "Spray lists when a Stage is in play")
 }
 
 {
-  let gamestate = stage(true)
+  let gamestate = await stage(true)
   const basic = gamestate.players[1].active.evolution[0]
   const stage1 = gamestate.players[1].active.evolution[1]
   gamestate = applyStatus(gamestate, "poison", { player: 1, slot: "active" })

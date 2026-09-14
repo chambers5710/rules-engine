@@ -1,10 +1,10 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card } from "../../types.js"
 import { applyStatus } from "../../ops.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -17,13 +17,13 @@ import {
 
 const set = cards as Card[]
 
-function board() {
+async function board() {
   const haunter = printed(set, "base1-29")
   const chansey = printed(set, "base1-3")
   const psychic = printed(set, "base1-101")
   const fighting = printed(set, "base1-97")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [haunter, haunter, ...copies(psychic, 16)],
     [chansey, chansey, ...copies(fighting, 16)]
   )
@@ -42,10 +42,10 @@ function board() {
   return applyStatus(gamestate, "asleep", { player: 2, slot: "active" })
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Haunter vs Chansey (Hypnosis / Dream Eater)")
 console.log("Chansey starts Asleep. Dream Eater 50 if Asleep; otherwise the If skips.")
-listen(session(), () => session())
+listen(await session(), () => session())

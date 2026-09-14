@@ -1,32 +1,19 @@
-import { computeAvailableActions } from "./compute.js"
-import { initializeGameState } from "./initialize.js"
-import { stateMachine } from "./machine.js"
+import {
+  createSession as playCreateSession,
+  createSessionFromState as playFromState,
+  type Choice,
+  type Frame,
+  type PlaySession,
+} from "./play.js"
 import type { Card, EffectRegistry, GameState, SourceId } from "./types.js"
-import { formatAction } from "./ui.js"
+
+export type { Choice, Frame }
+export type Session = PlaySession
 
 export const DECKS = {
   1:  "d-base1-1",
   2: "d-base1-2"
 } as const
-
-export type Choice = {
-  index: number
-  label: string
-  player: 1 | 2
-  card?: string
-}
-
-export type Frame = {
-  type: "STATE"
-  gamestate: GameState
-  choices: Choice[]
-  decks: { p1: string; p2: string }
-}
-
-export type Session = {
-  frame: () => Frame
-  choose: (index: number) => Frame
-}
 
 export type CompactDeck = {
   id: string
@@ -79,7 +66,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
   const unique = [...new Set(ids.filter(Boolean))]
   if (unique.length === 0) return {}
   const response = await fetch(
-    `http://localhost:8787/api/effects?ids=${encodeURIComponent(unique.join(","))}`
+    `${CARD_API}/api/effects?ids=${encodeURIComponent(unique.join(","))}`
   )
   if (!response.ok) throw new Error(`effects: ${response.status}`)
   const rows = (await response.json()) as Array<{
@@ -131,34 +118,10 @@ export async function openDefaultSession(): Promise<Session> {
   return openSession(DECKS[1], DECKS[2])
 }
 
-export function createSession(p1Deck: Card[], p2Deck: Card[], registry?: EffectRegistry): Session {
-  return createSessionFromState(initializeGameState(p1Deck, p2Deck, registry))
+export function createSession(p1Deck: Card[], p2Deck: Card[], registry: EffectRegistry): Session {
+  return playCreateSession(p1Deck, p2Deck, registry, loadedDecks)
 }
 
 export function createSessionFromState(initial: GameState): Session {
-  let gamestate = initial
-  let actions = computeAvailableActions(gamestate)
-
-  const frame = (): Frame => ({
-    type: "STATE",
-    gamestate,
-    decks: loadedDecks,
-    choices: actions.map((action, index) => ({
-      index,
-      label: formatAction(gamestate, action),
-      player: action.player,
-      ...("card" in action ? { card: action.card } : {}),
-    })),
-  })
-
-  return {
-    frame,
-    choose(index: number) {
-      const action = actions[index]
-      if (!action) throw new Error("not a listed choice")
-      gamestate = stateMachine(gamestate, action)
-      actions = computeAvailableActions(gamestate)
-      return frame()
-    },
-  }
+  return playFromState(initial, loadedDecks)
 }

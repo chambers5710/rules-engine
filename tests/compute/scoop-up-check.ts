@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
 import { Action, Op } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { runExpr, stateMachine } from "../../machine.js"
 import { moveZoneToSlot } from "../../ops.js"
 import type { Card, GameState } from "../../types.js"
-import { attachEnergy, copies, liveTurn, moveToActive, moveToBench, printed, toHand } from "../fixture.js"
+import {
+  initBoard, attachEnergy, copies, liveTurn, moveToActive, moveToBench, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -24,12 +24,12 @@ function listsScoop(gamestate: GameState): boolean {
   )
 }
 
-function stage(): GameState {
+async function stage(): GameState {
   const scoop = printed(set, "base1-78")
   const ivy = printed(set, "base1-30")
   const bulb = printed(set, "base1-44")
   const energy = printed(set, "base1-98")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [scoop, ivy, bulb, printed(set, "base1-58"), ...copies(energy, 14)],
     [printed(set, "base1-58"), ...copies(energy, 17)]
   )
@@ -49,11 +49,11 @@ function stage(): GameState {
 }
 
 {
-  expect(listsScoop(stage()), "Scoop Up lists when you have a Pokémon in play")
+  expect(listsScoop(await stage()), "Scoop Up lists when you have a Pokémon in play")
 }
 
 {
-  let gamestate = stage()
+  let gamestate = await stage()
   const basic = gamestate.players[1].active.evolution[0]
   const stage1 = gamestate.players[1].active.evolution[1]
   const energy = gamestate.players[1].active.energy[0]
@@ -73,7 +73,7 @@ function stage(): GameState {
 }
 
 {
-  let gamestate = stage()
+  let gamestate = await stage()
   gamestate = moveToBench(gamestate, 1, "base1-58", 0)
   const write = gamestate.effectRegistry["base1-78"].trainer!["Scoop Up"].filter(
     (step) => step.op !== Op.Select

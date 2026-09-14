@@ -1,10 +1,10 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { applyStatus, moveZoneToSlot, moveZoneToZone } from "../../ops.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -49,7 +49,7 @@ function toDiscard(gamestate: GameState, player: 1 | 2, sourceId: string): GameS
   return moveZoneToZone(gamestate, card, { player, zone: "hand" }, { player, zone: "discard" }, "bottom")
 }
 
-function duel(
+async function duel(
   p1: string[],
   p2: string[],
   energy: string,
@@ -60,7 +60,7 @@ function duel(
   const extra = p1.slice(1).map((id) => printed(set, id))
   const e = printed(set, energy)
   const theirs = p2.map((id) => printed(set, id))
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [lead, ...extra, ...copies(e, 16)],
     [...theirs, ...copies(e, 16)]
   )
@@ -74,7 +74,7 @@ function duel(
   return liveTurn(gamestate)
 }
 
-function trainers(): GameState {
+async function trainers(): GameState {
   const spray = printed(set, "base1-72")
   const breeder = printed(set, "base1-76")
   const scoop = printed(set, "base1-78")
@@ -87,7 +87,7 @@ function trainers(): GameState {
   const dummy = printed(set, DUMMY)
   const energy = printed(set, GRASS)
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [spray, breeder, scoop, flute, revive, bulb, bulb, ivy, saur, bird, ...copies(energy, 10)],
     [dummy, bird, ...copies(energy, 16)]
   )
@@ -114,20 +114,20 @@ function trainers(): GameState {
   return liveTurn(gamestate)
 }
 
-function board(name: Name): GameState {
-  if (name === "trainers") return trainers()
-  if (name === "leek") return duel(["base1-27"], [DUMMY], LIGHTNING, 1)
-  if (name === "metronome") return duel(["base1-5"], ["base1-36"], FIRE, 3, 3)
-  if (name === "recoil") return duel(["base1-5"], ["base1-3"], FIGHTING, 3, 4)
-  if (name === "water") return duel(["base1-59"], [DUMMY], WATER, 3)
-  if (name === "thrash") return duel(["base1-11"], [DUMMY], GRASS, 3)
-  if (name === "punch") return duel(["base1-20"], [DUMMY], LIGHTNING, 2)
-  if (name === "gas") return duel(["base1-51"], [DUMMY], GRASS, 2)
-  return duel(["base1-63"], [DUMMY], WATER, 2)
+async function board(name: Name): GameState {
+  if (name === "trainers") return await trainers()
+  if (name === "leek") return await duel(["base1-27"], [DUMMY], LIGHTNING, 1)
+  if (name === "metronome") return await duel(["base1-5"], ["base1-36"], FIRE, 3, 3)
+  if (name === "recoil") return await duel(["base1-5"], ["base1-3"], FIGHTING, 3, 4)
+  if (name === "water") return await duel(["base1-59"], [DUMMY], WATER, 3)
+  if (name === "thrash") return await duel(["base1-11"], [DUMMY], GRASS, 3)
+  if (name === "punch") return await duel(["base1-20"], [DUMMY], LIGHTNING, 2)
+  if (name === "gas") return await duel(["base1-51"], [DUMMY], GRASS, 2)
+  return await duel(["base1-63"], [DUMMY], WATER, 2)
 }
 
-function session(name: Name) {
-  return createSessionFromState(board(name))
+async function session(name: Name) {
+  return createSessionFromState(await board(name))
 }
 
 function next(name: Name): Name {
@@ -154,7 +154,7 @@ console.log(`board: ${current}`)
 console.log(blurb[current])
 console.log("pnpm serve:authored -- trainers   (or leek | metronome | recoil | water | thrash | punch | gas | withdraw)")
 console.log("POST /reset cycles. Or { p1: \"<name>\" }.")
-listen(session(current), (body) => {
+listen(await session(current), (body) => {
   const asked = body.p1
   current = names.includes(asked as Name) ? (asked as Name) : next(current)
   console.log(`board: ${current}`)

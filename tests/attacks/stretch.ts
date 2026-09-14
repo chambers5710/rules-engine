@@ -1,10 +1,10 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { applyDamage } from "../../ops.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -23,7 +23,7 @@ function startName(): Name {
   return (raw as Name) ?? "horn"
 }
 
-function stage(
+async function stage(
   p1: string,
   energy: string,
   attach: number,
@@ -35,7 +35,7 @@ function stage(
   const b = printed(set, p2)
   const e1 = printed(set, energy)
   const e2 = printed(set, p2energy)
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [a, a, ...copies(e1, 20)],
     [b, b, ...copies(e2, 16)]
   )
@@ -49,18 +49,18 @@ function stage(
   return liveTurn(gamestate)
 }
 
-function board(name: Name): GameState {
-  if (name === "coins") return stage("base1-31", "base1-101", 1, "base1-52", "base1-97", 1)
-  if (name === "beam") return stage("base1-18", "base1-97", 4, "base1-36", "base1-98", 2)
-  if (name === "bolt") return stage("base1-16", "base1-100", 4)
+async function board(name: Name): GameState {
+  if (name === "coins") return await stage("base1-31", "base1-101", 1, "base1-52", "base1-97", 1)
+  if (name === "beam") return await stage("base1-18", "base1-97", 4, "base1-36", "base1-98", 2)
+  if (name === "bolt") return await stage("base1-16", "base1-100", 4)
   if (name === "recover") {
-    return applyDamage(stage("base1-32", "base1-101", 2), 30, { player: 1, slot: "active" })
+    return applyDamage(await stage("base1-32", "base1-101", 2), 30, { player: 1, slot: "active" })
   }
-  return stage("base1-55", "base1-99", 1)
+  return await stage("base1-55", "base1-99", 1)
 }
 
-function session(name: Name) {
-  return createSessionFromState(board(name))
+async function session(name: Name) {
+  return createSessionFromState(await board(name))
 }
 
 function next(name: Name): Name {
@@ -71,7 +71,7 @@ let current: Name = startName()
 console.log("Stretch — Horn Hazard / Doubleslap / Hyper Beam / Thunderbolt / Recover")
 console.log(`board: ${current}`)
 console.log("pnpm serve:stretch -- horn  (or coins | beam | bolt | recover). POST /reset cycles.")
-listen(session(current), (body) => {
+listen(await session(current), (body) => {
   const asked = body.p1
   current = names.includes(asked as Name) ? (asked as Name) : next(current)
   console.log(`board: ${current}`)

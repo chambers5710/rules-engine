@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { Action, Op } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { selectChoices, selectFrame } from "../../select.js"
 import type { Card, GameState } from "../../types.js"
-import { copies, liveTurn, printed, toHand } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -15,12 +15,12 @@ function expect(ok: boolean, message: string) {
   if (!ok) fail(message)
 }
 
-function stage(): GameState {
+async function stage(): GameState {
   const fire = printed(set, "base1-46")
   const evo = printed(set, "base1-24")
   const bill = printed(set, "base1-91")
   const energy = printed(set, "base1-98")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [fire, evo, bill, ...copies(energy, 15)],
     [printed(set, "base1-58"), ...copies(energy, 17)]
   )
@@ -31,7 +31,7 @@ function stage(): GameState {
 }
 
 {
-  const gamestate = stage()
+  const gamestate = await stage()
   const frame = selectFrame(
     {
       op: Op.Select,

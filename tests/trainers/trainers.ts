@@ -1,10 +1,10 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import { DAMAGE_COUNTER } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -27,7 +27,7 @@ function trainerHand(gamestate: GameState, player: 1 | 2): GameState {
   return gamestate
 }
 
-function board() {
+async function board() {
   const clefairy = printed(set, "base1-5")
   const electabuzz = printed(set, "base1-20")
   const hitmonchan = printed(set, "base1-7")
@@ -37,7 +37,7 @@ function board() {
   const fighting = printed(set, "base1-97")
   const fire = printed(set, "base1-98")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [clefairy, electabuzz, hitmonchan, ...pack(), ...copies(fighting, 16)],
     [magmar, haunter, ivysaur, ...pack(), ...copies(fire, 16)]
   )
@@ -67,9 +67,9 @@ function board() {
   return gamestate
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Trainers — both hands (Bill, Potion, Switch, Gust, Full Heal)")
-listen(session(), () => session())
+listen(await session(), () => session())

@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -34,9 +34,9 @@ function toDiscard(gamestate: GameState, player: 1 | 2, sourceId: string, n: num
   return gamestate
 }
 
-function board(): GameState {
+async function board(): GameState {
   const energy = printed(set, "base1-97")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [
       printed(set, "base1-5"),
       printed(set, "base1-5"),
@@ -67,10 +67,10 @@ function board(): GameState {
   return liveTurn(gamestate)
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Optional Select — SER + Energy Retrieval + Item Finder in one hand")
 console.log("discard: 2 Fighting, Bill, Potion. POST /reset rebuilds this board.")
-listen(session(), () => session())
+listen(await session(), () => session())

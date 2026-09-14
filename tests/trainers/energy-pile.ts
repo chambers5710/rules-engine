@@ -1,10 +1,10 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import { DAMAGE_COUNTER } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -27,13 +27,13 @@ function trainerHand(gamestate: GameState, player: 1 | 2): GameState {
   return gamestate
 }
 
-function board() {
+async function board() {
   const poliwrath = printed(set, "base1-13")
   const magmar = printed(set, "base1-36")
   const water = printed(set, "base1-102")
   const fire = printed(set, "base1-98")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [poliwrath, poliwrath, ...pack(), ...copies(water, 16)],
     [magmar, magmar, ...pack(), ...copies(fire, 16)]
   )
@@ -57,9 +57,9 @@ function board() {
   return gamestate
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Poliwrath vs Magmar — Whirlpool, Super Potion, Energy Removal")
-listen(session(), () => session())
+listen(await session(), () => session())

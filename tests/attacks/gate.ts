@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -22,13 +22,13 @@ function startName(): Name {
   return (raw as Name) ?? "sand"
 }
 
-function board(name: Name): GameState {
+async function board(name: Name): GameState {
   if (name === "amnesia") {
     const whirl = printed(set, "base1-38")
     const chansey = printed(set, "base1-3")
     const water = printed(set, "base1-102")
     const colorless = printed(set, "base1-97")
-    let gamestate = initializeGameState(
+    let gamestate = await initBoard(
       [whirl, whirl, ...copies(water, 20)],
       [chansey, chansey, ...copies(colorless, 16)]
     )
@@ -44,7 +44,7 @@ function board(name: Name): GameState {
   const shrew = printed(set, "base1-62")
   const chansey = printed(set, "base1-3")
   const fighting = printed(set, "base1-97")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [shrew, shrew, ...copies(fighting, 20)],
     [chansey, chansey, ...copies(fighting, 16)]
   )
@@ -58,8 +58,8 @@ function board(name: Name): GameState {
   return liveTurn(gamestate)
 }
 
-function session(name: Name) {
-  return createSessionFromState(board(name))
+async function session(name: Name) {
+  return createSessionFromState(await board(name))
 }
 
 function next(name: Name): Name {
@@ -71,7 +71,7 @@ console.log("Attack use — Sand-attack / Amnesia")
 console.log(`board: ${current}`)
 console.log("sand: 10 then P2 coin or attack fails. amnesia: pick a Chansey attack; that name is gone next turn.")
 console.log("pnpm serve:gate -- sand  (or amnesia). POST /reset cycles.")
-listen(session(current), (body) => {
+listen(await session(current), (body) => {
   const asked = body.p1
   current = names.includes(asked as Name) ? (asked as Name) : next(current)
   console.log(`board: ${current}`)

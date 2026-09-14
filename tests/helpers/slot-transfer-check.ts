@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { emptySlot, promote, swapActive } from "../../helpers.js"
-import { initializeGameState } from "../../initialize.js"
 import { emptyStatus } from "../../status.js"
 import type { Card, GameState, Slot } from "../../types.js"
-import { copies, liveTurn, moveToActive, moveToBench, printed } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, moveToActive, moveToBench, printed } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -41,17 +41,17 @@ function mark(slot: Slot, tag: number) {
   ]
 }
 
-function stage(): GameState {
+async function stage(): GameState {
   const a = printed(set, "base1-36")
   const b = printed(set, "base1-58")
-  let gamestate = initializeGameState([a, b, ...copies(printed(set, "base1-98"), 16)], copies(a, 18))
+  let gamestate = await initBoard([a, b, ...copies(printed(set, "base1-98"), 16)], copies(a, 18))
   gamestate = moveToActive(gamestate, 1, "base1-36")
   gamestate = moveToBench(gamestate, 1, "base1-58", 0)
   return liveTurn(gamestate)
 }
 
 {
-  const before = stage()
+  const before = await stage()
   mark(before.players[1].bench[0], 2)
   const kept = copySlot(before.players[1].bench[0])
   before.players[1].active = emptySlot()
@@ -61,7 +61,7 @@ function stage(): GameState {
 }
 
 {
-  const before = stage()
+  const before = await stage()
   mark(before.players[1].active, 1)
   mark(before.players[1].bench[0], 2)
   const fromBench = copySlot(before.players[1].bench[0])

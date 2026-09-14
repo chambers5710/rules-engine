@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { applyDamage } from "../../ops.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card, GameState } from "../../types.js"
 import { DAMAGE_COUNTER } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -37,11 +37,11 @@ function stageSide(
   return gamestate
 }
 
-function board() {
+async function board() {
   const lightning = printed(set, "base1-100")
   const fighting = printed(set, "base1-97")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [
       ...pack([
         "base1-9", "base1-9", "base1-35", "base1-58", "base1-43", "base1-46", "base1-5",
@@ -79,9 +79,9 @@ function board() {
   return liveTurn(gamestate)
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Magneton Selfdestruct — trainers in hand: Bill / Potion / Gust; P2 Energy Removal / Switch / Potion")
-listen(session(), () => session())
+listen(await session(), () => session())

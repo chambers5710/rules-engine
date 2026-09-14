@@ -1,6 +1,12 @@
+import { initializeGameState } from "../initialize.js"
 import { moveZoneToSlot, moveZoneToZone } from "../ops.js"
+import { fetchEffects } from "../session.js"
 import type { Card, GameState, SlotId, ZoneName } from "../types.js"
 import { Phase } from "../types.js"
+
+export async function initBoard(p1: Card[], p2: Card[]): Promise<GameState> {
+  return initializeGameState(p1, p2, await fetchEffects([...p1, ...p2].map((card) => card.id)))
+}
 
 export function printed(cards: Card[], id: string): Card {
   const card = cards.find((row) => row.id === id)

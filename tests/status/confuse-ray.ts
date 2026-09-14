@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -16,13 +16,13 @@ import {
 
 const set = cards as Card[]
 
-function board() {
+async function board() {
   const alakazam = printed(set, "base1-1")
   const machop = printed(set, "base1-52")
   const psychic = printed(set, "base1-101")
   const fighting = printed(set, "base1-97")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [alakazam, alakazam, ...copies(psychic, 16)],
     [machop, machop, ...copies(fighting, 16)]
   )
@@ -40,9 +40,9 @@ function board() {
   return liveTurn(gamestate)
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Alakazam vs Machop (Confuse Ray)")
-listen(session(), () => session())
+listen(await session(), () => session())

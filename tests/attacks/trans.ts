@@ -1,9 +1,9 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
-import { initializeGameState } from "../../initialize.js"
 import { createSessionFromState } from "../../session.js"
 import type { Card } from "../../types.js"
 import {
+  initBoard,
   attachEnergy,
   copies,
   liveTurn,
@@ -16,7 +16,7 @@ import {
 
 const set = cards as Card[]
 
-function board() {
+async function board() {
   const venusaur = printed(set, "base1-15")
   const ivy = printed(set, "base1-30")
   const magmar = printed(set, "base1-36")
@@ -25,7 +25,7 @@ function board() {
   const fire = printed(set, "base1-98")
   const colorless = printed(set, "base1-97")
 
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [venusaur, ivy, magmar, ...copies(grass, 16), ...copies(fire, 4)],
     [chansey, chansey, ...copies(colorless, 16)]
   )
@@ -42,10 +42,10 @@ function board() {
   return liveTurn(gamestate)
 }
 
-function session() {
-  return createSessionFromState(board())
+async function session() {
+  return createSessionFromState(await board())
 }
 
 console.log("Energy Trans — Venusaur / Ivysaur (Grass) / Magmar (Fire only)")
 console.log("From lights Grass seats only. Dest is any other of yours, including Magmar.")
-listen(session(), () => session())
+listen(await session(), () => session())

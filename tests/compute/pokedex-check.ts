@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
 import { Action } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { stateMachine } from "../../machine.js"
 import { moveZoneToZone } from "../../ops.js"
 import type { Card, GameState, ZoneName } from "../../types.js"
-import { copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -34,10 +34,10 @@ function chooseCard(gamestate: GameState, card: string): GameState {
   return stateMachine(gamestate, action)
 }
 
-function stage(top: string[]): GameState {
+async function stage(top: string[]): GameState {
   const dex = printed(set, "base1-87")
   const extra = top.map((id) => printed(set, id))
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [dex, printed(set, "base1-58"), ...extra, ...copies(printed(set, "base1-98"), 12)],
     [printed(set, "base1-58"), ...copies(printed(set, "base1-97"), 17)]
   )
@@ -75,7 +75,7 @@ function stage(top: string[]): GameState {
 
 {
   const top = ["base1-91", "base1-95", "base1-82", "base1-94", "base1-93"]
-  let gamestate = stage(top)
+  let gamestate = await stage(top)
   const before = gamestate.players[1].deck.slice(0, 5)
   expect(before.length === 5, "five cards on top")
   gamestate = playPokedex(gamestate)
@@ -100,7 +100,7 @@ function stage(top: string[]): GameState {
 }
 
 {
-  let gamestate = stage(["base1-91", "base1-95"])
+  let gamestate = await stage(["base1-91", "base1-95"])
   const before = gamestate.players[1].deck.slice(0, 2)
   const leftovers = gamestate.players[1].deck.slice(2)
   gamestate = {

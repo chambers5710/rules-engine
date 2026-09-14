@@ -12,17 +12,16 @@ import type {
   Player,
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
-import authoredEffects from "../tcg-effect-author/effects/effects.json" with { type: "json" }
 
 const OPENING_HAND = 7
 
-// Game — coin flip, hydrate decks, opening hands + mulligans, assemble snapshot
+// Game — coin flip, hydrate decks, opening hands + mulligans, assemble snapshot.
+// Caller already loaded the registry (Card API locally, D1 in GameRoom). No I/O here.
 export function initializeGameState(
   p1DeckData: Card[],
   p2DeckData: Card[],
-  effectRegistry?: EffectRegistry
+  effectRegistry: EffectRegistry,
 ): GameState {
-  effectRegistry ??= authoredEffects as EffectRegistry
   const firstPlayer: 1 | 2 = flipCoin(1)[0] === "heads" ? 1 : 2
   const deckData = { 1: p1DeckData, 2: p2DeckData }
 

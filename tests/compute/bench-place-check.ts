@@ -1,11 +1,11 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
 import { Action, Op, type InterpretCtx } from "../../dsl.js"
-import { initializeGameState } from "../../initialize.js"
 import { runExpr } from "../../machine.js"
 import { moveZoneToZone } from "../../ops.js"
 import type { Card, GameState } from "../../types.js"
-import { copies, liveTurn, moveToActive, moveToBench, printed, toHand } from "../fixture.js"
+import {
+  initBoard, copies, liveTurn, moveToActive, moveToBench, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
 
@@ -37,11 +37,11 @@ function toDiscard(gamestate: GameState, player: 1 | 2, sourceId: string): GameS
   )
 }
 
-function fluteBoard(): GameState {
+async function fluteBoard(): GameState {
   const flute = printed(set, "base1-86")
   const bird = printed(set, "base1-57")
   const energy = printed(set, "base1-100")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [flute, printed(set, "base1-58"), ...copies(energy, 16)],
     [bird, ...copies(printed(set, "base1-58"), 6), ...copies(energy, 11)]
   )
@@ -53,12 +53,12 @@ function fluteBoard(): GameState {
 }
 
 {
-  const gamestate = fluteBoard()
+  const gamestate = await fluteBoard()
   expect(listsTrainer(gamestate, "base1-86"), "Flute lists when a Basic is in the opponent discard and a bench is open")
 }
 
 {
-  let gamestate = fluteBoard()
+  let gamestate = await fluteBoard()
   const bird = gamestate.players[2].discard.find((id) => gamestate.cardRegistry[id].sourceId === "base1-57")
   const seat = { player: 2, slot: "bench" as const, index: 0 as const }
   const ctx: InterpretCtx = {
@@ -77,7 +77,7 @@ function fluteBoard(): GameState {
 }
 
 {
-  let gamestate = fluteBoard()
+  let gamestate = await fluteBoard()
   for (const index of [0, 1, 2, 3, 4] as const) {
     gamestate = moveToBench(gamestate, 2, "base1-58", index)
   }
@@ -88,7 +88,7 @@ function fluteBoard(): GameState {
   const revive = printed(set, "base1-89")
   const bird = printed(set, "base1-57")
   const energy = printed(set, "base1-100")
-  let gamestate = initializeGameState(
+  let gamestate = await initBoard(
     [revive, bird, printed(set, "base1-58"), ...copies(energy, 15)],
     [printed(set, "base1-58"), ...copies(energy, 17)]
   )
