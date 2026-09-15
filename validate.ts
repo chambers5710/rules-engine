@@ -4,6 +4,7 @@ const SLOT_KINDS = new Set<SlotFilter["kind"]>([
   "has_counters",
   "survives_counters",
   "other_than",
+  "name",
   "has_type",
   "has_energy",
   "empty",
@@ -15,6 +16,8 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "energy",
   "basic_pokemon",
   "evolves_from",
+  "name",
+  "has_type",
   "trainer",
   "pokemon",
   "stage_2",
@@ -34,6 +37,8 @@ export const CATALOG_SEEDS: BindingName[] = [
   "$deck",
   "$opp_hand",
   "$opp_deck",
+  "$prize",
+  "$opp_prize",
   "$played",
   "$attacker",
 ]
@@ -51,13 +56,25 @@ function read(have: Set<string>, value: unknown, at: string): string | null {
   return isBind(value) ? need(have, value, at) : null
 }
 
-function filterBinds(filters: { bind?: BindingName }[]): BindingName[] {
-  return filters.flatMap((filter) => (filter.bind ? [filter.bind] : []))
-}
-
-function asFilters(value: unknown): Array<{ kind?: string; bind?: BindingName }> {
+function asFilters(value: unknown): Array<{ kind?: string; bind?: BindingName; type?: unknown }> {
   if (value == null) return []
   return Array.isArray(value) ? value : [value]
+}
+
+function filterNeed(
+  have: Set<string>,
+  at: string,
+  filters: Array<{ bind?: BindingName; type?: unknown }>
+): string | null {
+  for (const filter of filters) {
+    if (filter.bind) {
+      const err = need(have, filter.bind, at)
+      if (err) return err
+    }
+    const typed = read(have, filter.type, at)
+    if (typed) return typed
+  }
+  return null
 }
 
 function walk(expr: Expr, known: Set<string>): string | null {
@@ -115,30 +132,29 @@ function reads(step: Primitive, have: Set<string>): string | null {
           if (filter.kind && !SLOT_KINDS.has(filter.kind as SlotFilter["kind"])) {
             return `select slots: filter ${filter.kind} is not a slot filter`
           }
-          if (filter.bind) {
-            const err = need(have, filter.bind, at)
-            if (err) return err
-          }
         }
-        return null
+        return filterNeed(have, at, asFilters(step.filter))
       }
       if (step.pick === "cards") {
         for (const filter of asFilters(step.filter)) {
           if (filter.kind && !CARD_KINDS.has(filter.kind as CardFilter["kind"])) {
             return `select cards: filter ${filter.kind} is not a card filter`
           }
-          if (filter.bind) {
-            const err = need(have, filter.bind, at)
-            if (err) return err
-          }
         }
-        return read(have, step.source, at)
+        return filterNeed(have, at, asFilters(step.filter)) ?? read(have, step.source, at)
       }
       if (step.pick === "attacks") {
         if ("filter" in step && step.filter != null) {
           return "select attacks: filters are not allowed"
         }
         return read(have, step.slot, at)
+      }
+      if (step.pick === "names") {
+        for (const option of step.names) {
+          const err = option.zone ? read(have, option.zone, at) : null
+          if (err) return err
+        }
+        return null
       }
       return null
     }
@@ -155,19 +171,26 @@ function reads(step: Primitive, have: Set<string>): string | null {
       const extra =
         "ban" in step
           ? read(have, step.ban, at)
-          : "set" in step
-            ? read(have, step.set, at)
-            : null
+          : "forbid" in step
+            ? read(have, step.forbid, at)
+            : "from" in step
+              ? read(have, step.from, at)
+              : "attack" in step
+                ? read(have, step.attack, at)
+                : "set" in step
+                  ? read(have, step.set, at)
+                  : null
       const card = "card" in step ? read(have, step.card, at) : null
       return read(have, step.slot, at) ?? card ?? extra
     }
     case Op.Count:
       if (step.kind === "slots") {
-        for (const name of filterBinds(asFilters(step.filter))) {
-          const err = need(have, name, at)
-          if (err) return err
+        for (const filter of asFilters(step.filter)) {
+          if (filter.kind && !SLOT_KINDS.has(filter.kind as SlotFilter["kind"])) {
+            return `count slots: filter ${filter.kind} is not a slot filter`
+          }
         }
-        return null
+        return filterNeed(have, at, asFilters(step.filter))
       }
       if (step.kind === "attack_damage") return read(have, step.slot, at) ?? read(have, step.attack, at)
       if ("zone" in step) {
@@ -177,11 +200,12 @@ function reads(step: Primitive, have: Set<string>): string | null {
       if ("slot" in step) return read(have, step.slot, at)
       return null
     case Op.Each:
-      for (const name of filterBinds(asFilters(step.filter))) {
-        const err = need(have, name, at)
-        if (err) return err
+      for (const filter of asFilters(step.filter)) {
+        if (filter.kind && !SLOT_KINDS.has(filter.kind as SlotFilter["kind"])) {
+          return `each: filter ${filter.kind} is not a slot filter`
+        }
       }
-      return null
+      return filterNeed(have, at, asFilters(step.filter))
     case Op.Calc:
       return read(have, step.a, at) ?? read(have, step.b, at)
     case Op.RunEffect:

@@ -97,7 +97,11 @@ function turnPhase(
       return onComplete(gamestate, action.kind)
     case Action.Attack: {
       const active = getSlot(gamestate, { player: action.player, slot: "active" })
-      if (!canAttack(active)) return gamestate
+      const target = currentForm(
+        gamestate,
+        getSlot(gamestate, { player: opponent(action.player), slot: "active" })
+      )?.instanceId
+      if (!canAttack(active, target)) return gamestate
       if (attackBanned(active, action.name)) return gamestate
       return gatedAttack(gamestate, action)
     }
@@ -311,7 +315,7 @@ function chooseBinding(
 ): SlotId | string {
   if (action.pick === "skip") return ""
   if (action.pick === "cards") return action.card
-  if (action.pick === "attacks" || action.pick === "types") return action.name
+  if (action.pick === "attacks" || action.pick === "types" || action.pick === "names") return action.name
   return action.slot
 }
 
@@ -319,7 +323,7 @@ function chooseBinding(
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
   const ctx: InterpretCtx = {
     bindings: { ...(action.seed ?? {}) },
-    ...(action.kind === Action.Attack ? { via: "attack" as const } : {}),
+    ...(action.kind === Action.Attack ? { via: "attack" as const, attack: action.name } : {}),
   }
   return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
 }

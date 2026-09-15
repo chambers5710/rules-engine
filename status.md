@@ -69,7 +69,7 @@ Conditions only exist on the **Active**. Evolve or leave Active (retreat / swap 
 | Poisoned | yes | yes | yes |
 | Burned | yes | yes | yes |
 
-`mayUsePokemonPower` matches the Power column. Attack and Retreat use `canAttack` / `canRetreat` (`reads.ts`) for those columns (`canRetreat` also folds `cannotRetreat`).
+`mayUsePokemonPower` matches the Power column. Attack and Retreat use `canAttack` / `canRetreat` (`reads.ts`) for those columns (`canRetreat` also folds `cannotRetreat` and timed `cannot_retreat`; `canAttack` takes the defending instance for Tail Wag).
 
 Per-card `evenIf` overrides the Power column when card text says so (e.g. some later Abilities work while Asleep).
 

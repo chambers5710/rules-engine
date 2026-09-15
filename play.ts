@@ -1,4 +1,4 @@
-import { computeAvailableActions } from "./compute.js"
+import { Action, computeAvailableActions } from "./compute.js"
 import { initializeGameState } from "./initialize.js"
 import { stateMachine } from "./machine.js"
 import type { Card, EffectRegistry, GameState, SlotId } from "./types.js"
@@ -48,7 +48,9 @@ export function createSessionFromState(
       index,
       label: formatAction(gamestate, action),
       player: action.player,
-      ...("card" in action ? { card: action.card } : {}),
+      ...("card" in action && !(action.kind === Action.Choose && action.pick === "cards" && action.hidden)
+        ? { card: action.card }
+        : {}),
       ...("slot" in action ? { slot: action.slot } : {}),
     })),
   })

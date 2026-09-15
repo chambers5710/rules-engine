@@ -11,6 +11,7 @@ export type EffectEntry = {
   abilities?: Record<string, Expr>
   trainer?: Record<string, Expr>
   triggers?: Record<string, TriggerSpec>
+  powers?: Record<string, PowerSpec>
 }
 
 export type EffectRegistry = Record<SourceId, EffectEntry>
@@ -100,6 +101,9 @@ export type AttackDamageRewrite =
   | { sub: number }
   | { prevent: number }
 
+/** Sibling to the numeric rewrite — not inside `rewriteOf`. */
+export type DamageScope = { from?: CardInstanceId; attack?: string }
+
 export type AttackEffectsRewrite = { prevent: "all" }
 
 export type AttackUseRewrite =
@@ -110,7 +114,7 @@ export type EnergyTypeRewrite = { set: EnergyType }
 
 export type ClockPhase = "pending" | "active"
 
-export type EndOfTurnUntil = { beat: "end_of_turn"; player: 1 | 2 }
+export type EndOfTurnUntil = { beat: "end_of_turn"; player: 1 | 2; next?: true }
 
 export type TurnClock = {
   until: EndOfTurnUntil
@@ -127,9 +131,11 @@ type ModifierClock = {
 
 // Modifier — on a slot; end_of_turn.player is set when interpret applies the op
 export type Modifier =
-  | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite)
+  | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite & DamageScope)
   | ({ field: "attack_effects" } & ModifierClock & AttackEffectsRewrite)
   | ({ field: "attack_use" } & ModifierClock & AttackUseRewrite)
+  | ({ field: "cannot_retreat" } & ModifierClock)
+  | ({ field: "can_attack"; forbid: CardInstanceId } & ModifierClock)
   | ({ field: "energy_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "weakness_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "resistance_type" } & ModifierClock & EnergyTypeRewrite)
@@ -153,6 +159,11 @@ export type GameEvent = {
   via: DamageVia
   applied?: number
 }
+
+export type PowerSpec =
+  | { kind: "blocks_status" }
+  | { kind: "prevent_damage"; min: number }
+  | { kind: "reduce_retreat" }
 
 export type TriggerSpec =
   | {

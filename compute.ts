@@ -14,7 +14,7 @@ import { ifPasses } from "./interpret.js"
 import { attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
 import { mayEvolve } from "./helpers.js"
-import { canAttack, canRetreat, mayUsePokemonPower } from "./reads.js"
+import { canAttack, canRetreat, mayUsePokemonPower, retreatCost } from "./reads.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, SlotId } from "./types.js"
@@ -36,9 +36,10 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
   | (ActionBase & { kind: Action.PlayTrainer; player: 1 | 2; card: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
-  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string; hidden?: true; face?: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "types"; name: string })
+  | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "names"; name: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "skip" })
   | (ActionBase & { kind: Action.Retreat; player: 1 | 2 })
   | (ActionBase & { kind: Action.Promote; player: 1 | 2; index: 0 | 1 | 2 | 3 | 4 })
@@ -248,7 +249,15 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
       if (ability.type === "Pokémon Power" && !mayUsePokemonPower(slot)) continue
       const expr = cardEffect(gamestate.effectRegistry, form.sourceId, "abilities", ability.name)
       if (expr.length === 0) continue
-      const seed = { $self_slot: slotId, $hand: { player, zone: "hand" } }
+      const seed = {
+        $self_slot: slotId,
+        $hand: { player, zone: "hand" },
+        $deck: { player, zone: "deck" },
+        $prize: { player, zone: "prize" },
+        $opp_hand: { player: opponent(player), zone: "hand" },
+        $opp_deck: { player: opponent(player), zone: "deck" },
+        $opp_prize: { player: opponent(player), zone: "prize" },
+      }
       if (!exprPlayable(gamestate, expr, seed, player, Action.Ability)) continue
       actions.push({
         kind: Action.Ability,
@@ -266,11 +275,12 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
 // Attack — payable costs only; seed aims $self_slot / $defending for the expr
 function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const active = gamestate.players[player].active
-  if (!canAttack(active)) return []
+  const defending = opponent(player)
+  const target = currentForm(gamestate, gamestate.players[defending].active)?.instanceId
+  if (!canAttack(active, target)) return []
   const form = currentForm(gamestate, active)
   if (!form) return []
   const slot = { player, slot: "active" } as const
-  const defending = opponent(player)
   return (form.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []) && !attackBanned(active, attack.name))
     .flatMap((attack) => {
@@ -305,9 +315,8 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   const active = gamestate.players[player].active
   if (!canRetreat(gamestate, active)) return []
   const slot = { player, slot: "active" } as const
-  const form = currentForm(gamestate, active)
-  if (!form) return []
-  const cost = form.retreatCost ?? []
+  if (!currentForm(gamestate, active)) return []
+  const cost = retreatCost(gamestate, active)
   if (!canPayEnergyCost(gamestate, slot, cost)) return []
   const need = cost.length
   const energy = { ...slot, attachment: "energy" as const }

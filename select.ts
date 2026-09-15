@@ -10,6 +10,7 @@ type SelectChoice =
   | { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string; expr: [] }
   | { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string; expr: [] }
   | { kind: Action.Choose; player: 1 | 2; pick: "types"; name: string; expr: [] }
+  | { kind: Action.Choose; player: 1 | 2; pick: "names"; name: string; expr: [] }
   | { kind: Action.Choose; player: 1 | 2; pick: "skip"; expr: [] }
 
 function isZoneRef(value: unknown): value is ZoneRef {
@@ -62,7 +63,7 @@ export function selectFrame(
       const raw = typeof step.source === "string" ? ctx.bindings[step.source] : step.source
       const source = cardSource(raw, step.attachment)
       if (!source) return undefined
-      return { ...base, pick: "cards", source, filter: step.filter }
+      return { ...base, pick: "cards", source, filter: step.filter, hidden: step.hidden }
     }
     case "attacks": {
       const slot = resolveSlot(step.slot, ctx)
@@ -71,6 +72,8 @@ export function selectFrame(
     }
     case "types":
       return { ...base, pick: "types", except: step.except ?? [] }
+    case "names":
+      return { ...base, pick: "names", names: step.names }
   }
 }
 
@@ -84,6 +87,8 @@ export function selectChoices(gamestate: GameState, frame: ActionFrame): SelectC
       return selectAttacks(gamestate, frame)
     case "types":
       return selectTypes(frame)
+    case "names":
+      return selectNames(gamestate, frame)
   }
 }
 
@@ -150,7 +155,14 @@ function selectCards(
       const rest = values.filter((_, j) => j !== i)
       if (!canCover(rest, need - value)) continue
     }
-    actions.push({ kind: Action.Choose, player: frame.player, pick: "cards", card: cards[i], expr: [] })
+    actions.push({
+      kind: Action.Choose,
+      player: frame.player,
+      pick: "cards",
+      card: cards[i],
+      ...(frame.hidden ? { hidden: true as const, face: `Prize ${i + 1}` } : {}),
+      expr: [],
+    })
   }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
   return actions
@@ -168,6 +180,28 @@ function selectAttacks(
     name: attack.name,
     expr: [] as const,
   }))
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  return actions
+}
+
+function selectNames(
+  gamestate: GameState,
+  frame: Extract<ActionFrame, { pick: "names" }>
+): SelectChoice[] {
+  const actions: SelectChoice[] = []
+  for (const option of frame.names) {
+    if (option.zone) {
+      const bound = frame.ctx.bindings[option.zone]
+      if (!isZoneRef(bound) || cardsAt(gamestate, bound).length === 0) continue
+    }
+    actions.push({
+      kind: Action.Choose,
+      player: frame.player,
+      pick: "names",
+      name: option.name,
+      expr: [],
+    })
+  }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
   return actions
 }
@@ -193,7 +227,7 @@ function canCover(values: number[], target: number): boolean {
 function chooseBinding(action: SelectChoice): SlotId | string {
   if (action.pick === "skip") return ""
   if (action.pick === "cards") return action.card
-  if (action.pick === "attacks" || action.pick === "types") return action.name
+  if (action.pick === "attacks" || action.pick === "types" || action.pick === "names") return action.name
   return action.slot
 }
 

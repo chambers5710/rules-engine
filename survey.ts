@@ -16,6 +16,8 @@ export type SurveyFilter =
   | { kind: "energy"; type?: EnergyType }
   | { kind: "basic_pokemon" }
   | { kind: "evolves_from"; name: string }
+  | { kind: "name"; name: string }
+  | { kind: "has_type"; type: EnergyType }
   | { kind: "trainer" }
   | { kind: "pokemon" }
   | { kind: "stage_2" }
@@ -132,6 +134,10 @@ export function cardMatches(
       return isBasicPokemon(gamestate, cardId)
     case "evolves_from":
       return foldedCard(gamestate, cardId)?.evolvesFrom === filter.name
+    case "name":
+      return foldedCard(gamestate, cardId)?.name === filter.name
+    case "has_type":
+      return foldedCard(gamestate, cardId)?.types?.includes(filter.type) === true
     case "trainer":
       return foldedCard(gamestate, cardId)?.supertype === "Trainer"
     case "pokemon":

@@ -1,7 +1,8 @@
 import { getSlot } from "./board.js"
+import { stripPairLocks } from "./modifiers.js"
 import { emptyStatus } from "./status.js"
 import { copy, copySlot, moveSlotToZone, moveZoneToZone } from "./ops.js"
-import type { GameState, Slot, SlotId } from "./types.js"
+import type { GameState, Slot, SlotId, ZoneName } from "./types.js"
 
 /** WOTC: neither player may evolve on their first turn, including setup Pokémon. */
 export function isPlayersFirstTurn(gamestate: GameState, player: 1 | 2): boolean {
@@ -68,13 +69,15 @@ export function swapActive(
   player: 1 | 2,
   index: 0 | 1 | 2 | 3 | 4
 ): GameState {
-  const next = copy(gamestate, player)
-  const p = next.players[player]
-  const bench = p.bench[index]
+  const bench = gamestate.players[player].bench[index]
   if (bench.evolution.length === 0) return gamestate
+  const left = [...gamestate.players[player].active.evolution]
+  const next = copy(gamestate, 1, 2)
+  const p = next.players[player]
   const outgoing = leaveActive(p.active)
-  p.active = copySlot(bench)
+  p.active = copySlot(p.bench[index])
   p.bench[index] = outgoing
+  stripPairLocks(next, left)
   return next
 }
 
@@ -90,25 +93,26 @@ export const emptySlot = (): Slot => ({
   poisonCounters: 1,
 })
 
-// Discard slot — Pokémon, energy, and tools to discard; slot cleared
-export function discardSlot(gamestate: GameState, ref: SlotId): GameState {
-  const dest = { player: ref.player, zone: "discard" as const }
+// Empty a seat — Pokémon, energy, and tools to that owner's zone (default discard)
+export function discardSlot(gamestate: GameState, ref: SlotId, dest: ZoneName = "discard"): GameState {
+  const destRef = { player: ref.player, zone: dest } as const
   const slot = getSlot(gamestate, ref)
   const evolution = [...slot.evolution]
   const energy = [...slot.energy]
   const tools = [...slot.tools]
   for (const card of evolution) {
-    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "evolution" }, dest, "bottom")
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "evolution" }, destRef, "bottom")
   }
   for (const card of energy) {
-    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "energy" }, dest, "bottom")
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "energy" }, destRef, "bottom")
   }
   for (const card of tools) {
-    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "tools" }, dest, "bottom")
+    gamestate = moveSlotToZone(gamestate, card, { ...ref, attachment: "tools" }, destRef, "bottom")
   }
-  const next = copy(gamestate, ref.player)
+  const next = copy(gamestate, 1, 2)
   if (ref.slot === "active") next.players[ref.player].active = emptySlot()
   else next.players[ref.player].bench[ref.index] = emptySlot()
+  if (ref.slot === "active") stripPairLocks(next, evolution)
   return next
 }
 

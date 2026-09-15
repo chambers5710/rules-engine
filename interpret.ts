@@ -1,6 +1,6 @@
-import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type EndOfTurnWho, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
 import { applyFieldOverrides } from "./card.js"
-import { applyModifier, effectsPrevented, foldAdds, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
+import { applyModifier, effectsPrevented, foldAdds, foldAttackBase, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
@@ -17,6 +17,7 @@ import {
   shuffle,
 } from "./ops.js"
 import { discardSlot, draw, mayEvolve, swapActive } from "./helpers.js"
+import { preventsAttackDamage } from "./reads.js"
 import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
 import { cardsAt, isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
@@ -152,7 +153,15 @@ function resolveReveal(
   return { cards: ids, from: from ?? self?.player ?? 1, zone }
 }
 
-// Attack damage — attack_damage rewrite, then Weakness, then Resistance.
+function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): { beat: "end_of_turn"; player: 1 | 2; next?: true } {
+  return {
+    beat: "end_of_turn",
+    player: until.who === "owner" ? slot.player : opponent(slot.player),
+    ...(until.next ? { next: true as const } : {}),
+  }
+}
+
+// Named base, then Weakness / Resistance, then attacker adds, then defender folds.
 // W/R only on the Defending Pokémon (opponent's Active). Attacker types are
 // the current form, not attached energy and not attack cost. Each printed
 // line whose type is among those types applies; damage floors at 0.
@@ -160,9 +169,10 @@ export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
   attacker: SlotId,
-  defender: SlotId
+  defender: SlotId,
+  attack?: string
 ): { damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean } {
-  let damage = base
+  let damage = foldAttackBase(gamestate, attacker, base, attack)
   let weakness = false
   let resistance = false
   if (defender.player !== attacker.player && defender.slot === "active") {
@@ -183,7 +193,7 @@ export function pipelineAttackDamage(
   }
   damage = foldAdds(gamestate, attacker, damage)
   const raw = Math.max(0, damage)
-  damage = foldDamage(gamestate, defender, raw)
+  damage = foldDamage(gamestate, defender, raw, attacker)
   return {
     damage,
     raw,
@@ -221,13 +231,27 @@ function resolveCard(card: string, ctx: InterpretCtx): string {
   return typeof bound === "string" ? bound : ""
 }
 
+function resolveInstance(
+  gamestate: GameState,
+  value: SlotId | BindingName,
+  ctx: InterpretCtx
+): string | undefined {
+  if (typeof value !== "string") {
+    return currentForm(gamestate, getSlot(gamestate, value))?.instanceId
+  }
+  if (!value.startsWith("$")) return value
+  const bound = ctx.bindings[value]
+  if (typeof bound === "string" && bound !== "") return bound
+  if (isSlotId(bound)) return currentForm(gamestate, getSlot(gamestate, bound))?.instanceId
+}
+
 function resolveOverrideSet(set: CardFieldOverrideSet, ctx: InterpretCtx): CardFieldOverrides | undefined {
   const out: CardFieldOverrides = {}
   for (const [key, value] of Object.entries(set)) {
     if (typeof value === "string" && value.startsWith("$")) {
       const bound = ctx.bindings[value]
       if (typeof bound !== "string" || bound === "") return
-      Object.assign(out, { [key]: bound })
+      Object.assign(out, { [key]: key === "types" ? [bound] : bound })
       continue
     }
     Object.assign(out, { [key]: value })
@@ -308,9 +332,23 @@ export function slotMatches(
         if (bound && sameSlot(slotId, bound as SlotId)) return false
         break
       }
+      case "name": {
+        if (currentForm(gamestate, slot)?.name !== filter.name) return false
+        break
+      }
       case "has_type": {
         const types = currentForm(gamestate, slot)?.types ?? []
-        if (!types.includes(filter.type)) return false
+        const want =
+          typeof filter.type === "string" && filter.type.startsWith("$")
+            ? bindings[filter.type]
+            : filter.type
+        let hit = false
+        if (typeof want === "string") hit = types.includes(want as EnergyType)
+        else if (isSlotId(want)) {
+          const other = currentForm(gamestate, getSlot(gamestate, want))?.types ?? []
+          hit = types.some((type) => other.includes(type))
+        }
+        if (filter.not ? hit : !hit) return false
         break
       }
       case "has_energy":
@@ -382,7 +420,8 @@ export function ifPasses(
     if (!slot) return false
     return getSlot(gamestate, slot).status[primitive.status]
   }
-  return ctx.bindings[primitive.bind] === primitive.equals
+  const hit = ctx.bindings[primitive.bind] === primitive.equals
+  return primitive.not ? !hit : hit
 }
 
 export function interpret(
@@ -437,7 +476,8 @@ export function interpret(
         gamestate,
         resolveAmount(primitive.base, ctx),
         attacker,
-        defender
+        defender,
+        ctx.attack
       )
       const blocked = effectsPrevented(gamestate, defender)
       const damage = blocked ? 0 : hit.damage
@@ -470,9 +510,15 @@ export function interpret(
     case Op.ApplyDamage: {
       const slot = resolveSlot(primitive.slot, ctx)
       if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
-      const amount = resolveAmount(primitive.amount, ctx)
+      let amount = resolveAmount(primitive.amount, ctx)
       const source = resolveSlot("$self_slot", ctx)
       const via = applyDamageVia(ctx, slot, primitive.source)
+      if (
+        (via === "attack" || via === "splash") &&
+        preventsAttackDamage(gamestate, getSlot(gamestate, slot), amount)
+      ) {
+        amount = 0
+      }
       const next = applyDamage(gamestate, amount, slot, primitive.source)
       emitDamage(ctx, next, source, slot, amount, via)
       emitKo(ctx, gamestate, next, source, slot, via)
@@ -527,10 +573,7 @@ export function interpret(
           const until =
             primitive.until.beat === "leave_play"
               ? { beat: "leave_play" as const }
-              : {
-                  beat: "end_of_turn" as const,
-                  player: primitive.until.who === "owner" ? slot.player : opponent(slot.player),
-                }
+              : endOfTurnUntil(slot, primitive.until)
           const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
@@ -539,8 +582,7 @@ export function interpret(
           )
         }
         case "energy_type": {
-          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-          const until = { beat: "end_of_turn" as const, player }
+          const until = endOfTurnUntil(slot, primitive.until)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "energy_type", set: primitive.set, until, ...(card ? { card } : {}) }),
@@ -548,18 +590,45 @@ export function interpret(
           )
         }
         case "attack_damage": {
-          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-          const until = { beat: "end_of_turn" as const, player }
+          const until = endOfTurnUntil(slot, primitive.until)
           const rewrite = rewriteOf(primitive)
+          const from = primitive.from ? resolveInstance(gamestate, primitive.from, ctx) : undefined
+          if (primitive.from && !from) return gamestate
+          const attack = primitive.attack ? resolveCard(primitive.attack, ctx) : undefined
+          if (primitive.attack && !attack) return gamestate
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          const scope = { ...(from ? { from } : {}), ...(attack ? { attack } : {}) }
+          return record(
+            applyModifier(gamestate, slot, {
+              field: "attack_damage",
+              ...rewrite,
+              until,
+              ...scope,
+              ...(card ? { card } : {}),
+            }),
+            { op: Op.ApplyModifier, slot, field: "attack_damage", ...rewrite, until, ...scope },
+          )
+        }
+        case "cannot_retreat": {
+          const until = endOfTurnUntil(slot, primitive.until)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
-            applyModifier(gamestate, slot, { field: "attack_damage", ...rewrite, until, ...(card ? { card } : {}) }),
-            { op: Op.ApplyModifier, slot, field: "attack_damage", ...rewrite, until },
+            applyModifier(gamestate, slot, { field: "cannot_retreat", until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "cannot_retreat", until },
+          )
+        }
+        case "can_attack": {
+          const forbid = resolveInstance(gamestate, primitive.forbid, ctx)
+          if (!forbid) return gamestate
+          const until = endOfTurnUntil(slot, primitive.until)
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "can_attack", forbid, until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "can_attack", forbid, until },
           )
         }
         case "attack_effects": {
-          const player = primitive.until.who === "owner" ? slot.player : opponent(slot.player)
-          const until = { beat: "end_of_turn" as const, player }
+          const until = endOfTurnUntil(slot, primitive.until)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "attack_effects", prevent: "all", until, ...(card ? { card } : {}) }),
@@ -607,6 +676,11 @@ export function interpret(
     }
 
     case Op.Count: {
+      if (primitive.kind === "knocked_out") {
+        const slot = resolveSlot(primitive.slot, ctx)
+        ctx.bindings[primitive.bind] = slot && isKnockedOut(gamestate, getSlot(gamestate, slot)) ? 1 : 0
+        return gamestate
+      }
       if (primitive.kind === "last_attacked" || primitive.kind === "last_hit") {
         const slot = resolveSlot(primitive.slot, ctx)
         const id = slot ? currentForm(gamestate, getSlot(gamestate, slot))?.instanceId : undefined
@@ -626,6 +700,13 @@ export function interpret(
         ctx.bindings[primitive.bind] = slot
           ? currentForm(gamestate, getSlot(gamestate, slot))?.weaknesses?.length ?? 0
           : 0
+        return gamestate
+      }
+      if (primitive.kind === "type") {
+        const slot = resolveSlot(primitive.slot, ctx)
+        ctx.bindings[primitive.bind] = slot
+          ? currentForm(gamestate, getSlot(gamestate, slot))?.types?.[0] ?? ""
+          : ""
         return gamestate
       }
       if (primitive.kind === "hp") {
@@ -666,14 +747,22 @@ export function interpret(
         ctx.bindings[primitive.bind] = zone ? cardsAt(gamestate, zone).slice(0, n) : []
         return gamestate
       }
-      if (primitive.kind === "first" || primitive.kind === "last") {
+      if (primitive.kind === "first" || primitive.kind === "last" || primitive.kind === "random") {
         const source =
           "zone" in primitive
             ? resolveZone(primitive.zone, ctx)
-            : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
+            : primitive.kind === "random"
+              ? undefined
+              : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
         const cards = source ? surveyCards(gamestate, source, primitive.filter) : []
         ctx.bindings[primitive.bind] =
-          primitive.kind === "last" ? cards.at(-1) ?? "" : cards[0] ?? ""
+          primitive.kind === "last"
+            ? cards.at(-1) ?? ""
+            : primitive.kind === "random"
+              ? cards.length
+                ? cards[Math.floor(Math.random() * cards.length)] ?? ""
+                : ""
+              : cards[0] ?? ""
         return gamestate
       }
       if (primitive.kind !== "cards" && primitive.kind !== "energy_value") return gamestate
@@ -710,7 +799,7 @@ export function interpret(
     case Op.DiscardSlot: {
       const slot = resolveSlot(primitive.slot, ctx)
       if (!slot) return gamestate
-      return discardSlot(gamestate, slot)
+      return discardSlot(gamestate, slot, primitive.dest ?? "discard")
     }
 
     case Op.Devolve: {
