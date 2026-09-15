@@ -1,7 +1,8 @@
-import { currentForm, getSlot } from "./board.js"
+import { getSlot } from "./board.js"
 import { clearFieldOverrides } from "./card.js"
 import { Op } from "./dsl.js"
 import { record } from "./history.js"
+import { acceptsStatus } from "./reads.js"
 import { emptyStatus, withStatus } from "./status.js"
 import type {
   CardInstanceId,
@@ -229,8 +230,7 @@ export const applyStatus = (
   slot: SlotId,
   counters?: number
 ) => {
-  const form = currentForm(gamestate, getSlot(gamestate, slot))
-  if (form?.blocksStatus && status !== "burn") return gamestate
+  if (!acceptsStatus(gamestate, getSlot(gamestate, slot), status)) return gamestate
   const next = copy(gamestate, slot.player)
   const pokemon = getSlot(next, slot)
   pokemon.status = withStatus(pokemon.status, status)

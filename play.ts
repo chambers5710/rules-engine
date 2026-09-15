@@ -1,7 +1,7 @@
 import { computeAvailableActions } from "./compute.js"
 import { initializeGameState } from "./initialize.js"
 import { stateMachine } from "./machine.js"
-import type { Card, EffectRegistry, GameState } from "./types.js"
+import type { Card, EffectRegistry, GameState, SlotId } from "./types.js"
 import { formatAction } from "./ui.js"
 
 export type Choice = {
@@ -9,6 +9,7 @@ export type Choice = {
   label: string
   player: 1 | 2
   card?: string
+  slot?: SlotId
 }
 
 export type Frame = {
@@ -48,6 +49,7 @@ export function createSessionFromState(
       label: formatAction(gamestate, action),
       player: action.player,
       ...("card" in action ? { card: action.card } : {}),
+      ...("slot" in action ? { slot: action.slot } : {}),
     })),
   })
 

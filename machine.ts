@@ -13,6 +13,7 @@ import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, honestCopy } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
+import { canAttack, canRetreat, mayUsePokemonPower, takesPrizeOnKo } from "./reads.js"
 import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter } from "./triggers.js"
@@ -94,12 +95,12 @@ function turnPhase(
   switch (action.kind) {
     case Action.EndTurn:
       return onComplete(gamestate, action.kind)
-    case Action.Attack:
-      if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
-      if (attackBanned(getSlot(gamestate, { player: action.player, slot: "active" }), action.name)) {
-        return gamestate
-      }
+    case Action.Attack: {
+      const active = getSlot(gamestate, { player: action.player, slot: "active" })
+      if (!canAttack(active)) return gamestate
+      if (attackBanned(active, action.name)) return gamestate
       return gatedAttack(gamestate, action)
+    }
     case Action.Promote:
       return promote(gamestate, action.player, action.index)
     case Action.AttachEnergy:
@@ -111,21 +112,22 @@ function turnPhase(
       )
     case Action.Evolve:
       return markEvolvedThisTurn(runAction(gamestate, action), action.slot)
-    case Action.Ability:
+    case Action.Ability: {
+      const seat = getSlot(gamestate, action.slot)
+      const kind = currentForm(gamestate, seat)?.abilities?.find((row) => row.name === action.name)?.type
+      if (kind === "Pokémon Power" && !mayUsePokemonPower(seat)) return gamestate
       return runAction(gamestate, action)
+    }
     case Action.PlayTrainer:
       return runAction(gamestate, action)
     case Action.Retreat:
-      if (attackOrRetreatBlocked(gamestate, action.player)) return gamestate
+      if (!canRetreat(gamestate, getSlot(gamestate, { player: action.player, slot: "active" }))) {
+        return gamestate
+      }
       return { ...runAction(gamestate, action), retreatedThisTurn: true }
     default:
       return runAction(gamestate, action)
   }
-}
-
-function attackOrRetreatBlocked(gamestate: GameState, player: 1 | 2): boolean {
-  const status = getSlot(gamestate, { player, slot: "active" }).status
-  return status.asleep || status.paralyzed
 }
 
 // Confused first, then Sand-attack-style flip. Confused tails: 3 counters, no expr.
@@ -277,7 +279,7 @@ function resolveKnockouts(gamestate: GameState): GameState {
       if (!isKnockedOut(gamestate, seat)) continue
       const form = currentForm(gamestate, seat)
       gamestate = discardSlot(gamestate, ref)
-      if (form?.prizesOnKo === false) continue
+      if (!takesPrizeOnKo(form)) continue
       for (let i = 0; i < PRIZES_ON_KO; i++) {
         gamestate = takePrize(gamestate, opponent(player))
       }

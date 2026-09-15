@@ -1,7 +1,18 @@
-import authored from "../../../effect-author/effects/effects.json" with { type: "json" }
-import { Op, type Expr } from "../../dsl.js"
+import { readdirSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { Op } from "../../dsl.js"
 import { CATALOG_SEEDS, validateExpr } from "../../validate.js"
 import type { EffectRegistry } from "../../types.js"
+
+const dumpsDir = fileURLToPath(new URL("../../../effect-author/effects/", import.meta.url))
+const authored = Object.assign(
+  {},
+  ...readdirSync(dumpsDir)
+    .filter((name) => /^effects_.+\.json$/.test(name))
+    .sort()
+    .map((name) => JSON.parse(readFileSync(join(dumpsDir, name), "utf8")) as EffectRegistry)
+) as EffectRegistry
 
 function fail(message: string): never {
   throw new Error(message)

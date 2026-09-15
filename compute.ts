@@ -14,9 +14,10 @@ import { ifPasses } from "./interpret.js"
 import { attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
 import { mayEvolve } from "./helpers.js"
+import { canAttack, canRetreat, mayUsePokemonPower } from "./reads.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
-import type { GameState, Slot, SlotId } from "./types.js"
+import type { GameState, SlotId } from "./types.js"
 
 export { Action } from "./dsl.js"
 
@@ -244,7 +245,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     const form = currentForm(gamestate, slot)
     if (!form) continue
     for (const ability of form.abilities ?? []) {
-      if (ability.type === "Pokémon Power" && pokemonPowerBlocked(slot)) continue
+      if (ability.type === "Pokémon Power" && !mayUsePokemonPower(slot)) continue
       const expr = cardEffect(gamestate.effectRegistry, form.sourceId, "abilities", ability.name)
       if (expr.length === 0) continue
       const seed = { $self_slot: slotId, $hand: { player, zone: "hand" } }
@@ -262,22 +263,10 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
   return actions
 }
 
-// Pokémon Power (Base set) — cannot use if Asleep, Confused, or Paralyzed.
-// That was the standard on these cards; later Abilities often do not share it.
-// Do not parse ability text. Per-card evenIf (e.g. still usable while Asleep) comes later.
-function pokemonPowerBlocked(slot: Slot): boolean {
-  const s = slot.status
-  return s.asleep || s.paralyzed|| s.confused 
-}
-
-function attackOrRetreatBlocked(slot: Slot): boolean {
-  return slot.status.asleep || slot.status.paralyzed
-}
-
 // Attack — payable costs only; seed aims $self_slot / $defending for the expr
 function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const active = gamestate.players[player].active
-  if (attackOrRetreatBlocked(active)) return []
+  if (!canAttack(active)) return []
   const form = currentForm(gamestate, active)
   if (!form) return []
   const slot = { player, slot: "active" } as const
@@ -314,11 +303,10 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   if (gamestate.retreatedThisTurn) return []
   if (occupiedBench(gamestate, player).length === 0) return []
   const active = gamestate.players[player].active
-  if (attackOrRetreatBlocked(active)) return []
+  if (!canRetreat(gamestate, active)) return []
   const slot = { player, slot: "active" } as const
   const form = currentForm(gamestate, active)
   if (!form) return []
-  if (form.cannotRetreat) return []
   const cost = form.retreatCost ?? []
   if (!canPayEnergyCost(gamestate, slot, cost)) return []
   const need = cost.length

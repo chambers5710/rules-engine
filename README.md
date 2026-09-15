@@ -167,6 +167,7 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 - **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused)
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
 - **foldedCard** / **applyFieldOverrides** / **clearFieldOverrides** (`card.ts`) — printed `CardInstance` plus `fieldOverrides`. Survey / `currentForm` / lineage read the fold. `apply_field_overrides` writes the map; zone moves clear it. Seat `energy_type` still folds on top.
+- **canAttack / canRetreat / mayUsePokemonPower / acceptsStatus / takesPrizeOnKo** (`reads.ts`) — Asleep / Paralyzed; retreat also folded `cannotRetreat`; Power also Confused; Doll `blocksStatus` (Burn still lands) and `prizesOnKo`. Compute lists; machine fail-closes. Standing triggers with `blockedByStatus` use `mayUsePokemonPower`. Ops `applyStatus` uses `acceptsStatus`. Checkup prize uses `takesPrizeOnKo`.
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
 `attack_effects` `prevent: "all"` (Barrier / Agility). `attack_damage` `prevent: 30` (Harden). `set: 0` is still Scrunch. `Op.Attack` writes the hit.
