@@ -71,7 +71,7 @@ async function stage(
   const gamestate = await stage("base1-13", "base1-36", "base1-102", 4)
   const attacks = names(gamestate, Action.Attack)
   expect(attacks.includes("Whirlpool"), "Whirlpool lists with 0 defending Energy")
-  expect(!attacks.includes("Water Gun"), "Water Gun (30+ with text) must not list")
+  expect(attacks.includes("Water Gun"), "authored Water Gun (Hydro Pump stack) should list")
 }
 
 {

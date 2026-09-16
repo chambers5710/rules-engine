@@ -60,6 +60,7 @@ export type InterpretCtx = {
   via?: "attack" | "trigger"
   attack?: string
   events?: GameEvent[]
+  attackShield?: Record<string, boolean>
 }
 
 export type EndOfTurnWho = { beat: "end_of_turn"; who: "owner" | "opponent"; next?: true }
@@ -78,6 +79,8 @@ export type SlotFilter =
   | { kind: "has_energy"; type?: EnergyType }
   | { kind: "empty" }
   | { kind: "evolved" }
+  | { kind: "benched" }
+  | { kind: "evolved_this_turn"; not?: true }
   | { kind: "breeder"; bind: BindingName }
 
 export type CardFilter =
@@ -105,7 +108,7 @@ export type Primitive =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef | BindingName; dest: SlotRef | BindingName; attachment?: Attachment; sourceAttachment?: Attachment }
-  | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName }
+  | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName; matchup?: false }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
@@ -117,6 +120,7 @@ export type Primitive =
   | { op: Op.Select; bind: BindingName; pick: "names"; names: NameOption[]; optional?: true }
   | { op: Op.If; bind: BindingName; equals: unknown; not?: true; then: Expr }
   | { op: Op.If; slot: SlotId | BindingName; status: Status; then: Expr }
+  | { op: Op.If; slot: SlotId | BindingName; filter: SlotFilter | SlotFilter[]; then: Expr }
   | { op: Op.Loop; bind: BindingName; until: number | BindingName; then: Expr }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_damage"; until: EndOfTurnWho; card?: string | BindingName; from?: SlotId | BindingName; attack?: string | BindingName } & AttackDamageRewrite
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "attack_effects"; prevent: "all"; until: EndOfTurnWho; card?: string | BindingName }
@@ -124,7 +128,9 @@ export type Primitive =
       | { flip: true }
       | { ban: string | BindingName }
     )
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "ability_use"; ban: string | BindingName; until: EndOfTurnWho; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "cannot_retreat"; until: EndOfTurnWho; card?: string | BindingName }
+  | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "trainer_use"; until: EndOfTurnWho; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "can_attack"; forbid: SlotId | BindingName; until: EndOfTurnWho; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "energy_type"; set: EnergyType; until: EndOfTurnWho; card?: string | BindingName }
   | { op: Op.ApplyModifier; slot: SlotId | BindingName; field: "weakness_type" | "resistance_type"; set: EnergyType | BindingName; until: { beat: "leave_play" } }
@@ -170,7 +176,9 @@ export type HistoryEntry =
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_damage"; until: { beat: "end_of_turn"; player: 1 | 2 }; from?: CardInstanceId; attack?: string } & AttackDamageRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_effects"; prevent: "all"; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.ApplyModifier; slot: SlotId; field: "attack_use"; until: { beat: "end_of_turn"; player: 1 | 2 } | { beat: "leave_play" } } & AttackUseRewrite
+  | { op: Op.ApplyModifier; slot: SlotId; field: "ability_use"; ban: string; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.ApplyModifier; slot: SlotId; field: "cannot_retreat"; until: { beat: "end_of_turn"; player: 1 | 2 } }
+  | { op: Op.ApplyModifier; slot: SlotId; field: "trainer_use"; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.ApplyModifier; slot: SlotId; field: "can_attack"; forbid: string; until: { beat: "end_of_turn"; player: 1 | 2 } }
   | { op: Op.ApplyModifier; slot: SlotId; field: "energy_type"; until: { beat: "end_of_turn"; player: 1 | 2 } } & EnergyTypeRewrite
   | { op: Op.ApplyModifier; slot: SlotId; field: "weakness_type" | "resistance_type"; until: { beat: "leave_play" } } & EnergyTypeRewrite

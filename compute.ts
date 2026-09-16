@@ -1,4 +1,5 @@
 import {
+  attackSourceId,
   currentForm,
   getSlot,
   hasActive,
@@ -8,13 +9,12 @@ import {
   opponent,
   pokemonInPlay,
 } from "./board.js"
-import { Action, Op, type Expr, type Primitive } from "./dsl.js"
+import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
-import { ifPasses } from "./interpret.js"
-import { attackBanned } from "./modifiers.js"
+import { ifPasses, useGate } from "./interpret.js"
+import { abilityBanned, attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
-import { mayEvolve } from "./helpers.js"
-import { canAttack, canRetreat, mayUsePokemonPower, retreatCost } from "./reads.js"
+import { canAttack, canRetreat, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, retreatCost } from "./reads.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, SlotId } from "./types.js"
@@ -175,7 +175,7 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   )
 }
 
-// Evolve — hand card whose evolvesFrom matches the current form; not first turn; skip seats played or evolved this turn
+// Evolve — hand card whose evolvesFrom matches the current form; `mayEvolve` (first turn, evolvedThisTurn, block_evolve)
 function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
@@ -207,6 +207,7 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
 
 // Trainer — one play per copy in hand. Discard is the play unless the expr MoveZoneToSlots the card (tool / play-as-Pokémon).
 function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  if (!mayPlayTrainer(gamestate, player)) return []
   const hand = { player, zone: "hand" } as const
   const discard = { player, zone: "discard" } as const
   const active = { player, slot: "active" } as const
@@ -246,9 +247,10 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     const form = currentForm(gamestate, slot)
     if (!form) continue
     for (const ability of form.abilities ?? []) {
-      if (ability.type === "Pokémon Power" && !mayUsePokemonPower(slot)) continue
+      if (ability.type === "Pokémon Power" && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
       const expr = cardEffect(gamestate.effectRegistry, form.sourceId, "abilities", ability.name)
       if (expr.length === 0) continue
+      if (abilityBanned(slot, ability.name)) continue
       const seed = {
         $self_slot: slotId,
         $hand: { player, zone: "hand" },
@@ -258,6 +260,8 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
         $opp_deck: { player: opponent(player), zone: "deck" },
         $opp_prize: { player: opponent(player), zone: "prize" },
       }
+      const gate = useGate(expr)
+      if (gate && !ifPasses(gamestate, gate, { bindings: seed })) continue
       if (!exprPlayable(gamestate, expr, seed, player, Action.Ability)) continue
       actions.push({
         kind: Action.Ability,
@@ -284,28 +288,23 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   return (form.attacks ?? [])
     .filter((attack) => canPayEnergyCost(gamestate, slot, attack.cost ?? []) && !attackBanned(active, attack.name))
     .flatMap((attack) => {
-      const expr = attackExpr(gamestate.effectRegistry, form.sourceId, attack)
+      const expr = attackExpr(gamestate.effectRegistry, attackSourceId(gamestate, player) ?? form.sourceId, attack)
       if (expr.length === 0) return []
       const seed = {
         $self_slot: slot,
         $defending: { player: defending, slot: "active" },
         $energy: { ...slot, attachment: "energy" },
+        $hand: { player, zone: "hand" },
+        $deck: { player, zone: "deck" },
         $discard: { player, zone: "discard" },
+        $opp_deck: { player: defending, zone: "deck" },
         $opp_discard: { player: defending, zone: "discard" },
       }
-      const gate = statusUseGate(expr)
+      const gate = useGate(expr)
       if (gate && !ifPasses(gamestate, gate, { bindings: seed })) return []
       if (!exprPlayable(gamestate, expr, seed, player, Action.Attack)) return []
       return [{ kind: Action.Attack, player, name: attack.name, expr, seed }]
     })
-}
-
-// Whole expr is one status If — "can't use unless" (Dream Eater). Mid-expr If stays a no-op skip.
-function statusUseGate(expr: Expr): Extract<Primitive, { op: Op.If }> | undefined {
-  if (expr.length !== 1) return undefined
-  const step = expr[0]
-  if (step.op !== Op.If || !("status" in step)) return undefined
-  return step
 }
 
 // Retreat — pay energy value on Active, then swap with a benched Pokémon.

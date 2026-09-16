@@ -1,5 +1,5 @@
 import { currentForm, getSlot } from "./board.js"
-import { preventsAttackDamage } from "./reads.js"
+import { halveAttackDamage, preventsAttackDamage } from "./reads.js"
 import { clockActivates, clockExpires } from "./clock.js"
 import { copy, moveSlotToZone } from "./ops.js"
 import type { AttackDamageRewrite, AttackUseRewrite, EnergyType, GameState, Modifier, Slot, SlotId } from "./types.js"
@@ -72,6 +72,8 @@ export function foldDamage(gamestate: GameState, slot: SlotId, base: number, att
     if ("add" in rewrite) damage += rewrite.add
     if ("sub" in rewrite) damage = Math.max(0, damage - rewrite.sub)
   }
+  damage = Math.max(0, damage)
+  damage = halveAttackDamage(gamestate, getSlot(gamestate, slot), damage)
   for (const m of mods) {
     const rewrite = rewriteOf(m)
     if ("prevent" in rewrite && damage <= rewrite.prevent) {
@@ -117,6 +119,12 @@ function activeUse(slot: Slot): Extract<Modifier, { field: "attack_use" }>[] {
   )
 }
 
+function activeAbilityUse(slot: Slot): Extract<Modifier, { field: "ability_use" }>[] {
+  return slot.modifiers.filter((m): m is Extract<Modifier, { field: "ability_use" }> =>
+    m.field === "ability_use" && m.phase === "active"
+  )
+}
+
 export function effectsPrevented(gamestate: GameState, slot: SlotId): boolean {
   return getSlot(gamestate, slot).modifiers.some(
     (m) => m.field === "attack_effects" && m.phase === "active" && m.prevent === "all"
@@ -125,6 +133,10 @@ export function effectsPrevented(gamestate: GameState, slot: SlotId): boolean {
 
 export function attackBanned(slot: Slot, name: string): boolean {
   return activeUse(slot).some((m) => "ban" in m && m.ban === name)
+}
+
+export function abilityBanned(slot: Slot, name: string): boolean {
+  return activeAbilityUse(slot).some((m) => m.ban === name)
 }
 
 /** Tail Wag / Snivel: benching or discarding Active drops target-scoped locks. Mutates a copied state. */

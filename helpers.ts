@@ -4,19 +4,6 @@ import { emptyStatus } from "./status.js"
 import { copy, copySlot, moveSlotToZone, moveZoneToZone } from "./ops.js"
 import type { GameState, Slot, SlotId, ZoneName } from "./types.js"
 
-/** WOTC: neither player may evolve on their first turn, including setup Pokémon. */
-export function isPlayersFirstTurn(gamestate: GameState, player: 1 | 2): boolean {
-  if (gamestate.turnCount < 1) return false
-  return player === gamestate.firstPlayer
-    ? gamestate.turnCount === 1
-    : gamestate.turnCount === 2
-}
-
-/** Hand evolve and Breeder: not first turn, and the seat was not played or evolved this turn. */
-export function mayEvolve(gamestate: GameState, player: 1 | 2, slot: Slot): boolean {
-  return !isPlayersFirstTurn(gamestate, player) && !slot.evolvedThisTurn
-}
-
 export function draw(gamestate: GameState, playerId: 1 | 2, count: number) {
   for (let i = 0; i < count; i++) {
     const card = gamestate.players[playerId].deck[0]

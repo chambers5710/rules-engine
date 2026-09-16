@@ -9,11 +9,14 @@ const SLOT_KINDS = new Set<SlotFilter["kind"]>([
   "has_energy",
   "empty",
   "evolved",
+  "benched",
+  "evolved_this_turn",
   "breeder",
 ])
 
 const CARD_KINDS = new Set<CardFilter["kind"]>([
   "energy",
+  "basic_energy",
   "basic_pokemon",
   "evolves_from",
   "name",
@@ -77,8 +80,7 @@ function filterNeed(
   return null
 }
 
-function walk(expr: Expr, known: Set<string>): string | null {
-  const have = new Set(known)
+function walk(expr: Expr, have: Set<string>): string | null {
   for (const step of expr) {
     const err = reads(step, have)
     if (err) return err
@@ -159,6 +161,14 @@ function reads(step: Primitive, have: Set<string>): string | null {
       return null
     }
     case Op.If:
+      if ("filter" in step) {
+        for (const filter of asFilters(step.filter)) {
+          if (filter.kind && !SLOT_KINDS.has(filter.kind as SlotFilter["kind"])) {
+            return `if: filter ${filter.kind} is not a slot filter`
+          }
+        }
+        return read(have, step.slot, at) ?? filterNeed(have, at, asFilters(step.filter))
+      }
       if ("status" in step) return read(have, step.slot, at)
       return read(have, step.bind, at)
     case Op.Loop:

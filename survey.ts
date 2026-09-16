@@ -1,6 +1,8 @@
 import { foldedCard } from "./card.js"
+import { getSlot } from "./board.js"
 import { isStage2Pokemon } from "./lineage.js"
 import { foldedEnergyType } from "./modifiers.js"
+import { energyPaysAny } from "./reads.js"
 import type {
   CardInstanceId,
   EnergyType,
@@ -14,6 +16,7 @@ import type {
 // this seems painfully arbitrary
 export type SurveyFilter =
   | { kind: "energy"; type?: EnergyType }
+  | { kind: "basic_energy"; type?: EnergyType }
   | { kind: "basic_pokemon" }
   | { kind: "evolves_from"; name: string }
   | { kind: "name"; name: string }
@@ -92,6 +95,9 @@ export function canPayEnergyCost(
   cost: EnergyType[]
 ): boolean {
   const pool = energyUnitsOn(gamestate, slot)
+  if (energyPaysAny(gamestate, getSlot(gamestate, slot))) {
+    return pool.length >= cost.length
+  }
   const typed = cost.filter((type) => type !== "Colorless")
   for (const need of typed) {
     const i = pool.indexOf(need)
@@ -111,6 +117,11 @@ export function isEnergy(gamestate: GameState, cardId: string): boolean {
   return foldedCard(gamestate, cardId)?.supertype === "Energy"
 }
 
+export function isBasicEnergy(gamestate: GameState, cardId: string): boolean {
+  const printed = foldedCard(gamestate, cardId)
+  return printed?.supertype === "Energy" && printed.subtypes?.includes("Basic") === true
+}
+
 export function printedAttackDamage(damage?: string | number | null): number {
   const raw = damage == null ? "" : String(damage).trim()
   if (!/^\d+$/.test(raw)) return 0
@@ -128,6 +139,10 @@ export function cardMatches(
   switch (filter.kind) {
     case "energy":
       if (!isEnergy(gamestate, cardId)) return false
+      if (filter.type && energyTypeOf(gamestate, cardId, source) !== filter.type) return false
+      return true
+    case "basic_energy":
+      if (!isBasicEnergy(gamestate, cardId)) return false
       if (filter.type && energyTypeOf(gamestate, cardId, source) !== filter.type) return false
       return true
     case "basic_pokemon":

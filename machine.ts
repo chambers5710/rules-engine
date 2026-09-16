@@ -1,4 +1,5 @@
 import {
+  attackSourceId,
   bothReady,
   currentForm,
   getSlot,
@@ -13,9 +14,9 @@ import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, honestCopy } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
-import { canAttack, canRetreat, mayUsePokemonPower, takesPrizeOnKo } from "./reads.js"
-import { attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
-import { ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
+import { canAttack, canRetreat, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, takesPrizeOnKo } from "./reads.js"
+import { abilityBanned, attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
+import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
 import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter } from "./triggers.js"
 import { copy } from "./ops.js"
 import { selectChoices, selectFrame } from "./select.js"
@@ -103,6 +104,8 @@ function turnPhase(
       )?.instanceId
       if (!canAttack(active, target)) return gamestate
       if (attackBanned(active, action.name)) return gamestate
+      const gate = useGate(action.expr)
+      if (gate && !ifPasses(gamestate, gate, { bindings: action.seed ?? {} })) return gamestate
       return gatedAttack(gamestate, action)
     }
     case Action.Promote:
@@ -114,15 +117,24 @@ function turnPhase(
         runAction(gamestate, action),
         { player: action.player, slot: "bench", index: action.index }
       )
-    case Action.Evolve:
+    case Action.Evolve: {
+      const seat = getSlot(gamestate, action.slot)
+      if (!mayEvolve(gamestate, action.player, seat)) return gamestate
       return markEvolvedThisTurn(runAction(gamestate, action), action.slot)
+    }
     case Action.Ability: {
       const seat = getSlot(gamestate, action.slot)
       const kind = currentForm(gamestate, seat)?.abilities?.find((row) => row.name === action.name)?.type
-      if (kind === "Pokémon Power" && !mayUsePokemonPower(seat)) return gamestate
+      if (kind === "Pokémon Power" && (!mayUsePokemonPower(seat) || powersSuppressed(gamestate))) {
+        return gamestate
+      }
+      if (abilityBanned(seat, action.name)) return gamestate
+      const gate = useGate(action.expr)
+      if (gate && !ifPasses(gamestate, gate, { bindings: action.seed ?? {} })) return gamestate
       return runAction(gamestate, action)
     }
     case Action.PlayTrainer:
+      if (!mayPlayTrainer(gamestate, action.player)) return gamestate
       return runAction(gamestate, action)
     case Action.Retreat:
       if (!canRetreat(gamestate, getSlot(gamestate, { player: action.player, slot: "active" }))) {
@@ -423,7 +435,7 @@ export function copiedAttackExpr(gamestate: GameState, slot: SlotId, name: strin
   const form = currentForm(gamestate, getSlot(gamestate, slot))
   const attack = form?.attacks?.find((row) => row.name === name)
   if (!form || !attack) return []
-  return honestCopy(attackExpr(gamestate.effectRegistry, form.sourceId, attack))
+  return honestCopy(attackExpr(gamestate.effectRegistry, attackSourceId(gamestate, slot.player) ?? form.sourceId, attack))
 }
 
 // Action finished — paused Select is not done; Attack / EndTurn then Checkup

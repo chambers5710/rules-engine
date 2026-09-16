@@ -1,6 +1,6 @@
 import { opponent, getSlot, currentForm } from "./board.js"
 import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
-import { interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
+import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
 import { foldedCard } from "./card.js"
 import { cardMatches, cardsAt } from "./survey.js"
 import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
@@ -259,6 +259,10 @@ function walkPlayable(
   for (let i = index; i < expr.length; i++) {
     const step = expr[i]
     if (step.op === Op.If || step.op === Op.Loop || step.op === Op.RunEffect) {
+      if (step.op === Op.If && i === index && useGate(expr) === step) {
+        if (!ifPasses(gamestate, step, ctx)) return false
+        return walkPlayable(gamestate, step.then, ctx, player, kind, 0)
+      }
       continue
     }
     if (step.op === Op.Each) {

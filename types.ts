@@ -81,7 +81,7 @@ export type Slot = {
   energy: CardInstanceId[]
   tools: CardInstanceId[]
   modifiers: Modifier[]
-  evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet. First-turn evolve is `mayEvolve`, not this flag.
+  evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet. First-turn evolve and `block_evolve` are `mayEvolve`, not this flag.
   poisonCounters: number
 }
 // Slot id — which Pokémon in play
@@ -110,6 +110,8 @@ export type AttackUseRewrite =
   | { flip: true }
   | { ban: string }
 
+export type AbilityUseRewrite = { ban: string }
+
 export type EnergyTypeRewrite = { set: EnergyType }
 
 export type ClockPhase = "pending" | "active"
@@ -134,7 +136,9 @@ export type Modifier =
   | ({ field: "attack_damage" } & ModifierClock & AttackDamageRewrite & DamageScope)
   | ({ field: "attack_effects" } & ModifierClock & AttackEffectsRewrite)
   | ({ field: "attack_use" } & ModifierClock & AttackUseRewrite)
+  | ({ field: "ability_use" } & ModifierClock & AbilityUseRewrite)
   | ({ field: "cannot_retreat" } & ModifierClock)
+  | ({ field: "trainer_use" } & ModifierClock)
   | ({ field: "can_attack"; forbid: CardInstanceId } & ModifierClock)
   | ({ field: "energy_type" } & ModifierClock & EnergyTypeRewrite)
   | ({ field: "weakness_type" } & ModifierClock & EnergyTypeRewrite)
@@ -164,6 +168,12 @@ export type PowerSpec =
   | { kind: "blocks_status" }
   | { kind: "prevent_damage"; min: number }
   | { kind: "reduce_retreat" }
+  | { kind: "block_evolve" }
+  | { kind: "ignore_powers" }
+  | { kind: "halve_damage" }
+  | { kind: "reveal_hand" }
+  | { kind: "copy_defending" }
+  | { kind: "coin_prevent_attack" }
 
 export type TriggerSpec =
   | {

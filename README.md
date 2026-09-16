@@ -76,7 +76,7 @@ Stop using `from` for three jobs. The field is the role:
 |---|---|
 | `AvailableAction` (attach, evolve, ability, choose, promote) | `slot: SlotId` |
 | Move ops | `source` + dest (`SlotRef` or `ZoneDest`) |
-| `Op.Attack` | `attacker` + `defender` (`SlotId \| BindingName`) |
+| `Op.Attack` | `attacker` + `defender` (`SlotId \| BindingName`); optional `matchup: false` skips W/R |
 | `Op.ApplyDamage` / status / modifier | `slot` |
 | `Op.Count` | `zone`, or `slot` + `attachment` (a `SlotRef` after resolve) |
 | `Op.Select` | split on `pick` — see below |
@@ -135,7 +135,7 @@ Names on the interpret context. Every real attack uses them, not just tests.
 Read-only. Compute and card text ask the same questions.
 
 - **Where** — `ZoneRef` or `SlotRef` (zone vs slot attachment)
-- **Filter** — `energy` (optional `type`), `basic_pokemon`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`
+- **Filter** — `energy` (optional `type`), `basic_energy` (optional `type`; subtype Basic only), `basic_pokemon`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`
 - **Reduce** — list, count, or sum of `energyValue`
 
 `Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "knocked_out"` is `isKnockedOut` as 1/0 (Hurricane). Zone `kind: "random"` binds one id without shuffling (Peek). `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). Zone `kind: "prefix"` binds the top `n` ids. `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`name`, `has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
@@ -165,10 +165,10 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 - **applyModifier** — `pending`, or `active` if `until.player` is already active; `until.next` stays pending (Swords Dance)
 - **foldAttackBase** — name-scoped `set` on the attacker before W/R
 - **foldAdds / foldDamage** — after W/R in the attack pipeline; `apply_damage` does not fold. `from` only folds when that instance is the attacker (Snivel). Name-scoped mods are not folded here
-- **attackBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused)
+- **attackBanned / abilityBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused). `ability_use` `ban` hides that Power (Curse / Step In until owner’s turn ends)
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
-- **foldedCard** / **applyFieldOverrides** / **clearFieldOverrides** (`card.ts`) — printed `CardInstance` plus `fieldOverrides`. Survey / `currentForm` / lineage read the fold. `apply_field_overrides` writes the map (`types: "$t"` wraps as `[type]`); zone moves clear it. Seat `energy_type` still folds on top.
-- **canAttack / canRetreat / retreatCost / mayUsePokemonPower / acceptsStatus / takesPrizeOnKo / preventsAttackDamage** (`reads.ts`) — Asleep / Paralyzed; `canAttack` also timed `can_attack` vs a defending instance (Tail Wag); retreat also folded `cannotRetreat` and timed `cannot_retreat` (Acid); `retreatCost` drops Colorless for benched `reduce_retreat`; Power also Confused; Doll or standing `blocks_status` (Burn still lands); Invisible Wall `prevent_damage` after W/R / splash; `prizesOnKo`. Compute lists; machine fail-closes. Standing triggers with `blockedByStatus` use `mayUsePokemonPower`. Ops `applyStatus` uses `acceptsStatus`. Checkup prize uses `takesPrizeOnKo`.
+- **foldedCard** / **applyFieldOverrides** / **clearFieldOverrides** (`card.ts`) — printed `CardInstance` plus `fieldOverrides`. `physicalForm` is that fold; `currentForm` then overlays Transform `copy_defending`. Survey / lineage read `foldedCard`; combat / KO / retreat read `currentForm`. `apply_field_overrides` writes the map (`types: "$t"` wraps as `[type]`); zone moves clear it. Seat `energy_type` still folds on top.
+- **canAttack / canRetreat / retreatCost / mayUsePokemonPower / powersSuppressed / mayEvolve / mayPlayTrainer / acceptsStatus / takesPrizeOnKo / preventsAttackDamage / halveAttackDamage / handIsPublic / energyPaysAny / coinPreventsAttack** (`reads.ts`) — Asleep / Paralyzed; `canAttack` also timed `can_attack` vs a defending instance (Tail Wag); retreat also folded `cannotRetreat` and timed `cannot_retreat` (Acid); `retreatCost` drops Colorless for benched `reduce_retreat`; Power also Confused and `ignore_powers` (Toxic Gas keeps itself); Headache `trainer_use` on that player’s seats; Doll or standing `blocks_status` (Burn still lands); Invisible Wall `prevent_damage` after W/R / splash; Kabuto Armor `halve_damage` after W/R add/sub; evolve is first-turn + `evolvedThisTurn` + `block_evolve` + Transform; Clairvoyance `reveal_hand` for fog; Transform energy is wild for costs; Transparency `coin_prevent_attack` (coin in interpret); `prizesOnKo`. Compute lists; machine fail-closes. Standing triggers with `blockedByStatus` use `mayUsePokemonPower` and `powersSuppressed`. Ops `applyStatus` uses `acceptsStatus`. Checkup prize uses `takesPrizeOnKo`.
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
 `attack_effects` `prevent: "all"` (Barrier / Agility). `attack_damage` `prevent: 30` (Harden). `set: 0` is still Scrunch. `Op.Attack` writes the hit.

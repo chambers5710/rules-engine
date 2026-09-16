@@ -1,7 +1,7 @@
-import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type EndOfTurnWho, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
+import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type EndOfTurnWho, type Expr, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
 import { applyFieldOverrides } from "./card.js"
 import { applyModifier, effectsPrevented, foldAdds, foldAttackBase, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
-import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, pokemonInPlay, sameSlot } from "./board.js"
+import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, physicalForm, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
   applyStatus,
@@ -16,8 +16,8 @@ import {
   reorderZone,
   shuffle,
 } from "./ops.js"
-import { discardSlot, draw, mayEvolve, swapActive } from "./helpers.js"
-import { preventsAttackDamage } from "./reads.js"
+import { discardSlot, draw, swapActive } from "./helpers.js"
+import { coinPreventsAttack, halveAttackDamage, mayEvolve, preventsAttackDamage } from "./reads.js"
 import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
 import { cardsAt, isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
@@ -38,8 +38,26 @@ function isSlotRef(value: unknown): value is SlotRef {
   return isSlotId(value) && "attachment" in value
 }
 
-function attackBlocked(gamestate: GameState, slot: SlotId | undefined, ctx: InterpretCtx): boolean {
-  return ctx.via === "attack" && !!slot && effectsPrevented(gamestate, slot)
+function withAttackShield(
+  gamestate: GameState,
+  slot: SlotId | undefined,
+  ctx: InterpretCtx
+): { gamestate: GameState; blocked: boolean } {
+  if (ctx.via !== "attack" || !slot) return { gamestate, blocked: false }
+  if (effectsPrevented(gamestate, slot)) return { gamestate, blocked: true }
+  const seat = getSlot(gamestate, slot)
+  if (!coinPreventsAttack(gamestate, seat)) return { gamestate, blocked: false }
+  const id = physicalForm(gamestate, seat)?.instanceId
+  if (!id) return { gamestate, blocked: false }
+  ctx.attackShield ??= {}
+  if (id in ctx.attackShield) return { gamestate, blocked: ctx.attackShield[id] }
+  const scripted = ctx.script?.coins?.shift()
+  const result = scripted ?? flipCoin(1)[0]
+  ctx.attackShield[id] = result === "heads"
+  return {
+    gamestate: record(gamestate, { op: Op.FlipCoin, result }),
+    blocked: ctx.attackShield[id],
+  }
 }
 
 function emitDamage(
@@ -162,20 +180,23 @@ function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): { beat: "end_of_turn
 }
 
 // Named base, then Weakness / Resistance, then attacker adds, then defender folds.
-// W/R only on the Defending Pokémon (opponent's Active). Attacker types are
-// the current form, not attached energy and not attack cost. Each printed
-// line whose type is among those types applies; damage floors at 0.
+// W/R only on the Defending Pokémon (opponent's Active), unless the Attack
+// primitive sets matchup: false (Sonicboom). Attacker types are the current
+// form, not attached energy and not attack cost. Each printed line whose type
+// is among those types applies; damage floors at 0. foldAdds / foldDamage still
+// run after that skip — printed “other effects after W/R still happen.”
 export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
   attacker: SlotId,
   defender: SlotId,
-  attack?: string
+  attack?: string,
+  matchup = true
 ): { damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean } {
   let damage = foldAttackBase(gamestate, attacker, base, attack)
   let weakness = false
   let resistance = false
-  if (defender.player !== attacker.player && defender.slot === "active") {
+  if (matchup && defender.player !== attacker.player && defender.slot === "active") {
     const types = currentForm(gamestate, getSlot(gamestate, attacker))?.types ?? []
     const defending = currentForm(gamestate, getSlot(gamestate, defender))
     const weakTo = foldedMatchupType(gamestate, defender, "weakness_type")
@@ -368,6 +389,14 @@ export function slotMatches(
       case "evolved":
         if (slot.evolution.length < 2) return false
         break
+      case "benched":
+        if (slotId.slot !== "bench") return false
+        break
+      case "evolved_this_turn": {
+        const hit = slot.evolvedThisTurn
+        if (filter.not ? hit : !hit) return false
+        break
+      }
       case "breeder": {
         const evo = bindings[filter.bind]
         if (typeof evo !== "string" || !mayEvolve(gamestate, slotId.player, slot)) return false
@@ -415,6 +444,11 @@ export function ifPasses(
   primitive: Extract<Primitive, { op: Op.If }>,
   ctx: InterpretCtx
 ): boolean {
+  if ("filter" in primitive) {
+    const slot = resolveSlot(primitive.slot, ctx)
+    if (!slot) return false
+    return slotMatches(gamestate, slot, [primitive.filter].flat(), ctx.bindings)
+  }
   if ("status" in primitive) {
     const slot = resolveSlot(primitive.slot, ctx)
     if (!slot) return false
@@ -422,6 +456,15 @@ export function ifPasses(
   }
   const hit = ctx.bindings[primitive.bind] === primitive.equals
   return primitive.not ? !hit : hit
+}
+
+/** Sole top-level status / slot-filter If — "can't use unless" (Dream Eater, Spacing Out, Step In). */
+export function useGate(expr: Expr): Extract<Primitive, { op: Op.If }> | undefined {
+  if (expr.length !== 1) return undefined
+  const step = expr[0]
+  if (step.op !== Op.If) return undefined
+  if ("status" in step || "filter" in step) return step
+  return undefined
 }
 
 export function interpret(
@@ -451,8 +494,9 @@ export function interpret(
       const dest = resolveZone(primitive.dest, ctx)
       const card = resolveCard(primitive.card, ctx)
       if (!source || !dest || !card) return gamestate
-      if (attackBlocked(gamestate, source, ctx)) return gamestate
-      return moveSlotToZone(gamestate, card, source, dest, primitive.position)
+      const shield = withAttackShield(gamestate, source, ctx)
+      if (shield.blocked) return shield.gamestate
+      return moveSlotToZone(shield.gamestate, card, source, dest, primitive.position)
     }
 
     case Op.MoveSlotToSlot: {
@@ -464,22 +508,26 @@ export function interpret(
       const dest = resolveSlotAttachment(primitive.dest, ctx, primitive.attachment)
       const card = resolveCard(primitive.card, ctx)
       if (!source || !dest || !card) return gamestate
-      if (attackBlocked(gamestate, source, ctx)) return gamestate
-      return moveSlotToSlot(gamestate, card, source, dest)
+      const shield = withAttackShield(gamestate, source, ctx)
+      if (shield.blocked) return shield.gamestate
+      return moveSlotToSlot(shield.gamestate, card, source, dest)
     }
 
     case Op.Attack: {
       const attacker = resolveSlot(primitive.attacker, ctx)
       const defender = resolveSlot(primitive.defender, ctx)
       if (!attacker || !defender) return gamestate
+      const shield = withAttackShield(gamestate, defender, ctx)
+      gamestate = shield.gamestate
       const hit = pipelineAttackDamage(
         gamestate,
         resolveAmount(primitive.base, ctx),
         attacker,
         defender,
-        ctx.attack
+        ctx.attack,
+        primitive.matchup !== false
       )
-      const blocked = effectsPrevented(gamestate, defender)
+      const blocked = shield.blocked
       const damage = blocked ? 0 : hit.damage
       const prevented = blocked || hit.prevented
       ctx.bindings[primitive.bind] = damage
@@ -509,15 +557,16 @@ export function interpret(
 
     case Op.ApplyDamage: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
+      const shield = withAttackShield(gamestate, slot, ctx)
+      if (!slot || shield.blocked) return shield.gamestate
+      gamestate = shield.gamestate
       let amount = resolveAmount(primitive.amount, ctx)
       const source = resolveSlot("$self_slot", ctx)
       const via = applyDamageVia(ctx, slot, primitive.source)
-      if (
-        (via === "attack" || via === "splash") &&
-        preventsAttackDamage(gamestate, getSlot(gamestate, slot), amount)
-      ) {
-        amount = 0
+      if (via === "attack" || via === "splash") {
+        const seat = getSlot(gamestate, slot)
+        amount = halveAttackDamage(gamestate, seat, amount)
+        if (preventsAttackDamage(gamestate, seat, amount)) amount = 0
       }
       const next = applyDamage(gamestate, amount, slot, primitive.source)
       emitDamage(ctx, next, source, slot, amount, via)
@@ -527,14 +576,16 @@ export function interpret(
 
     case Op.ApplyStatus: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
-      return applyStatus(gamestate, primitive.status, slot, primitive.counters)
+      const shield = withAttackShield(gamestate, slot, ctx)
+      if (!slot || shield.blocked) return shield.gamestate
+      return applyStatus(shield.gamestate, primitive.status, slot, primitive.counters)
     }
 
     case Op.RemoveStatus: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
-      return removeStatus(gamestate, primitive.status, slot)
+      const shield = withAttackShield(gamestate, slot, ctx)
+      if (!slot || shield.blocked) return shield.gamestate
+      return removeStatus(shield.gamestate, primitive.status, slot)
     }
 
     case Op.FlipCoin: {
@@ -550,7 +601,9 @@ export function interpret(
 
     case Op.ApplyModifier: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (!slot || attackBlocked(gamestate, slot, ctx)) return gamestate
+      const shield = withAttackShield(gamestate, slot, ctx)
+      if (!slot || shield.blocked) return shield.gamestate
+      gamestate = shield.gamestate
       switch (primitive.field) {
         case "weakness_type":
         case "resistance_type": {
@@ -579,6 +632,16 @@ export function interpret(
           return record(
             applyModifier(gamestate, slot, { field: "attack_use", ...rewrite, until, ...(card ? { card } : {}) }),
             { op: Op.ApplyModifier, slot, field: "attack_use", ...rewrite, until },
+          )
+        }
+        case "ability_use": {
+          const until = endOfTurnUntil(slot, primitive.until)
+          const rewrite = useRewriteOf({ ban: primitive.ban }, (name) => String(ctx.bindings[name] ?? ""))
+          if (!("ban" in rewrite)) return gamestate
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "ability_use", ban: rewrite.ban, until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "ability_use", ban: rewrite.ban, until },
           )
         }
         case "energy_type": {
@@ -615,6 +678,14 @@ export function interpret(
           return record(
             applyModifier(gamestate, slot, { field: "cannot_retreat", until, ...(card ? { card } : {}) }),
             { op: Op.ApplyModifier, slot, field: "cannot_retreat", until },
+          )
+        }
+        case "trainer_use": {
+          const until = endOfTurnUntil(slot, primitive.until)
+          const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
+          return record(
+            applyModifier(gamestate, slot, { field: "trainer_use", until, ...(card ? { card } : {}) }),
+            { op: Op.ApplyModifier, slot, field: "trainer_use", until },
           )
         }
         case "can_attack": {
@@ -790,16 +861,18 @@ export function interpret(
     case Op.SwapActive: {
       const slot = resolveSlot(primitive.slot, ctx)
       if (!slot || slot.slot !== "bench") return gamestate
-      if (attackBlocked(gamestate, { player: slot.player, slot: "active" }, ctx)) return gamestate
-      const next = swapActive(gamestate, slot.player, slot.index)
-      if (next === gamestate) return gamestate
+      const shield = withAttackShield(gamestate, { player: slot.player, slot: "active" }, ctx)
+      if (shield.blocked) return shield.gamestate
+      const next = swapActive(shield.gamestate, slot.player, slot.index)
+      if (next === shield.gamestate) return shield.gamestate
       return record(next, { op: Op.SwapActive, slot })
     }
 
     case Op.DiscardSlot: {
       const slot = resolveSlot(primitive.slot, ctx)
-      if (!slot) return gamestate
-      return discardSlot(gamestate, slot, primitive.dest ?? "discard")
+      const shield = withAttackShield(gamestate, slot, ctx)
+      if (!slot || shield.blocked) return shield.gamestate
+      return discardSlot(shield.gamestate, slot, primitive.dest ?? "discard")
     }
 
     case Op.Devolve: {

@@ -1,7 +1,7 @@
 import { currentForm, getSlot, sameSlot } from "./board.js"
 import { clockActivates, clockExpires } from "./clock.js"
 import type { Expr, InterpretCtx } from "./dsl.js"
-import { mayUsePokemonPower } from "./reads.js"
+import { mayUsePokemonPower, powersSuppressed } from "./reads.js"
 import type { GameEvent, GameState, SlotId } from "./types.js"
 
 export type TriggerJob = {
@@ -54,7 +54,7 @@ export function matchTriggers(gamestate: GameState, event: GameEvent): TriggerJo
       if (spec.when !== "damage_applied") return []
       if (!spec.via.includes(event.via)) return []
       if ((event.applied ?? 0) < (spec.minApplied ?? 0)) return []
-      if (spec.blockedByStatus && !mayUsePokemonPower(slot)) return []
+      if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) return []
       return [{ seat: event.target, then: spec.then }]
     })
   }
