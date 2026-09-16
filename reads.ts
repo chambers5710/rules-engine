@@ -51,11 +51,11 @@ export function preventsAttackDamage(gamestate: GameState, slot: Slot, amount: n
 }
 
 /** Printed Active retreat, minus one Colorless per benched `reduce_retreat` Power that is on. */
-export function retreatCost(gamestate: GameState, slot: Slot): EnergyType[] {
-  const printed = currentForm(gamestate, slot)?.retreatCost ?? []
+export function retreatCost(gamestate: GameState, player: 1 | 2): EnergyType[] {
+  const printed = currentForm(gamestate, gamestate.players[player].active)?.retreatCost ?? []
   let drop = 0
-  for (const index of occupiedBench(gamestate, slot.player)) {
-    const bench = gamestate.players[slot.player].bench[index]
+  for (const index of occupiedBench(gamestate, player)) {
+    const bench = gamestate.players[player].bench[index]
     if (standingSpecs(gamestate, bench).some((power) => power.kind === "reduce_retreat")) drop++
   }
   if (drop === 0) return printed

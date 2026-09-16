@@ -316,7 +316,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
   if (!canRetreat(gamestate, active)) return []
   const slot = { player, slot: "active" } as const
   if (!currentForm(gamestate, active)) return []
-  const cost = retreatCost(gamestate, active)
+  const cost = retreatCost(gamestate, player)
   if (!canPayEnergyCost(gamestate, slot, cost)) return []
   const need = cost.length
   const energy = { ...slot, attachment: "energy" as const }
