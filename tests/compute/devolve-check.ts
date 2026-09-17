@@ -74,4 +74,22 @@ async function stage(evolved: boolean): GameState {
   expect(!gamestate.players[1].active.status.poison, "devolve clears status")
 }
 
+{
+  let gamestate = await stage(true)
+  const basic = gamestate.players[1].active.evolution[0]
+  const stage1 = gamestate.players[1].active.evolution[1]
+  gamestate = applyStatus(gamestate, "poison", { player: 1, slot: "active" })
+  gamestate = runExpr(gamestate, [{ op: Op.Devolve, slot: "$target", from: "$cut", dest: "hand" }], {
+    bindings: {
+      $target: { player: 1, slot: "active" },
+      $cut: stage1,
+    },
+  }, 1, Action.Attack)
+  expect(gamestate.players[1].active.evolution.length === 1, "Beam leaves the Basic")
+  expect(gamestate.players[1].active.evolution[0] === basic, "Beam Basic stays")
+  expect(gamestate.players[1].hand.includes(stage1), "highest Stage returns to the owner’s hand")
+  expect(!gamestate.players[1].discard.includes(stage1), "Beam does not discard the Stage")
+  expect(!gamestate.players[1].active.status.poison, "Beam still runs asIfEvolved")
+}
+
 console.log("devolve-check assertions passed")

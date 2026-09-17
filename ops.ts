@@ -209,20 +209,22 @@ export const moveSlotToZone = (
   })
 }
 
-/** Discard `from` and every later evolution card, then evolve-cleanup. */
+/** Move `from` and every later evolution card to the owner’s dest (default discard), then evolve-cleanup. */
 export const devolve = (
   gamestate: GameState,
   slotId: SlotId,
-  from: CardInstanceId
+  from: CardInstanceId,
+  destZone: ZoneName = "discard"
 ) => {
   const pile = getSlot(gamestate, slotId).evolution
   const start = pile.indexOf(from)
   if (start <= 0) return gamestate
-  const dest = { player: slotId.player, zone: "discard" as const }
+  const dest = { player: slotId.player, zone: destZone }
   const source = { ...slotId, attachment: "evolution" as const }
   const drop = pile.slice(start)
+  const position = destZone === "discard" ? "bottom" : "top"
   for (const card of [...drop].reverse()) {
-    gamestate = moveSlotToZone(gamestate, card, source, dest, "bottom")
+    gamestate = moveSlotToZone(gamestate, card, source, dest, position)
   }
   const next = copy(gamestate, slotId.player)
   asIfEvolved(next, slotId)

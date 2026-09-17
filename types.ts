@@ -109,9 +109,10 @@ export type AttackDamageRewrite =
   | { add: number }
   | { sub: number }
   | { prevent: number }
+  | { mul: number }
 
-/** Sibling to the numeric rewrite — not inside `rewriteOf`. */
-export type DamageScope = { from?: CardInstanceId; attack?: string }
+/** Sibling to the numeric rewrite — not inside `rewriteOf`. `before: "matchup"` is Togepi Snivel (Jungle Snivel omits it). */
+export type DamageScope = { from?: CardInstanceId; attack?: string; before?: "matchup" }
 
 export type AttackEffectsRewrite = { prevent: "all" }
 
@@ -132,7 +133,7 @@ export type TurnClock = {
   phase: ClockPhase
 }
 
-export type ModifierUntil = EndOfTurnUntil | { beat: "leave_play" }
+export type ModifierUntil = EndOfTurnUntil | { beat: "leave_play" } | { beat: "leave_active" }
 
 type ModifierClock = {
   until: ModifierUntil
@@ -194,6 +195,8 @@ export type PowerSpec =
   | { kind: "reveal_hand" }
   | { kind: "copy_defending" }
   | { kind: "coin_prevent_attack" }
+  | { kind: "prevent_attacks"; on: "owner_bench" | "self"; from?: "evolved" }
+  | { kind: "cannot_retreat"; on: "opponent_active" }
 
 export type TriggerSpec =
   | {

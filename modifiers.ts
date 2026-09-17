@@ -1,5 +1,5 @@
 import { currentForm, getSlot } from "./board.js"
-import { halveAttackDamage, preventsAttackDamage } from "./reads.js"
+import { halveAttackDamage, preventsAttackDamage, preventsAttackEffects } from "./reads.js"
 import { clockActivates, clockExpires } from "./clock.js"
 import { copy, moveSlotToZone } from "./ops.js"
 import type { AttackDamageRewrite, AttackUseRewrite, EnergyType, GameState, Modifier, Slot, SlotId } from "./types.js"
@@ -26,6 +26,7 @@ export function rewriteOf(modifier: AttackDamageRewrite): AttackDamageRewrite {
   if ("set" in modifier) return { set: modifier.set }
   if ("add" in modifier) return { add: modifier.add }
   if ("sub" in modifier) return { sub: modifier.sub }
+  if ("mul" in modifier) return { mul: modifier.mul }
   return { prevent: modifier.prevent }
 }
 
@@ -40,7 +41,7 @@ export function applyModifier(
 ): GameState {
   const next = copy(gamestate, slot.player)
   const phase =
-    modifier.until.beat === "leave_play"
+    modifier.until.beat === "leave_play" || modifier.until.beat === "leave_active"
       ? "active"
       : modifier.until.next
         ? "pending"
@@ -55,17 +56,42 @@ export function applyModifier(
   return next
 }
 
-export function foldDamage(gamestate: GameState, slot: SlotId, base: number, attacker?: SlotId): number {
+function attackDamageMods(
+  gamestate: GameState,
+  slot: SlotId,
+  attacker?: SlotId
+): Extract<Modifier, { field: "attack_damage" }>[] {
   const attackerId = attacker
     ? currentForm(gamestate, getSlot(gamestate, attacker))?.instanceId
     : undefined
-  const mods = getSlot(gamestate, slot).modifiers.filter(
+  return getSlot(gamestate, slot).modifiers.filter(
     (m): m is Extract<Modifier, { field: "attack_damage" }> =>
       m.field === "attack_damage" &&
       m.phase === "active" &&
       !m.attack &&
       (!m.from || m.from === attackerId)
   )
+}
+
+/** Defender add/sub before Weakness / Resistance (Togepi Snivel). */
+export function foldBeforeMatchup(
+  gamestate: GameState,
+  slot: SlotId,
+  base: number,
+  attacker?: SlotId
+): number {
+  let damage = base
+  for (const m of attackDamageMods(gamestate, slot, attacker)) {
+    if (m.before !== "matchup") continue
+    const rewrite = rewriteOf(m)
+    if ("add" in rewrite) damage += rewrite.add
+    if ("sub" in rewrite) damage = Math.max(0, damage - rewrite.sub)
+  }
+  return Math.max(0, damage)
+}
+
+export function foldDamage(gamestate: GameState, slot: SlotId, base: number, attacker?: SlotId): number {
+  const mods = attackDamageMods(gamestate, slot, attacker).filter((m) => m.before !== "matchup")
   let damage = base
   for (const m of mods) {
     const rewrite = rewriteOf(m)
@@ -125,7 +151,8 @@ function activeAbilityUse(slot: Slot): Extract<Modifier, { field: "ability_use" 
   )
 }
 
-export function effectsPrevented(gamestate: GameState, slot: SlotId): boolean {
+export function effectsPrevented(gamestate: GameState, slot: SlotId, from?: Slot): boolean {
+  if (preventsAttackEffects(gamestate, slot, from)) return true
   return getSlot(gamestate, slot).modifiers.some(
     (m) => m.field === "attack_effects" && m.phase === "active" && m.prevent === "all"
   )
@@ -137,6 +164,11 @@ export function attackBanned(slot: Slot, name: string): boolean {
 
 export function abilityBanned(slot: Slot, name: string): boolean {
   return activeAbilityUse(slot).some((m) => m.ban === name)
+}
+
+/** Texture Magic: benching that Pokémon drops `leave_active` mods. Mutates a copied seat. */
+export function stripLeaveActive(slot: Slot): void {
+  slot.modifiers = slot.modifiers.filter((m) => m.until.beat !== "leave_active")
 }
 
 /** Tail Wag / Snivel: benching or discarding Active drops target-scoped locks. Mutates a copied state. */

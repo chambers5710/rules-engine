@@ -1,5 +1,5 @@
 import { getSlot } from "./board.js"
-import { stripPairLocks } from "./modifiers.js"
+import { stripLeaveActive, stripPairLocks } from "./modifiers.js"
 import { emptyStatus } from "./status.js"
 import { copy, copySlot, moveSlotToZone, moveZoneToZone } from "./ops.js"
 import type { GameState, Slot, SlotId, ZoneName } from "./types.js"
@@ -62,6 +62,7 @@ export function swapActive(
   const next = copy(gamestate, 1, 2)
   const p = next.players[player]
   const outgoing = leaveActive(p.active)
+  stripLeaveActive(outgoing)
   p.active = copySlot(p.bench[index])
   p.bench[index] = outgoing
   stripPairLocks(next, left)

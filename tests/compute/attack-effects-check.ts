@@ -67,4 +67,18 @@ const ctx = {
   expect(gamestate.players[2].active.damage === 10, "unshielded Attack still writes counters")
 }
 
+{
+  let gamestate = applyModifier(await stage(), defending, {
+    field: "attack_damage",
+    mul: 0.5,
+    until: { beat: "end_of_turn", player: 1 },
+  })
+  gamestate = interpret(
+    gamestate,
+    { op: Op.Attack, base: 30, attacker: "$self_slot", defender: "$defending", bind: "$damage" },
+    ctx
+  )
+  expect(gamestate.players[2].active.damage === 10, "timed mul 0.5 is after W/R, round down 10")
+}
+
 console.log("attack-effects-check assertions passed")

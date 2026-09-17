@@ -1,5 +1,5 @@
 import { copyingDefending, currentForm, getSlot, occupiedBench, opponent, physicalForm, pokemonInPlay } from "./board.js"
-import type { CardInstance, CardInstanceId, EnergyType, GameState, PowerSpec, Slot, Status } from "./types.js"
+import type { CardInstance, CardInstanceId, EnergyType, GameState, PowerSpec, Slot, SlotId, Status } from "./types.js"
 
 const PLAYERS = [1, 2] as const
 
@@ -15,6 +15,23 @@ function standingSpecs(gamestate: GameState, slot: Slot): PowerSpec[] {
   const specs = livePowers(gamestate, slot)
   if (!powersSuppressed(gamestate)) return specs
   return specs.filter((power) => power.kind === "ignore_powers")
+}
+
+/** Specs on another seat that apply to this one (Aurora Veil / Guard). */
+function aimedAt(gamestate: GameState, slot: SlotId): PowerSpec[] {
+  const aimed: PowerSpec[] = []
+  if (slot.slot === "bench") {
+    for (const power of standingSpecs(gamestate, gamestate.players[slot.player].active)) {
+      if (power.kind === "prevent_attacks" && power.on === "owner_bench") aimed.push(power)
+    }
+  }
+  if (slot.slot === "active") {
+    const foe = gamestate.players[opponent(slot.player)].active
+    for (const power of standingSpecs(gamestate, foe)) {
+      if (power.kind === "cannot_retreat" && power.on === "opponent_active") aimed.push(power)
+    }
+  }
+  return aimed
 }
 
 function statusBlocksAttackAndRetreat(slot: Slot): boolean {
@@ -38,12 +55,19 @@ export function canAttack(slot: Slot, target?: CardInstanceId): boolean {
   )
 }
 
-/** Same status gate as `canAttack`, plus folded `cannotRetreat` (Doll) and timed `cannot_retreat`. */
+/** Same status gate as `canAttack`, plus folded `cannotRetreat`, timed `cannot_retreat`, and standing Guard. */
 export function canRetreat(gamestate: GameState, slot: Slot): boolean {
   if (statusBlocksAttackAndRetreat(slot)) return false
   if (slot.modifiers.some((m) => m.field === "cannot_retreat" && m.phase === "active")) return false
   const form = currentForm(gamestate, slot)
-  return !!form && !form.cannotRetreat
+  if (!form || form.cannotRetreat) return false
+  for (const player of PLAYERS) {
+    if (gamestate.players[player].active !== slot) continue
+    if (aimedAt(gamestate, { player, slot: "active" }).some((power) => power.kind === "cannot_retreat")) {
+      return false
+    }
+  }
+  return true
 }
 
 /** Headache — timed `trainer_use` on that player's seats (Acid clock on `$defending`). */
@@ -81,6 +105,24 @@ export function acceptsStatus(gamestate: GameState, slot: Slot, status: Status):
   return !standingSpecs(gamestate, slot).some((power) => power.kind === "blocks_status")
 }
 
+function attackSourceMatches(power: Extract<PowerSpec, { kind: "prevent_attacks" }>, from?: Slot): boolean {
+  if (!power.from) return true
+  if (!from) return false
+  return power.from === "evolved" && from.evolution.length >= 2
+}
+
+/** Aurora Veil on owner bench; Neutral Shield on self from Evolved. */
+export function preventsAttackEffects(gamestate: GameState, slot: SlotId, from?: Slot): boolean {
+  const specs: Extract<PowerSpec, { kind: "prevent_attacks" }>[] = []
+  for (const power of aimedAt(gamestate, slot)) {
+    if (power.kind === "prevent_attacks") specs.push(power)
+  }
+  for (const power of standingSpecs(gamestate, getSlot(gamestate, slot))) {
+    if (power.kind === "prevent_attacks" && power.on === "self") specs.push(power)
+  }
+  return specs.some((power) => attackSourceMatches(power, from))
+}
+
 /** Invisible Wall — attack/splash damage ≥ min while the Power is on. */
 export function preventsAttackDamage(gamestate: GameState, slot: Slot, amount: number): boolean {
   if (amount < 0) return false
@@ -94,11 +136,16 @@ export function coinPreventsAttack(gamestate: GameState, slot: Slot): boolean {
   return standingSpecs(gamestate, slot).some((power) => power.kind === "coin_prevent_attack")
 }
 
-/** Kabuto Armor — half after W/R, round down 10. 0 stays 0. */
+/** Scale after W/R, round down 10. Standing Kabuto Armor is ×0.5; timed Light Screen is `attack_damage` `mul`. 0 stays 0. */
 export function halveAttackDamage(gamestate: GameState, slot: Slot, amount: number): number {
   if (amount <= 0) return amount
-  if (!standingSpecs(gamestate, slot).some((power) => power.kind === "halve_damage")) return amount
-  return Math.floor(amount / 2 / 10) * 10
+  let factor = 1
+  if (standingSpecs(gamestate, slot).some((power) => power.kind === "halve_damage")) factor *= 0.5
+  for (const m of slot.modifiers) {
+    if (m.field === "attack_damage" && m.phase === "active" && "mul" in m) factor *= m.mul
+  }
+  if (factor === 1) return amount
+  return Math.floor((amount * factor) / 10) * 10
 }
 
 /** Hand evolve and Breeder: not first turn, not played/evolved this turn, no live `block_evolve` / Transform. */

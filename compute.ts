@@ -292,6 +292,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
       if (abilityBanned(slot, ability.name)) continue
       const seed = {
         $self_slot: slotId,
+        $defending: { player: opponent(player), slot: "active" },
         $hand: { player, zone: "hand" },
         $deck: { player, zone: "deck" },
         $prize: { player, zone: "prize" },

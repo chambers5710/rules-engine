@@ -1,6 +1,6 @@
 import { Op, type BindingName, type CalcFn, type CardFieldOverrideSet, type EndOfTurnWho, type Expr, type InterpretCtx, type Primitive, type SeatAmong, type SeatWho, type SlotFilter } from "./dsl.js"
 import { applyFieldOverrides } from "./card.js"
-import { applyModifier, effectsPrevented, foldAdds, foldAttackBase, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
+import { applyModifier, effectsPrevented, foldAdds, foldAttackBase, foldBeforeMatchup, foldDamage, foldedMatchupType, rewriteOf, useRewriteOf } from "./modifiers.js"
 import { benchSeats, currentForm, getSlot, isKnockedOut, occupiedBench, opponent, physicalForm, pokemonInPlay, sameSlot } from "./board.js"
 import {
   applyDamage,
@@ -45,7 +45,9 @@ function withAttackShield(
   ctx: InterpretCtx
 ): { gamestate: GameState; blocked: boolean } {
   if (ctx.via !== "attack" || !slot) return { gamestate, blocked: false }
-  if (effectsPrevented(gamestate, slot)) return { gamestate, blocked: true }
+  const attacker = resolveSlot("$self_slot", ctx)
+  const from = attacker ? getSlot(gamestate, attacker) : undefined
+  if (effectsPrevented(gamestate, slot, from)) return { gamestate, blocked: true }
   const seat = getSlot(gamestate, slot)
   if (!coinPreventsAttack(gamestate, seat)) return { gamestate, blocked: false }
   const id = physicalForm(gamestate, seat)?.instanceId
@@ -180,12 +182,13 @@ function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): { beat: "end_of_turn
   }
 }
 
-// Named base, then Weakness / Resistance, then attacker adds, then defender folds.
-// W/R only on the Defending Pokémon (opponent's Active), unless the Attack
-// primitive sets matchup: false (Sonicboom). Attacker types are the current
-// form, not attached energy and not attack cost. Each printed line whose type
-// is among those types applies; damage floors at 0. foldAdds / foldDamage still
-// run after that skip — printed “other effects after W/R still happen.”
+// Named base, then before-matchup defender sub, then Weakness / Resistance,
+// then attacker adds, then defender folds. W/R only on the Defending Pokémon
+// (opponent's Active), unless the Attack primitive sets matchup: false
+// (Sonicboom). Attacker types are the current form, not attached energy and
+// not attack cost. Each printed line whose type is among those types applies;
+// damage floors at 0. foldAdds / foldDamage still run after that skip —
+// printed “other effects after W/R still happen.”
 export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
@@ -195,6 +198,7 @@ export function pipelineAttackDamage(
   matchup = true
 ): { damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean } {
   let damage = foldAttackBase(gamestate, attacker, base, attack)
+  damage = foldBeforeMatchup(gamestate, defender, damage, attacker)
   let weakness = false
   let resistance = false
   if (matchup && defender.player !== attacker.player && defender.slot === "active") {
@@ -618,7 +622,10 @@ export function interpret(
           const raw = primitive.set
           const set = (raw.startsWith("$") ? String(ctx.bindings[raw] ?? "") : raw) as EnergyType
           if (!set) return gamestate
-          const until = { beat: "leave_play" as const }
+          const until =
+            primitive.until.beat === "leave_active"
+              ? { beat: "leave_active" as const }
+              : { beat: "leave_play" as const }
           if (primitive.field === "weakness_type") {
             return record(
               applyModifier(gamestate, slot, { field: "weakness_type", set, until }),
@@ -668,7 +675,11 @@ export function interpret(
           const attack = primitive.attack ? resolveCard(primitive.attack, ctx) : undefined
           if (primitive.attack && !attack) return gamestate
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
-          const scope = { ...(from ? { from } : {}), ...(attack ? { attack } : {}) }
+          const scope = {
+            ...(from ? { from } : {}),
+            ...(attack ? { attack } : {}),
+            ...(primitive.before ? { before: primitive.before } : {}),
+          }
           return record(
             applyModifier(gamestate, slot, {
               field: "attack_damage",
@@ -830,9 +841,7 @@ export function interpret(
         const source =
           "zone" in primitive
             ? resolveZone(primitive.zone, ctx)
-            : primitive.kind === "random"
-              ? undefined
-              : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
+            : resolveSlotRef(primitive.slot, primitive.attachment, ctx)
         const cards = source ? surveyCards(gamestate, source, primitive.filter) : []
         ctx.bindings[primitive.bind] =
           primitive.kind === "last"
@@ -887,7 +896,7 @@ export function interpret(
       const slot = resolveSlot(primitive.slot, ctx)
       const from = resolveCard(primitive.from, ctx)
       if (!slot || !from) return gamestate
-      return devolve(gamestate, slot, from)
+      return devolve(gamestate, slot, from, primitive.dest ?? "discard")
     }
 
     case Op.Draw: {
