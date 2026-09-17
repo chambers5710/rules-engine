@@ -2,7 +2,7 @@ import { getSlot } from "./board.js"
 import { clearFieldOverrides } from "./card.js"
 import { Op } from "./dsl.js"
 import { record } from "./history.js"
-import { acceptsStatus } from "./reads.js"
+import { acceptsStatus, blocksDiscardToHand } from "./reads.js"
 import { emptyStatus, withStatus } from "./status.js"
 import type {
   CardInstanceId,
@@ -81,6 +81,14 @@ export const moveZoneToZone = (
 ) => {
   const location = gamestate.players[source.player][source.zone]
   if (location.indexOf(cardId) === -1) {
+    return gamestate
+  }
+  if (
+    source.zone === "discard" &&
+    dest.zone === "hand" &&
+    dest.player === source.player &&
+    blocksDiscardToHand(gamestate)
+  ) {
     return gamestate
   }
 

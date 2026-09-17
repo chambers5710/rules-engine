@@ -155,3 +155,14 @@ export function retreatCost(gamestate: GameState, player: 1 | 2): EnergyType[] {
 export function takesPrizeOnKo(form: CardInstance | undefined): boolean {
   return form?.prizesOnKo !== false
 }
+
+/** Pokémon Tower: discard → owner's hand stays in discard. Derived from the stuck Stadium dump. */
+export function blocksDiscardToHand(gamestate: GameState): boolean {
+  const stuck = gamestate.stadium
+  if (!stuck) return false
+  const sourceId = gamestate.cardRegistry[stuck.card]?.sourceId
+  if (!sourceId) return false
+  return Object.values(gamestate.effectRegistry[sourceId]?.stadium ?? {}).some(
+    (spec) => spec.kind === "block_discard_to_hand"
+  )
+}

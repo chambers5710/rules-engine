@@ -174,7 +174,7 @@ export type GameEvent = {
 }
 
 // Printed Stadium text on the in-play card. GameState.stadium is the stick; this map is the writing.
-// `use` is a Turn action. `power` / `trigger` kinds wait on later slices — do not copy this map onto GameState.
+// `use` is a Turn action. `block_discard_to_hand` is Pokémon Tower. `power` / `trigger` kinds wait on later slices.
 export type StadiumUseLimit = {
   during: "turn"
   times: number
@@ -182,6 +182,7 @@ export type StadiumUseLimit = {
 
 export type StadiumSpec =
   | { kind: "use"; then: Expr; limit?: StadiumUseLimit }
+  | { kind: "block_discard_to_hand" }
 
 export type PowerSpec =
   | { kind: "blocks_status" }

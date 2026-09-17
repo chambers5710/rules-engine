@@ -7,6 +7,7 @@ import { initializeGameState } from "../../initialize.js"
 import { runExpr } from "../../machine.js"
 import type { Card, EffectRegistry, GameState } from "../../types.js"
 import { copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
+import { moveZoneToZone } from "../../ops.js"
 
 const set = base as Card[]
 const promos = promo as Card[]
@@ -41,6 +42,14 @@ function useStadium(gamestate: GameState, name: string, coins: Array<"heads" | "
     Action.UseStadium
   )
   return { ...next, stadiumUsedThisTurn: true }
+}
+
+function energyOffBoard(gamestate: GameState, player: 1 | 2): { card: string; zone: "hand" | "deck" | "prize" } {
+  for (const zone of ["hand", "deck", "prize"] as const) {
+    const card = gamestate.players[player][zone].find((id) => gamestate.cardRegistry[id].sourceId === "base1-100")
+    if (card) return { card, zone }
+  }
+  fail(`no energy off board for p${player}`)
 }
 
 function stage(): GameState {
@@ -121,6 +130,45 @@ function stage(): GameState {
     computeAvailableActions(gamestate).every((row) => row.kind !== Action.UseStadium),
     "tails still blocks a second use"
   )
+}
+
+{
+  let gamestate = stage()
+  gamestate = playStadium(gamestate, "basep-41")
+  const { card: energy, zone } = energyOffBoard(gamestate, 1)
+  gamestate = moveZoneToZone(gamestate, energy, { player: 1, zone }, { player: 1, zone: "discard" }, "bottom")
+  gamestate = moveZoneToZone(
+    gamestate,
+    energy,
+    { player: 1, zone: "discard" },
+    { player: 1, zone: "hand" },
+    "bottom"
+  )
+  expect(gamestate.players[1].hand.includes(energy), "Lucky Stadium does not block retrieval")
+}
+
+{
+  let gamestate = stage()
+  gamestate = playStadium(gamestate, "basep-42")
+  const { card: energy, zone } = energyOffBoard(gamestate, 1)
+  gamestate = moveZoneToZone(gamestate, energy, { player: 1, zone }, { player: 1, zone: "discard" }, "bottom")
+  gamestate = moveZoneToZone(
+    gamestate,
+    energy,
+    { player: 1, zone: "discard" },
+    { player: 1, zone: "hand" },
+    "bottom"
+  )
+  expect(gamestate.players[1].discard.includes(energy), "Tower keeps discard→hand in discard")
+  expect(!gamestate.players[1].hand.includes(energy), "Tower does not put it in hand")
+  gamestate = moveZoneToZone(
+    gamestate,
+    energy,
+    { player: 1, zone: "discard" },
+    { player: 1, zone: "deck" },
+    "bottom"
+  )
+  expect(gamestate.players[1].deck.includes(energy), "Tower does not block discard→deck")
 }
 
 console.log("stadium-check assertions passed")
