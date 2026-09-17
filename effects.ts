@@ -26,6 +26,11 @@ export function trainerEffect(
   return Object.values(named)[0] ?? []
 }
 
+export function hasStadiumSpec(registry: EffectRegistry, sourceId: SourceId): boolean {
+  const named = registry[sourceId]?.stadium
+  return named != null && Object.keys(named).length > 0
+}
+
 export function stadiumUses(
   registry: EffectRegistry,
   sourceId: SourceId

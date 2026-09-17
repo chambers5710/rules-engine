@@ -50,7 +50,7 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     if (!text) return head
     return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
-  if (a.kind === Action.PlayTrainer) {
+  if (a.kind === Action.PlayTrainer || a.kind === Action.PlayStadium) {
     const printed = gamestate.cardRegistry[a.card]
     const text = (printed?.rules ?? []).join(" ").trim()
     const head = `${a.kind}  ${printed?.name ?? a.card}`

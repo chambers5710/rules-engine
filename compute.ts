@@ -11,7 +11,7 @@ import {
 } from "./board.js"
 import { isStadium } from "./card.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr, cardEffect, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
+import { attackExpr, cardEffect, hasStadiumSpec, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
 import { ifPasses, useGate } from "./interpret.js"
 import { abilityBanned, attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
@@ -36,6 +36,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
   | (ActionBase & { kind: Action.PlayTrainer; player: 1 | 2; card: string })
+  | (ActionBase & { kind: Action.PlayStadium; player: 1 | 2; card: string })
   | (ActionBase & { kind: Action.UseStadium; player: 1 | 2; card: string; name: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string; hidden?: true; face?: string })
@@ -219,8 +220,9 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
     const sourceId = gamestate.cardRegistry[card].sourceId
     const printed = gamestate.cardRegistry[card]
     const effect = trainerEffect(gamestate.effectRegistry, sourceId)
-    const stadium = isStadium(printed)
+    const stadium = isStadium(printed) || hasStadiumSpec(gamestate.effectRegistry, sourceId)
     if (effect.length === 0 && !stadium) continue
+    const kind = stadium ? Action.PlayStadium : Action.PlayTrainer
     const expr: Expr = stadium
       ? [{ op: Op.MoveZoneToStadium, card, source: hand }, ...effect]
       : trainerAttaches(gamestate.effectRegistry, sourceId)
@@ -240,8 +242,8 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       $opp_discard: { player: opponent(player), zone: "discard" },
       $played: card,
     }
-    if (!exprPlayable(gamestate, expr, seed, player, Action.PlayTrainer)) continue
-    actions.push({ kind: Action.PlayTrainer, player, card, expr, seed })
+    if (!exprPlayable(gamestate, expr, seed, player, kind)) continue
+    actions.push({ kind, player, card, expr, seed })
   }
   return actions
 }

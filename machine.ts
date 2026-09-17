@@ -134,6 +134,7 @@ function turnPhase(
       return runAction(gamestate, action)
     }
     case Action.PlayTrainer:
+    case Action.PlayStadium:
       if (!mayPlayTrainer(gamestate, action.player)) return gamestate
       return runAction(gamestate, action)
     case Action.UseStadium: {

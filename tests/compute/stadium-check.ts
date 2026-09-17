@@ -23,10 +23,10 @@ function expect(ok: boolean, message: string) {
 
 function playStadium(gamestate: GameState, sourceId: string): GameState {
   const action = computeAvailableActions(gamestate).find(
-    (row) => row.kind === Action.PlayTrainer && gamestate.cardRegistry[row.card].sourceId === sourceId
+    (row) => row.kind === Action.PlayStadium && gamestate.cardRegistry[row.card].sourceId === sourceId
   )
-  if (!action || action.kind !== Action.PlayTrainer) fail(`no play ${sourceId}`)
-  return runExpr(gamestate, action.expr, { bindings: action.seed ?? {} }, 1, Action.PlayTrainer)
+  if (!action || action.kind !== Action.PlayStadium) fail(`no play ${sourceId}`)
+  return runExpr(gamestate, action.expr, { bindings: action.seed ?? {} }, 1, Action.PlayStadium)
 }
 
 function useStadium(gamestate: GameState, name: string, coins: Array<"heads" | "tails">): GameState {
@@ -78,7 +78,7 @@ function stage(): GameState {
   )
   expect(
     computeAvailableActions(gamestate).some(
-      (row) => row.kind === Action.PlayTrainer && gamestate.cardRegistry[row.card].sourceId === "basep-41"
+      (row) => row.kind === Action.PlayStadium && gamestate.cardRegistry[row.card].sourceId === "basep-41"
     ),
     "Lucky Stadium lists without a trainer dump row"
   )
