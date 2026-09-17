@@ -12,12 +12,12 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr, honestCopy, stadiumUseCappedThisTurn, stadiumUses } from "./effects.js"
+import { attackExpr, stadiumUseCappedThisTurn, stadiumUses, stripCopy } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
-import { canAttack, canRetreat, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, takesPrizeOnKo } from "./reads.js"
+import { babyCoinOnAnnounce, canAttack, canRetreat, mayAttachEnergy, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, takesPrizeOnKo } from "./reads.js"
 import { abilityBanned, attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
-import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
-import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter } from "./triggers.js"
+import { gatePasses, ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
+import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter, triggerCtx, type TriggerJob } from "./triggers.js"
 import { copy } from "./ops.js"
 import { selectChoices, selectFrame } from "./select.js"
 import type { GameState, SlotId } from "./types.js"
@@ -104,13 +104,13 @@ function turnPhase(
       )?.instanceId
       if (!canAttack(active, target)) return gamestate
       if (attackBanned(active, action.name)) return gamestate
-      const gate = useGate(action.expr)
-      if (gate && !ifPasses(gamestate, gate, { bindings: action.seed ?? {} })) return gamestate
+      if (!gatePasses(gamestate, action.expr, action.seed)) return gamestate
       return gatedAttack(gamestate, action)
     }
     case Action.Promote:
       return promote(gamestate, action.player, action.index)
     case Action.AttachEnergy:
+      if (!mayAttachEnergy(gamestate, action.slot, action.card)) return gamestate
       return { ...runAction(gamestate, action), energyAttachedThisTurn: true }
     case Action.PlayBench:
       return markEvolvedThisTurn(
@@ -129,8 +129,7 @@ function turnPhase(
         return gamestate
       }
       if (abilityBanned(seat, action.name)) return gamestate
-      const gate = useGate(action.expr)
-      if (gate && !ifPasses(gamestate, gate, { bindings: action.seed ?? {} })) return gamestate
+      if (!gatePasses(gamestate, action.expr, action.seed)) return gamestate
       return runAction(gamestate, action)
     }
     case Action.PlayTrainer:
@@ -159,12 +158,17 @@ function turnPhase(
   }
 }
 
-// Confused first, then Sand-attack-style flip. Confused tails: 3 counters, no expr.
-// Flip-gate tails: attack does nothing (no self-damage).
-function gatedAttack(
+// Baby coin (defending Active), then Confused, then Sand-attack-style flip.
+// Baby / flip-gate tails: no expr. Confused tails: 3 counters, no expr.
+export function gatedAttack(
   gamestate: GameState,
-  action: Extract<AvailableAction, { kind: Action.Attack }>
+  action: Extract<AvailableAction, { kind: Action.Attack }>,
+  ctx: InterpretCtx = { bindings: {} }
 ): GameState {
+  if (babyCoinOnAnnounce(gamestate, action.player)) {
+    gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$announce" }, ctx)
+    if (ctx.bindings.$announce !== "heads") return onComplete(gamestate, action.kind)
+  }
   const slot = { player: action.player, slot: "active" } as const
   if (getSlot(gamestate, slot).status.confused) {
     const ctx: InterpretCtx = { bindings: {} }
@@ -328,12 +332,17 @@ function resumeSelect(
 ): GameState {
   const frame = gamestate.actionStack.at(-1)
   if (!frame) return gamestate
+  const leftover = frame.pendingTriggers ?? []
   const ctx: InterpretCtx = {
     ...frame.ctx,
     bindings: { ...frame.ctx.bindings, [frame.bind]: chooseBinding(action) },
   }
   gamestate = { ...gamestate, actionStack: gamestate.actionStack.slice(0, -1) }
-  return onComplete(runExpr(gamestate, frame.remaining, ctx, frame.player, frame.kind), frame.kind)
+  const budget = { left: EXPR_STEP_BUDGET }
+  gamestate = runExpr(gamestate, frame.remaining, ctx, frame.player, frame.kind, budget)
+  if (gamestate.actionStack.length > 0) return stashLeftover(gamestate, leftover)
+  gamestate = runTriggerJobs(gamestate, leftover, frame.kind, budget)
+  return onComplete(gamestate, frame.kind, ctx)
 }
 
 function chooseBinding(
@@ -351,7 +360,7 @@ function runAction(gamestate: GameState, action: AvailableAction): GameState {
     bindings: { ...(action.seed ?? {}) },
     ...(action.kind === Action.Attack ? { via: "attack" as const, attack: action.name } : {}),
   }
-  return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind)
+  return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind, ctx)
 }
 
 export function runExpr(
@@ -405,12 +414,16 @@ export function runExpr(
     if (step.op === Op.RunEffect) {
       const slot = resolveSlot(step.slot, ctx)
       const copied = slot
-        ? copiedAttackExpr(gamestate, slot, String(ctx.bindings[step.attack] ?? ""))
+        ? stripCopy(
+            copiedAttackExpr(gamestate, slot, String(ctx.bindings[step.attack] ?? "")),
+            step.strip ?? []
+          )
         : []
       return runExpr(gamestate, [...copied, ...expr.slice(i + 1)], ctx, player, kind, budget)
     }
     gamestate = interpret(gamestate, step, ctx)
     gamestate = drainEvents(gamestate, ctx, kind, budget)
+    if (gamestate.actionStack.length > 0) return gamestate
   }
   return gamestate
 }
@@ -423,39 +436,59 @@ function drainEvents(
 ): GameState {
   const events = ctx.events ?? []
   ctx.events = []
+  const jobs: TriggerJob[] = []
   for (const event of events) {
-    for (const job of matchTriggers(gamestate, event)) {
-      const tctx: InterpretCtx = {
-        bindings: {
-          $self_slot: job.seat,
-          ...(event.source ? { $attacker: event.source } : {}),
-        },
-        via: "trigger",
-      }
-      gamestate = runExpr(gamestate, job.then, tctx, job.seat.player, kind, budget)
-      if (job.drop) {
-        gamestate = {
-          ...gamestate,
-          subscriptions: gamestate.subscriptions.filter((sub) => sub.id !== job.drop),
-        }
+    jobs.push(...matchTriggers(gamestate, event))
+  }
+  return runTriggerJobs(gamestate, jobs, kind, budget)
+}
+
+function runTriggerJobs(
+  gamestate: GameState,
+  jobs: TriggerJob[],
+  kind: Action,
+  budget: { left: number }
+): GameState {
+  const paused = gamestate.actionStack.length
+  for (let i = 0; i < jobs.length; i++) {
+    const job = jobs[i]
+    gamestate = runExpr(gamestate, job.then, triggerCtx(job), job.seat.player, kind, budget)
+    if (gamestate.actionStack.length > paused) return stashLeftover(gamestate, jobs.slice(i + 1))
+    if (job.drop) {
+      gamestate = {
+        ...gamestate,
+        subscriptions: gamestate.subscriptions.filter((sub) => sub.id !== job.drop),
       }
     }
   }
   return gamestate
 }
 
-/** Seat + name → honest copy. Shape rewrite lives in `honestCopy`. */
+function stashLeftover(gamestate: GameState, leftover: TriggerJob[]): GameState {
+  if (leftover.length === 0) return gamestate
+  const top = gamestate.actionStack.at(-1)
+  if (!top) return gamestate
+  return {
+    ...gamestate,
+    actionStack: [
+      ...gamestate.actionStack.slice(0, -1),
+      { ...top, pendingTriggers: leftover.concat(top.pendingTriggers ?? []) },
+    ],
+  }
+}
+
+/** Seat + name → that attack’s expr as written. `run_effect` `strip` rewrites. */
 export function copiedAttackExpr(gamestate: GameState, slot: SlotId, name: string): Expr {
   const form = currentForm(gamestate, getSlot(gamestate, slot))
   const attack = form?.attacks?.find((row) => row.name === name)
   if (!form || !attack) return []
-  return honestCopy(attackExpr(gamestate.effectRegistry, attackSourceId(gamestate, slot.player) ?? form.sourceId, attack))
+  return attackExpr(gamestate.effectRegistry, attackSourceId(gamestate, slot.player) ?? form.sourceId, attack)
 }
 
 // Action finished — paused Select is not done; Attack / EndTurn then Checkup
-function onComplete(gamestate: GameState, kind: Action): GameState {
+function onComplete(gamestate: GameState, kind: Action, ctx?: InterpretCtx): GameState {
   if (gamestate.actionStack.length > 0) return gamestate
-  if (kind === Action.Attack || kind === Action.EndTurn) return enterCheckup(gamestate)
+  if (kind === Action.Attack || kind === Action.EndTurn || ctx?.endTurn) return enterCheckup(gamestate)
   return gamestate
 }
 

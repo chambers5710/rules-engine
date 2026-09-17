@@ -137,7 +137,7 @@ Names on the interpret context. Every real attack uses them, not just tests.
 Read-only. Compute and card text ask the same questions.
 
 - **Where** — `ZoneRef` or `SlotRef` (zone vs slot attachment)
-- **Filter** — `energy` (optional `type`), `basic_energy` (optional `type`; subtype Basic only), `basic_pokemon`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`
+- **Filter** — `energy` (optional `type`), `basic_energy` (optional `type`; subtype Basic only), `basic_pokemon`, `baby`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`
 - **Reduce** — list, count, or sum of `energyValue`
 
 `Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "knocked_out"` is `isKnockedOut` as 1/0 (Hurricane). Zone `kind: "random"` binds one id without shuffling (Peek). `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). Zone `kind: "prefix"` binds the top `n` ids. `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`name`, `has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.
@@ -148,7 +148,7 @@ Read-only. Compute and card text ask the same questions.
 
 Pure `Expr` on `GameState.effectRegistry`, keyed by printed card id. Pokémon: `attacks` / `abilities` by **name**. Trainers: `trainer` is a name→expr map (`trainerEffect(registry, id)` uses the first value). Compute attaches the expr; Energy cost stays on the card. Missing names are `[]`. Unauthored trainers do not list. A trainer whose expr moves `$played` onto `tools` skips the discard. `effects.ts` is lookup only. Hand-authored rows live in `effect-author/effects/effects.json`.
 
-Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. `PlayTrainer` is during the turn (discard first, then expr — unless the expr `MoveZoneToSlot`s the card).
+Attack is the last thing on a turn: run the effect, then Checkup. Passing without attacking is `EndTurn`. An expr can say the same thing with `Op.EndTurn` (`ctx.endTurn`); `onComplete` Checkups. `PlayTrainer` is during the turn (discard first, then expr — unless the expr `MoveZoneToSlot`s the card).
 
 Plain numeric damage (`"30"`) gets a default `attack` → `apply_damage` with no effects row. `"40+"` does not.
 
@@ -167,10 +167,10 @@ There is one `Modifier`, on the slot. Card text cannot say “player 2”; the o
 - **applyModifier** — `pending`, or `active` if `until.player` is already active; `until.next` stays pending (Swords Dance)
 - **foldAttackBase** — name-scoped `set` on the attacker before W/R
 - **foldAdds / foldDamage / foldBeforeMatchup** — after W/R in the attack pipeline except `before: "matchup"` (Togepi), which is before W/R; `apply_damage` does not fold. `from` only folds when that instance is the attacker (Snivel). Name-scoped mods are not folded here
-- **attackBanned / abilityBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`; `flip` is a machine coin after Confused). `ability_use` `ban` hides that Power (Curse / Step In until owner’s turn ends)
+- **attackBanned / abilityBanned / attackFlipGated** — `attack_use` (`ban` hides the name — Amnesia is end of turn, Leek Slap is `leave_play`, Slashing Strike is `until.next` plus bench/evolve; `flip` is a machine coin after Confused). `ability_use` `ban` hides that Power (Curse / Step In until owner’s turn ends)
 - **foldedEnergyType** — `energy_type` `set` for payment and energy filters on that seat
 - **foldedCard** / **applyFieldOverrides** / **clearFieldOverrides** (`card.ts`) — printed `CardInstance` plus `fieldOverrides`. `physicalForm` is that fold; `currentForm` then overlays Transform `copy_defending`. Survey / lineage read `foldedCard`; combat / KO / retreat read `currentForm`. `apply_field_overrides` writes the map (`types: "$t"` wraps as `[type]`); zone moves clear it. Seat `energy_type` still folds on top.
-- **canAttack / canRetreat / retreatCost / mayUsePokemonPower / powersSuppressed / mayEvolve / mayPlayTrainer / acceptsStatus / takesPrizeOnKo / preventsAttackDamage / preventsAttackEffects / halveAttackDamage / handIsPublic / energyPaysAny / coinPreventsAttack** (`reads.ts`) — Asleep / Paralyzed; `canAttack` also timed `can_attack` vs a defending instance (Tail Wag); retreat also folded `cannotRetreat`, timed `cannot_retreat` (Acid), and standing Guard (`cannot_retreat` on opponent Active); `retreatCost` drops Colorless for benched `reduce_retreat`; Power also Confused and `ignore_powers` (Toxic Gas keeps itself); Headache `trainer_use` on that player’s seats; Doll or standing `blocks_status` (Burn still lands); Invisible Wall `prevent_damage` after W/R / splash; Kabuto Armor `halve_damage` after W/R add/sub; evolve is first-turn + `evolvedThisTurn` + `block_evolve` + Transform; Clairvoyance `reveal_hand` for fog; Transform energy is wild for costs; Transparency `coin_prevent_attack` (coin in interpret); Aurora Veil `prevent_attacks` on owner bench; Neutral Shield `on: "self"` `from: "evolved"` (`effectsPrevented`); `prizesOnKo`. Compute lists; machine fail-closes. Standing triggers with `blockedByStatus` use `mayUsePokemonPower` and `powersSuppressed`. Ops `applyStatus` uses `acceptsStatus`. Checkup prize uses `takesPrizeOnKo`.
+- **canAttack / canRetreat / retreatCost / mayUsePokemonPower / powersSuppressed / mayEvolve / mayPlayTrainer / mayAttachEnergy / babyCoinOnAnnounce / legalEnergyTypes / acceptsStatus / takesPrizeOnKo / preventsAttackDamage / preventsAttackEffects / halveAttackDamage / handIsPublic / energyPaysAny / coinPreventsAttack** (`reads.ts`) — Asleep / Paralyzed; `canAttack` also timed `can_attack` vs a defending instance (Tail Wag); retreat also folded `cannotRetreat`, timed `cannot_retreat` (Acid), and standing Guard (`cannot_retreat` on opponent Active); `retreatCost` drops Colorless for benched `reduce_retreat`; Power also Confused and `ignore_powers` (Toxic Gas keeps itself); Headache `trainer_use` on that player’s seats; Pure Body `attach_energy` taxes matching Energy from hand (`mayAttachEnergy`); Baby announce is `wotc-neo` + defending Active subtype (`babyCoinOnAnnounce`) before Confused; type Select uses `legalEnergyTypes(ruleset)`; Doll or standing `blocks_status` (Burn still lands); Invisible Wall `prevent_damage` after W/R / splash; Kabuto Armor `halve_damage` after W/R add/sub; evolve is first-turn + `evolvedThisTurn` + `block_evolve` + Transform; Clairvoyance `reveal_hand` for fog; Transform energy is wild for costs; Transparency `coin_prevent_attack` (coin in interpret); Aurora Veil `prevent_attacks` on owner bench; Neutral Shield `on: "self"` `from: "evolved"` (`effectsPrevented`); `prizesOnKo`. Compute lists; machine fail-closes. Standing triggers with `blockedByStatus` use `mayUsePokemonPower` and `powersSuppressed`. Ops `applyStatus` uses `acceptsStatus`. Checkup prize uses `takesPrizeOnKo`.
 - **tickModifiersEnter / tickModifiersEnd** — `pending → active` when `until.player` becomes active; drop `active` when that player’s turn ends
 
 `attack_effects` `prevent: "all"` (Barrier / Agility). `attack_damage` `prevent: 30` (Harden). `set: 0` is still Scrunch. `Op.Attack` writes the hit.
@@ -204,14 +204,14 @@ select  from $defending  pick attacks  bind $copy
 run_effect  $copy
 ```
 
-`$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost. Recoil (`ApplyDamage` a positive literal onto `$self_slot`) is stripped from the copy.
+`$self_slot` / `$defending` stay the Metronome seats. The player already paid Metronome’s cost. Clefairy `run_effect` sets `strip: ["energy_pay", "recoil"]`. Mini-Metronome omits `strip`.
 
 1. **Widen Select** — `pick` says what the menu is; the source type follows `pick` (`among` / `source` / `slot`). See Nouns. Do not add a `From` union. The answer binds a name, same style as `$coin`.
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `ctx` (`InterpretCtx`). Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.
-5. **Metronome** — Select defending attacks, `run_effect`. Recoil on `$self_slot` and leading self-Energy pay are dropped. No special case in `attacksFromActive`.
-6. **Later** — strip “requirements to use” on the copy (discard Energy, etc.). Weakness uses Clefairy because `$self_slot` is still Clefairy.
+5. **Metronome** — Select defending attacks, `run_effect` with `strip`. No special case in `attacksFromActive`. Mini-Metronome is the same Select without `strip`.
+6. **Copy policy** — default `run_effect` is the attack as written. `strip` names Energy pay and/or recoil. Weakness uses the copier because `$self_slot` is still Clefairy / Togepi.
 
 **Done:** (1)–(5). **Not done:** (6).
 
@@ -221,7 +221,7 @@ run_effect  $copy
 
 Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `attack.base`. The 3 and the cap 2 live in the effect, not in compute.
 
-`Count` `kind: "damage"` reads `slot.damage` (HP units). `kind: "hp"` is printed HP. `Calc` `half_up_10` is Super Fang. It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind, list bind, or card binds, `to`: self / opponent / both) — no board write, no pause. `Reorder` puts a list of ids already in a zone on top. `If` is bind `equals` or `slot` + `status` (any special condition). Slot Select may set `chooser: "opponent"`.
+`Count` `kind: "damage"` reads `slot.damage` (HP units). `kind: "hp"` is printed HP. `Calc` `half_up_10` is Super Fang. It does not count Pokémon in play. `Draw` exists (`who` + `count`). `Shuffle` shuffles one zone (`zone: ZoneRef`). `Reveal` writes history only (`cards` zone bind, list bind, or card binds, `to`: self / opponent / both) — no board write, no pause. `Reorder` puts a list of ids already in a zone on top. `If` is bind `equals` or `slot` + `status` (any special condition). Slot and names Select may set `chooser: "opponent"`.
 
 ## Roadmap
 

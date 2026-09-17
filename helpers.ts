@@ -76,6 +76,7 @@ export const emptySlot = (): Slot => ({
   status: emptyStatus(),
   energy: [],
   tools: [],
+  markers: [],
   modifiers: [],
   evolvedThisTurn: false,
   poisonCounters: 1,

@@ -24,6 +24,7 @@ export type SurveyFilter =
   | { kind: "trainer" }
   | { kind: "pokemon" }
   | { kind: "stage_2" }
+  | { kind: "baby" }
 
 // Cards at — ids in that zone or slot attachment, top-first
 export function cardsAt(gamestate: GameState, source: ZoneRef | SlotRef): CardInstanceId[] {
@@ -115,6 +116,11 @@ export function isBasicPokemon(gamestate: GameState, cardId: string): boolean {
   return subtypes.includes("Basic") || subtypes.includes("Baby")
 }
 
+export function isBabyPokemon(gamestate: GameState, cardId: string): boolean {
+  const printed = foldedCard(gamestate, cardId)
+  return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Baby") === true
+}
+
 export function isEnergy(gamestate: GameState, cardId: string): boolean {
   return foldedCard(gamestate, cardId)?.supertype === "Energy"
 }
@@ -161,5 +167,7 @@ export function cardMatches(
       return foldedCard(gamestate, cardId)?.supertype === "Pokémon"
     case "stage_2":
       return isStage2Pokemon(gamestate, cardId)
+    case "baby":
+      return isBabyPokemon(gamestate, cardId)
   }
 }

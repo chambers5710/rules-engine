@@ -1,8 +1,11 @@
 import { initializeGameState } from "../initialize.js"
+import { placePrize } from "../helpers.js"
 import { moveZoneToSlot, moveZoneToZone } from "../ops.js"
 import { fetchEffects } from "../session.js"
 import type { Card, GameState, SlotId, ZoneName } from "../types.js"
 import { Phase } from "../types.js"
+
+const PRIZE_COUNT = 6
 
 export async function initBoard(p1: Card[], p2: Card[]): Promise<GameState> {
   return initializeGameState(p1, p2, await fetchEffects([...p1, ...p2].map((card) => card.id)))
@@ -138,7 +141,7 @@ export function toPrize(gamestate: GameState, player: 1 | 2, sourceId: string, n
 }
 
 export function liveTurn(gamestate: GameState): GameState {
-  const next: GameState = {
+  let next: GameState = {
     ...gamestate,
     phase: Phase.Turn,
     firstPlayer: 1,
@@ -153,6 +156,16 @@ export function liveTurn(gamestate: GameState): GameState {
   for (const player of [1, 2] as const) {
     next.players[player].active.evolvedThisTurn = false
     for (const slot of next.players[player].bench) slot.evolvedThisTurn = false
+  }
+  // Checkup treats empty prize as a loss. Seed 6 like Ready if the fixture skipped setup.
+  if (next.players[1].prize.length === 0 && next.players[2].prize.length === 0) {
+    for (const player of [1, 2] as const) {
+      for (let i = 0; i < PRIZE_COUNT; i++) {
+        const card = next.players[player].deck[0]
+        if (!card) break
+        next = placePrize(next, player, card)
+      }
+    }
   }
   return next
 }

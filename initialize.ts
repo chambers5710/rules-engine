@@ -10,6 +10,7 @@ import type {
   EnergyType,
   GameState,
   Player,
+  Ruleset,
 } from "./types.js"
 import { EnergyTypes, Phase } from "./types.js"
 
@@ -21,6 +22,7 @@ export function initializeGameState(
   p1DeckData: Card[],
   p2DeckData: Card[],
   effectRegistry: EffectRegistry,
+  ruleset: Ruleset = "wotc-base",
 ): GameState {
   const firstPlayer: 1 | 2 = flipCoin(1)[0] === "heads" ? 1 : 2
   const deckData = { 1: p1DeckData, 2: p2DeckData }
@@ -38,6 +40,7 @@ export function initializeGameState(
   const gamestate: GameState = {
     id: `game-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     phase: Phase.Init,
+    ruleset,
     players: {
       1: instantiatePlayer(1, decks[1].map((c) => c.instanceId)),
       2: instantiatePlayer(2, decks[2].map((c) => c.instanceId)),
