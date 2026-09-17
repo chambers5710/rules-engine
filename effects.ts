@@ -30,7 +30,9 @@ export function trainerAttaches(
   registry: EffectRegistry,
   sourceId: SourceId
 ): boolean {
-  return trainerEffect(registry, sourceId).some((step) => step.op === Op.MoveZoneToSlot)
+  return trainerEffect(registry, sourceId).some(
+    (step) => step.op === Op.MoveZoneToSlot || step.op === Op.MoveZoneToStadium
+  )
 }
 
 // Written effect, or whole-string integer damage with empty extra text.

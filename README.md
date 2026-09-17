@@ -30,6 +30,7 @@ Any quantity a rule reads — prizes on KO, prize count, opening-hand size — i
 - **Slot** — the Pokémon **data** at a seat (evolution, energy, tools, damage, status, modifiers). Never an address.
 - **SlotId** — the **address** of a seat. Always includes `player`. Active or `bench[n]`.
 - **Zone** — a player's deck, hand, discard, or prize (`ZoneRef`). Holds instance ids.
+- **Stadium** — shared in-play Trainer on GameState (`stadium`), not a player zone
 - **Slot attachment** — `evolution` / `energy` / `tools` on a seat (`SlotRef` = `SlotId` + `attachment`). Holds instance ids.
 - **Card instance** — physical copy in `cardRegistry`
 - **Effects** — keyed by printed `sourceId`, never instance id
@@ -46,6 +47,7 @@ This is the blocker. The engine works; the **map** does not. One seat has been `
 | Slot | `Slot` | Value at a seat. `getSlot(state, id)` |
 | SlotId | `{ player, slot: "active" } \| { player, slot: "bench", index }` | Address of a seat. **Always has player.** |
 | Zone | `ZoneRef` | Address of a zone (`deck` / `hand` / `discard` / `prize`) |
+| Stadium | `InPlayStadium` | Shared in-play Trainer (`GameState.stadium`); not a zone |
 | Slot attachment | `SlotRef` | Seat + `evolution` / `energy` / `tools` |
 | ZoneDest | `ZoneRef` + `position` | Write-only: where a card lands in a zone |
 | Card | `CardInstanceId` | One copy |

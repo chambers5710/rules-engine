@@ -34,6 +34,7 @@ export type GameState = {
   history: HistoryEntry[]
   subscriptions: TriggerSubscription[]
   lastHit: Record<CardInstanceId, LastHit>
+  stadium: InPlayStadium | null
 }
 
 // Phase — what kind of step is legal right now
@@ -60,6 +61,12 @@ export type CardRegistry = Record<CardInstanceId, CardInstance>
 
 // Zone — an ordered list of instance ids (index 0 is top)
 export type Zone = CardInstanceId[]
+
+// Shared in-play Stadium — not a player zone. Owner is who played it (replace discards to that discard).
+export type InPlayStadium = {
+  card: CardInstanceId
+  player: 1 | 2
+}
 
 // Zone name — keys on Player that hold a Zone
 export type ZoneName = "deck" | "hand" | "discard" | "prize"

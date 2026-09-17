@@ -55,6 +55,7 @@ export function initializeGameState(
     history: [],
     subscriptions: [],
     lastHit: {},
+    stadium: null,
   }
 
   return dealOpeningHands(gamestate)

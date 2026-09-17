@@ -98,6 +98,35 @@ export const moveZoneToZone = (
   })
 }
 
+export const moveZoneToStadium = (
+  gamestate: GameState,
+  cardId: CardInstanceId,
+  source: ZoneRef
+) => {
+  const location = gamestate.players[source.player][source.zone]
+  if (location.indexOf(cardId) === -1) {
+    return gamestate
+  }
+
+  const prev = gamestate.stadium
+  const next = copy(gamestate, source.player, ...(prev ? [prev.player] : []))
+  const sourceZone = next.players[source.player][source.zone]
+  sourceZone.splice(sourceZone.indexOf(cardId), 1)
+  let discarded: { card: CardInstanceId; player: 1 | 2 } | undefined
+  if (prev) {
+    placeInZone(next.players[prev.player].discard, "bottom", prev.card)
+    discarded = { card: prev.card, player: prev.player }
+  }
+  next.stadium = { card: cardId, player: source.player }
+  const recorded = record(next, {
+    op: Op.MoveZoneToStadium,
+    card: cardId,
+    source,
+    ...(discarded ? { discarded } : {}),
+  })
+  return discarded ? clearFieldOverrides(recorded, discarded.card) : recorded
+}
+
 // Slot attachment — evolution, energy, or tools on that seat
 const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[] => {
   return getSlot(gamestate, ref)[ref.attachment]

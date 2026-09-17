@@ -6,6 +6,7 @@ export enum Op {
   MoveZoneToSlot = "move_zone_to_slot",
   MoveSlotToZone = "move_slot_to_zone",
   MoveSlotToSlot = "move_slot_to_slot",
+  MoveZoneToStadium = "move_zone_to_stadium",
   Attack = "attack",
   ApplyDamage = "apply_damage",
   ApplyStatus = "apply_status",
@@ -108,6 +109,7 @@ export type Primitive =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef | BindingName; dest: SlotId | BindingName; attachment: Attachment }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef | BindingName; dest: ZoneRef | BindingName; position: ZonePosition; attachment?: Attachment }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef | BindingName; dest: SlotRef | BindingName; attachment?: Attachment; sourceAttachment?: Attachment }
+  | { op: Op.MoveZoneToStadium; card: string; source: ZoneRef | BindingName }
   | { op: Op.Attack; base: number | BindingName; attacker: SlotId | BindingName; defender: SlotId | BindingName; bind: BindingName; matchup?: false }
   | { op: Op.ApplyDamage; amount: number | BindingName; slot: SlotId | BindingName; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId | BindingName; counters?: number }
@@ -168,6 +170,7 @@ export type HistoryEntry =
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }
+  | { op: Op.MoveZoneToStadium; card: string; source: ZoneRef; discarded?: { card: string; player: 1 | 2 } }
   | { op: Op.Attack; attacker: SlotId; defender: SlotId; damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean }
   | { op: Op.ApplyDamage; amount: number; slot: SlotId; source?: "poison" | "burn" }
   | { op: Op.ApplyStatus; status: Status; slot: SlotId }

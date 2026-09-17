@@ -11,6 +11,7 @@ import {
   moveSlotToSlot,
   moveSlotToZone,
   moveZoneToSlot,
+  moveZoneToStadium,
   moveZoneToZone,
   removeStatus,
   reorderZone,
@@ -487,6 +488,13 @@ export function interpret(
       const card = resolveCard(primitive.card, ctx)
       if (!source || !dest || !card) return gamestate
       return moveZoneToSlot(gamestate, card, source, dest)
+    }
+
+    case Op.MoveZoneToStadium: {
+      const source = resolveZone(primitive.source, ctx)
+      const card = resolveCard(primitive.card, ctx)
+      if (!source || !card) return gamestate
+      return moveZoneToStadium(gamestate, card, source)
     }
 
     case Op.MoveSlotToZone: {

@@ -236,7 +236,8 @@ function isMove(step: Primitive): boolean {
     step.op === Op.MoveZoneToZone ||
     step.op === Op.MoveZoneToSlot ||
     step.op === Op.MoveSlotToZone ||
-    step.op === Op.MoveSlotToSlot
+    step.op === Op.MoveSlotToSlot ||
+    step.op === Op.MoveZoneToStadium
   )
 }
 

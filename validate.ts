@@ -114,9 +114,10 @@ function reads(step: Primitive, have: Set<string>): string | null {
   switch (step.op) {
     case Op.MoveZoneToZone:
     case Op.MoveZoneToSlot:
+    case Op.MoveZoneToStadium:
     case Op.MoveSlotToZone:
     case Op.MoveSlotToSlot:
-      return read(have, step.card, at) ?? read(have, step.source, at) ?? read(have, step.dest, at)
+      return read(have, step.card, at) ?? read(have, step.source, at) ?? ("dest" in step ? read(have, step.dest, at) : null)
     case Op.Attack:
       return read(have, step.base, at) ?? read(have, step.attacker, at) ?? read(have, step.defender, at)
     case Op.ApplyDamage:

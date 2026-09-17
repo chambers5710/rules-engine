@@ -9,6 +9,7 @@ import {
   opponent,
   pokemonInPlay,
 } from "./board.js"
+import { isStadium } from "./card.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
 import { ifPasses, useGate } from "./interpret.js"
@@ -205,7 +206,7 @@ function placeEvolve(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
-// Trainer — one play per copy in hand. Discard is the play unless the expr MoveZoneToSlots the card (tool / play-as-Pokémon).
+// Trainer — one play per copy in hand. Discard is the play unless the expr lands the card (tool / play-as-Pokémon / Stadium).
 function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   if (!mayPlayTrainer(gamestate, player)) return []
   const hand = { player, zone: "hand" } as const
@@ -214,14 +215,18 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const card of surveyCards(gamestate, hand, { kind: "trainer" })) {
     const sourceId = gamestate.cardRegistry[card].sourceId
+    const printed = gamestate.cardRegistry[card]
     const effect = trainerEffect(gamestate.effectRegistry, sourceId)
-    if (effect.length === 0) continue
-    const expr: Expr = trainerAttaches(gamestate.effectRegistry, sourceId)
-      ? effect
-      : [
-          { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
-          ...effect,
-        ]
+    const stadium = isStadium(printed)
+    if (effect.length === 0 && !stadium) continue
+    const expr: Expr = stadium
+      ? [{ op: Op.MoveZoneToStadium, card, source: hand }, ...effect]
+      : trainerAttaches(gamestate.effectRegistry, sourceId)
+        ? effect
+        : [
+            { op: Op.MoveZoneToZone, card, source: hand, dest: discard, position: "bottom" },
+            ...effect,
+          ]
     const seed = {
       $self_slot: active,
       $defending: { player: opponent(player), slot: "active" },

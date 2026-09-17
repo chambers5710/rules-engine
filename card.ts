@@ -1,5 +1,9 @@
 import type { CardFieldOverrides, CardInstance, CardInstanceId, GameState } from "./types.js"
 
+export function isStadium(card: { subtypes?: string[] | null } | undefined): boolean {
+  return (card?.subtypes ?? []).includes("Stadium")
+}
+
 // Printed card plus `fieldOverrides`. Seat modifiers (Energy Burn) still fold on top in survey.
 export function foldedCard(gamestate: GameState, cardId: CardInstanceId): CardInstance | undefined {
   const printed = gamestate.cardRegistry[cardId]
