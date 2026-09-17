@@ -161,6 +161,11 @@ function stage(): GameState {
   )
   expect(gamestate.players[1].discard.includes(energy), "Tower keeps discard→hand in discard")
   expect(!gamestate.players[1].hand.includes(energy), "Tower does not put it in hand")
+  const blocked = gamestate.history.at(-1)
+  expect(
+    blocked?.op === "move_zone_to_zone" && "prevented" in blocked && blocked.prevented === true,
+    "Tower records a prevented retrieve"
+  )
   gamestate = moveZoneToZone(
     gamestate,
     energy,

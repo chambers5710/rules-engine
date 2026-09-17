@@ -168,7 +168,7 @@ export type Expr = Primitive[]
 
 // Resolved execution — binds already filled; no If/Loop/Select/Count/Calc
 export type HistoryEntry =
-  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition }
+  | { op: Op.MoveZoneToZone; card: string; source: ZoneRef; dest: ZoneRef; position: ZonePosition; prevented?: true }
   | { op: Op.MoveZoneToSlot; card: string; source: ZoneRef; dest: SlotRef }
   | { op: Op.MoveSlotToZone; card: string; source: SlotRef; dest: ZoneRef; position: ZonePosition }
   | { op: Op.MoveSlotToSlot; card: string; source: SlotRef; dest: SlotRef }

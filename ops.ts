@@ -89,7 +89,14 @@ export const moveZoneToZone = (
     dest.player === source.player &&
     blocksDiscardToHand(gamestate)
   ) {
-    return gamestate
+    return record(gamestate, {
+      op: Op.MoveZoneToZone,
+      card: cardId,
+      source,
+      dest,
+      position,
+      prevented: true,
+    })
   }
 
   const next = copy(gamestate, source.player, dest.player)
