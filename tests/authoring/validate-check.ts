@@ -72,6 +72,11 @@ function expect(ok: boolean, message: string) {
       const err = validateExpr(expr)
       expect(err === null, `${sourceId} ${name}: ${err}`)
     }
+    for (const [name, spec] of Object.entries(entry.stadium ?? {})) {
+      if (spec.kind !== "use") continue
+      const err = validateExpr(spec.then)
+      expect(err === null, `${sourceId} ${name}: ${err}`)
+    }
     for (const [name, spec] of Object.entries(entry.triggers ?? {})) {
       const err = validateExpr(spec.then, ["$self_slot", "$attacker"])
       expect(err === null, `${sourceId} ${name}: ${err}`)

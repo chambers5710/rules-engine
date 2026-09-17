@@ -1,6 +1,6 @@
 import { Op, type Expr, type Primitive } from "./dsl.js"
 import { printedAttackDamage } from "./survey.js"
-import { type EffectRegistry, type SourceId } from "./types.js"
+import { type EffectRegistry, type SourceId, type StadiumUseLimit } from "./types.js"
 
 // Pokémon maps on a registry entry. Trainer maps live on EffectEntry.trainer.
 export type CardEffects = {
@@ -24,6 +24,23 @@ export function trainerEffect(
   const named = registry[sourceId]?.trainer
   if (!named) return []
   return Object.values(named)[0] ?? []
+}
+
+export function stadiumUses(
+  registry: EffectRegistry,
+  sourceId: SourceId
+): Array<{ name: string; limit?: StadiumUseLimit; then: Expr }> {
+  const named = registry[sourceId]?.stadium
+  if (!named) return []
+  return Object.entries(named).flatMap(([name, spec]) =>
+    spec.kind === "use" && spec.then.length > 0
+      ? [{ name, limit: spec.limit, then: spec.then }]
+      : []
+  )
+}
+
+export function stadiumUseCappedThisTurn(limit: StadiumUseLimit | undefined): boolean {
+  return limit?.during === "turn"
 }
 
 export function trainerAttaches(

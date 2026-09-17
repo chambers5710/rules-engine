@@ -11,7 +11,7 @@ import {
 } from "./board.js"
 import { isStadium } from "./card.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr, cardEffect, trainerAttaches, trainerEffect } from "./effects.js"
+import { attackExpr, cardEffect, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
 import { ifPasses, useGate } from "./interpret.js"
 import { abilityBanned, attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
@@ -36,6 +36,7 @@ export type AvailableAction =
   | (ActionBase & { kind: Action.Attack; player: 1 | 2; name: string })
   | (ActionBase & { kind: Action.Ability; player: 1 | 2; name: string; slot: SlotId })
   | (ActionBase & { kind: Action.PlayTrainer; player: 1 | 2; card: string })
+  | (ActionBase & { kind: Action.UseStadium; player: 1 | 2; card: string; name: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "cards"; card: string; hidden?: true; face?: string })
   | (ActionBase & { kind: Action.Choose; player: 1 | 2; pick: "attacks"; name: string })
@@ -109,6 +110,7 @@ function computePlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
     ...placeEnergy(gamestate, player),
     ...placeEvolve(gamestate, player),
     ...playTrainer(gamestate, player),
+    ...stadiumInPlay(gamestate, player),
     ...abilitiesInPlay(gamestate, player),
     ...attacksFromActive(gamestate, player),
     ...retreatFromActive(gamestate, player),
@@ -240,6 +242,36 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
     }
     if (!exprPlayable(gamestate, expr, seed, player, Action.PlayTrainer)) continue
     actions.push({ kind: Action.PlayTrainer, player, card, expr, seed })
+  }
+  return actions
+}
+
+// In-play Stadium uses — dump `stadium` map on the stuck card. Not PlayTrainer. Not a seat Power.
+function stadiumInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
+  const stuck = gamestate.stadium
+  if (!stuck) return []
+  const printed = gamestate.cardRegistry[stuck.card]
+  if (!printed) return []
+  const hand = { player, zone: "hand" } as const
+  const actions: AvailableAction[] = []
+  for (const row of stadiumUses(gamestate.effectRegistry, printed.sourceId)) {
+    if (stadiumUseCappedThisTurn(row.limit) && gamestate.stadiumUsedThisTurn) continue
+    const expr = row.then
+    const seed = {
+      $self_slot: { player, slot: "active" } as const,
+      $hand: hand,
+      $deck: { player, zone: "deck" },
+      $discard: { player, zone: "discard" },
+    }
+    if (!exprPlayable(gamestate, expr, seed, player, Action.UseStadium)) continue
+    actions.push({
+      kind: Action.UseStadium,
+      player,
+      card: stuck.card,
+      name: row.name,
+      expr,
+      seed,
+    })
   }
   return actions
 }

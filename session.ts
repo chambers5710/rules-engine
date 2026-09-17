@@ -74,6 +74,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
     attacks?: EffectRegistry[string]["attacks"] | null
     abilities?: EffectRegistry[string]["abilities"] | null
     trainer?: EffectRegistry[string]["trainer"] | null
+    stadium?: EffectRegistry[string]["stadium"] | null
     triggers?: EffectRegistry[string]["triggers"] | null
     powers?: EffectRegistry[string]["powers"] | null
   }>
@@ -83,6 +84,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
       ...(row.attacks ? { attacks: row.attacks } : {}),
       ...(row.abilities ? { abilities: row.abilities } : {}),
       ...(row.trainer ? { trainer: row.trainer } : {}),
+      ...(row.stadium ? { stadium: row.stadium } : {}),
       ...(row.triggers ? { triggers: row.triggers } : {}),
       ...(row.powers ? { powers: row.powers } : {}),
     }

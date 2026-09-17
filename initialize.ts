@@ -51,6 +51,7 @@ export function initializeGameState(
     setupReady: { 1: false, 2: false },
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
+    stadiumUsedThisTurn: false,
     actionStack: [],
     history: [],
     subscriptions: [],

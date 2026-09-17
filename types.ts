@@ -10,6 +10,7 @@ export type EffectEntry = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
   trainer?: Record<string, Expr>
+  stadium?: Record<string, StadiumSpec>
   triggers?: Record<string, TriggerSpec>
   powers?: Record<string, PowerSpec>
 }
@@ -30,6 +31,7 @@ export type GameState = {
   setupReady: { 1: boolean; 2: boolean }
   energyAttachedThisTurn: boolean
   retreatedThisTurn: boolean
+  stadiumUsedThisTurn: boolean
   actionStack: ActionFrame[]
   history: HistoryEntry[]
   subscriptions: TriggerSubscription[]
@@ -170,6 +172,16 @@ export type GameEvent = {
   via: DamageVia
   applied?: number
 }
+
+// Printed Stadium text on the in-play card. GameState.stadium is the stick; this map is the writing.
+// `use` is a Turn action. `power` / `trigger` kinds wait on later slices — do not copy this map onto GameState.
+export type StadiumUseLimit = {
+  during: "turn"
+  times: number
+}
+
+export type StadiumSpec =
+  | { kind: "use"; then: Expr; limit?: StadiumUseLimit }
 
 export type PowerSpec =
   | { kind: "blocks_status" }

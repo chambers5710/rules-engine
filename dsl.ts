@@ -41,6 +41,7 @@ export enum Action {
   Attack = "attack",
   Ability = "ability",
   PlayTrainer = "play_trainer",
+  UseStadium = "use_stadium",
   Choose = "choose",
   Retreat = "retreat",
   Promote = "promote",

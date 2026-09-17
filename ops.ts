@@ -118,6 +118,7 @@ export const moveZoneToStadium = (
     discarded = { card: prev.card, player: prev.player }
   }
   next.stadium = { card: cardId, player: source.player }
+  next.stadiumUsedThisTurn = false
   const recorded = record(next, {
     op: Op.MoveZoneToStadium,
     card: cardId,

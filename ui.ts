@@ -57,6 +57,13 @@ export function formatAction(gamestate: GameState, a: AvailableAction): string {
     if (!text) return head
     return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
   }
+  if (a.kind === Action.UseStadium) {
+    const printed = gamestate.cardRegistry[a.card]
+    const text = (printed?.rules ?? []).slice(1).join(" ").trim()
+    const head = `${a.kind}  ${a.name}`
+    if (!text) return head
+    return [head, ...wrapText(text, 52).map((line) => `         ${line}`)].join("\n")
+  }
   if (a.kind === Action.Choose) {
     if (a.pick === "skip") return "select  skip"
     if (a.pick === "cards") return `select  ${a.hidden ? a.face ?? "Prize" : cardName(gamestate, a.card)}`

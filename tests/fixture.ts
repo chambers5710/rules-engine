@@ -147,6 +147,7 @@ export function liveTurn(gamestate: GameState): GameState {
     setupReady: { 1: true, 2: true },
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
+    stadiumUsedThisTurn: false,
   }
   // Placement via moveZoneToSlot marks evolvedThisTurn. A new turn clears that, same as the machine.
   for (const player of [1, 2] as const) {

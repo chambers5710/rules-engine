@@ -12,7 +12,7 @@ import {
 } from "./board.js"
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr, honestCopy } from "./effects.js"
+import { attackExpr, honestCopy, stadiumUseCappedThisTurn, stadiumUses } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
 import { canAttack, canRetreat, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, takesPrizeOnKo } from "./reads.js"
 import { abilityBanned, attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
@@ -136,6 +136,18 @@ function turnPhase(
     case Action.PlayTrainer:
       if (!mayPlayTrainer(gamestate, action.player)) return gamestate
       return runAction(gamestate, action)
+    case Action.UseStadium: {
+      if (!gamestate.stadium || gamestate.stadium.card !== action.card) return gamestate
+      const uses = stadiumUses(
+        gamestate.effectRegistry,
+        gamestate.cardRegistry[action.card]?.sourceId ?? ""
+      )
+      const row = uses.find((use) => use.name === action.name)
+      if (!row) return gamestate
+      if (stadiumUseCappedThisTurn(row.limit) && gamestate.stadiumUsedThisTurn) return gamestate
+      const next = runAction(gamestate, action)
+      return stadiumUseCappedThisTurn(row.limit) ? { ...next, stadiumUsedThisTurn: true } : next
+    }
     case Action.Retreat:
       if (!canRetreat(gamestate, getSlot(gamestate, { player: action.player, slot: "active" }))) {
         return gamestate
@@ -186,6 +198,7 @@ function enterTurn(
     turnCount,
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
+    stadiumUsedThisTurn: false,
   }
   gamestate = clearEvolvedThisTurn(gamestate, activePlayer)
   gamestate = tickModifiersEnter(gamestate, activePlayer)

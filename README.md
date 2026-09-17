@@ -187,7 +187,7 @@ while not Ended:
 
 ## Status today
 
-- Init: shuffle, draw 7, mulligan until Basic Pokémon (Energy `"Basic"` does not count)
+- Init: shuffle, draw 7, mulligan until Basic Pokémon (Baby counts; Energy `"Basic"` does not)
 - Both Ready → 6 prizes from deck top (no shuffle after prizes) → Turn, first-player draw
 - Turn: place Bench, attach Energy (once), play Trainers, attack, EndTurn
 - Attack ends the turn; empty deck on draw ends the game

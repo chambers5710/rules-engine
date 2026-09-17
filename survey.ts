@@ -107,10 +107,12 @@ export function canPayEnergyCost(
   return pool.length >= cost.length - typed.length
 }
 
-// Basic Pokémon — Energy's printed "Basic" subtype does not count
+// Basic Pokémon — Baby counts as Basic; Energy's printed "Basic" subtype does not
 export function isBasicPokemon(gamestate: GameState, cardId: string): boolean {
   const printed = foldedCard(gamestate, cardId)
-  return printed?.supertype === "Pokémon" && printed.subtypes?.includes("Basic") === true
+  if (printed?.supertype !== "Pokémon") return false
+  const subtypes = printed.subtypes ?? []
+  return subtypes.includes("Basic") || subtypes.includes("Baby")
 }
 
 export function isEnergy(gamestate: GameState, cardId: string): boolean {
