@@ -77,6 +77,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
     stadium?: EffectRegistry[string]["stadium"] | null
     triggers?: EffectRegistry[string]["triggers"] | null
     powers?: EffectRegistry[string]["powers"] | null
+    energy?: EffectRegistry[string]["energy"] | null
   }>
   const registry: EffectRegistry = {}
   for (const row of rows) {
@@ -87,6 +88,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
       ...(row.stadium ? { stadium: row.stadium } : {}),
       ...(row.triggers ? { triggers: row.triggers } : {}),
       ...(row.powers ? { powers: row.powers } : {}),
+      ...(row.energy ? { energy: row.energy } : {}),
     }
   }
   return registry
