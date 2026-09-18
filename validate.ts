@@ -38,6 +38,7 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
 export const CATALOG_SEEDS: BindingName[] = [
   "$self_slot",
   "$defending",
+  "$active",
   "$energy",
   "$discard",
   "$opp_discard",

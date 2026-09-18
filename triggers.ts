@@ -20,6 +20,7 @@ export function triggerCtx(job: TriggerJob): InterpretCtx {
     bindings: {
       $self_slot: job.seat,
       $defending: { player: opponent(player), slot: "active" },
+      $active: { player, slot: "active" },
       $hand: { player, zone: "hand" },
       $deck: { player, zone: "deck" },
       $discard: { player, zone: "discard" },

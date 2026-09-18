@@ -257,6 +257,7 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
     const seed = {
       $self_slot: active,
       $defending: { player: opponent(player), slot: "active" },
+      $active: active,
       $hand: hand,
       $deck: { player, zone: "deck" },
       $discard: discard,
@@ -303,7 +304,7 @@ function stadiumInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   return actions
 }
 
-// Ability — each in-play Pokémon's printed powers; $self_slot is that copy
+// Ability — each in-play Pokémon's printed powers; $self_slot is that copy, $active is your Active
 function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   const actions: AvailableAction[] = []
   for (const slotId of pokemonInPlay(gamestate, player)) {
@@ -318,6 +319,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
       const seed = {
         $self_slot: slotId,
         $defending: { player: opponent(player), slot: "active" },
+        $active: { player, slot: "active" },
         $hand: { player, zone: "hand" },
         $deck: { player, zone: "deck" },
         $prize: { player, zone: "prize" },
@@ -357,6 +359,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
       const seed = {
         $self_slot: slot,
         $defending: { player: defending, slot: "active" },
+        $active: slot,
         $energy: { ...slot, attachment: "energy" },
         $hand: { player, zone: "hand" },
         $deck: { player, zone: "deck" },
