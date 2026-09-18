@@ -23,7 +23,7 @@ import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
 import { cardsAt, isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
 import { applyDamageVia } from "./triggers.js"
-import { DAMAGE_COUNTER, type Attachment, type CardFieldOverrides, type DamageModifier, type EnergyType, type GameEvent, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
+import { DAMAGE_COUNTER, type Attachment, type CardFieldOverrides, type DamageModifier, type DamageVia, type EnergyType, type GameState, type SlotId, type SlotRef, type ZoneName, type ZoneRef } from "./types.js"
 
 export type { InterpretCtx, InterpretScript } from "./dsl.js"
 
@@ -69,7 +69,7 @@ function emitDamage(
   source: SlotId | undefined,
   target: SlotId,
   applied: number,
-  via: GameEvent["via"]
+  via: DamageVia
 ) {
   const targetCard = currentForm(gamestate, getSlot(gamestate, target))?.instanceId
   if (!targetCard) return
@@ -95,7 +95,7 @@ function emitKo(
   after: GameState,
   source: SlotId | undefined,
   target: SlotId,
-  via: GameEvent["via"]
+  via: DamageVia
 ) {
   if (isKnockedOut(before, getSlot(before, target))) return
   if (!isKnockedOut(after, getSlot(after, target))) return
@@ -114,6 +114,16 @@ function emitKo(
         }
       : {}),
   })
+}
+
+function emitEvolved(ctx: InterpretCtx, gamestate: GameState, dest: SlotRef) {
+  const target = dest.slot === "bench"
+    ? { player: dest.player, slot: "bench" as const, index: dest.index }
+    : { player: dest.player, slot: "active" as const }
+  const targetCard = currentForm(gamestate, getSlot(gamestate, target))?.instanceId
+  if (!targetCard) return
+  ctx.events ??= []
+  ctx.events.push({ kind: "evolved", targetCard, target })
 }
 
 function stampLastHit(
@@ -174,21 +184,29 @@ function resolveReveal(
   return { cards: ids, from: from ?? self?.player ?? 1, zone }
 }
 
-function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): { beat: "end_of_turn"; player: 1 | 2; next?: true } {
+function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): {
+  beat: "end_of_turn"
+  player: 1 | 2
+  next?: true
+  leave_active?: true
+  leave_play?: true
+} {
   return {
     beat: "end_of_turn",
     player: until.who === "owner" ? slot.player : opponent(slot.player),
     ...(until.next ? { next: true as const } : {}),
+    ...(until.leave_active ? { leave_active: true as const } : {}),
+    ...(until.leave_play ? { leave_play: true as const } : {}),
   }
 }
 
 // Named base, then before-matchup defender sub, then Weakness / Resistance,
-// then attacker adds, then defender folds. W/R only on the Defending Pokémon
-// (opponent's Active), unless the Attack primitive sets matchup: false
-// (Sonicboom). Attacker types are the current form, not attached energy and
-// not attack cost. Each printed line whose type is among those types applies;
-// damage floors at 0. foldAdds / foldDamage still run after that skip —
-// printed “other effects after W/R still happen.”
+// then attacker adds, then defender folds. W/R on the opponent defender this
+// Attack names, unless the primitive sets matchup: false (Sonicboom / Telekinesis).
+// Attacker types are the current form, not attached energy and not attack cost.
+// Each printed line whose type is among those types applies; damage floors at 0.
+// foldAdds / foldDamage still run after that skip — printed “other effects after
+// W/R still happen.”
 export function pipelineAttackDamage(
   gamestate: GameState,
   base: number,
@@ -201,7 +219,7 @@ export function pipelineAttackDamage(
   damage = foldBeforeMatchup(gamestate, defender, damage, attacker)
   let weakness = false
   let resistance = false
-  if (matchup && defender.player !== attacker.player && defender.slot === "active") {
+  if (matchup && defender.player !== attacker.player) {
     const types = currentForm(gamestate, getSlot(gamestate, attacker))?.types ?? []
     const defending = currentForm(gamestate, getSlot(gamestate, defender))
     const weakTo = foldedMatchupType(gamestate, defender, "weakness_type")
@@ -411,6 +429,9 @@ export function slotMatches(
         if (!isBasicPokemon(gamestate, form.instanceId)) return false
         break
       }
+      case "marker":
+        if (!slot.markers.includes(filter.name)) return false
+        break
     }
   }
   return true
@@ -463,13 +484,32 @@ export function ifPasses(
   return primitive.not ? !hit : hit
 }
 
-/** Sole top-level status / slot-filter If — "can't use unless" (Dream Eater, Spacing Out, Step In). */
+/** Trailing status / filter If, or a bind If with `gate: true` — "can't use unless". Count/Calc may precede. Mirror Move / Conversion 1 omit `gate` (skip-then). */
 export function useGate(expr: Expr): Extract<Primitive, { op: Op.If }> | undefined {
-  if (expr.length !== 1) return undefined
-  const step = expr[0]
-  if (step.op !== Op.If) return undefined
+  let i = 0
+  while (i < expr.length && (expr[i]!.op === Op.Count || expr[i]!.op === Op.Calc)) i++
+  if (i !== expr.length - 1) return undefined
+  const step = expr[i]
+  if (!step || step.op !== Op.If) return undefined
   if ("status" in step || "filter" in step) return step
+  if ("gate" in step && step.gate) return step
   return undefined
+}
+
+/** Listing / fail-close: dry-run leading Count/Calc so a bind If can see `$diff`. */
+export function gatePasses(
+  gamestate: GameState,
+  expr: Expr,
+  seed: Record<string, unknown> | undefined
+): boolean {
+  const gate = useGate(expr)
+  if (!gate) return true
+  const ctx: InterpretCtx = { bindings: { ...(seed ?? {}) } }
+  for (const step of expr) {
+    if (step.op !== Op.Count && step.op !== Op.Calc) break
+    gamestate = interpret(gamestate, step, ctx)
+  }
+  return ifPasses(gamestate, gate, ctx)
 }
 
 export function interpret(
@@ -491,7 +531,10 @@ export function interpret(
       const dest = resolveSlotRef(primitive.dest, primitive.attachment, ctx)
       const card = resolveCard(primitive.card, ctx)
       if (!source || !dest || !card) return gamestate
-      return moveZoneToSlot(gamestate, card, source, dest)
+      const evolving = dest.attachment === "evolution" && getSlot(gamestate, dest).evolution.length > 0
+      const next = moveZoneToSlot(gamestate, card, source, dest)
+      if (evolving && next !== gamestate) emitEvolved(ctx, next, dest)
+      return next
     }
 
     case Op.MoveZoneToStadium: {
@@ -522,7 +565,10 @@ export function interpret(
       if (!source || !dest || !card) return gamestate
       const shield = withAttackShield(gamestate, source, ctx)
       if (shield.blocked) return shield.gamestate
-      return moveSlotToSlot(shield.gamestate, card, source, dest)
+      const evolving = dest.attachment === "evolution" && getSlot(shield.gamestate, dest).evolution.length > 0
+      const next = moveSlotToSlot(shield.gamestate, card, source, dest)
+      if (evolving && next !== shield.gamestate) emitEvolved(ctx, next, dest)
+      return next
     }
 
     case Op.Attack: {
@@ -591,6 +637,16 @@ export function interpret(
       const shield = withAttackShield(gamestate, slot, ctx)
       if (!slot || shield.blocked) return shield.gamestate
       return applyStatus(shield.gamestate, primitive.status, slot, primitive.counters)
+    }
+
+    case Op.ApplyMarker: {
+      const dest = resolveSlot(primitive.slot, ctx)
+      if (!dest) return gamestate
+      const slot = getSlot(gamestate, dest)
+      if (slot.markers.includes(primitive.name)) return gamestate
+      const next = copy(gamestate, dest.player)
+      getSlot(next, dest).markers = [...slot.markers, primitive.name]
+      return record(next, { op: Op.ApplyMarker, slot: dest, name: primitive.name })
     }
 
     case Op.RemoveStatus: {
@@ -911,6 +967,10 @@ export function interpret(
       if (!zone) return gamestate
       return record(shuffle(gamestate, zone.player, zone.zone), { op: Op.Shuffle, zone })
     }
+
+    case Op.EndTurn:
+      ctx.endTurn = true
+      return record(gamestate, { op: Op.EndTurn })
 
     case Op.Reveal: {
       const shown = resolveReveal(gamestate, primitive.cards, ctx)

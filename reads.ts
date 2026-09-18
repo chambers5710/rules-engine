@@ -1,5 +1,6 @@
 import { copyingDefending, currentForm, getSlot, occupiedBench, opponent, physicalForm, pokemonInPlay } from "./board.js"
-import type { CardInstance, CardInstanceId, EnergyType, GameState, PowerSpec, Slot, SlotId, Status } from "./types.js"
+import { foldedCard } from "./card.js"
+import { EnergyTypes, type CardInstance, type CardInstanceId, type EnergyType, type GameState, type PowerSpec, type Ruleset, type Slot, type SlotId, type Status } from "./types.js"
 
 const PLAYERS = [1, 2] as const
 
@@ -68,6 +69,54 @@ export function canRetreat(gamestate: GameState, slot: Slot): boolean {
     }
   }
   return true
+}
+
+/** Live `attach_energy` on this seat for this hand card’s printed type. */
+function attachEnergyType(gamestate: GameState, slot: Slot, card: string): EnergyType | undefined {
+  const type = foldedCard(gamestate, card)?.energyType
+  if (!type) return undefined
+  for (const power of standingSpecs(gamestate, slot)) {
+    if (power.kind === "attach_energy" && power.type === type) return type
+  }
+  return undefined
+}
+
+/**
+ * Attach Energy from hand onto this seat. Pure Body taxes Water: already have Energy, then discard one after.
+ * Power off (status / Toxic Gas) → true. Other Energy types are free.
+ */
+export function mayAttachEnergy(gamestate: GameState, slotId: SlotId, card: string): boolean {
+  const slot = getSlot(gamestate, slotId)
+  if (!attachEnergyType(gamestate, slot, card)) return true
+  return slot.energy.length > 0
+}
+
+/** Same spec as `mayAttachEnergy`: the listed attach must discard one Energy after it lands. */
+export function attachEnergyTaxed(gamestate: GameState, slotId: SlotId, card: string): boolean {
+  return attachEnergyType(gamestate, getSlot(gamestate, slotId), card) !== undefined
+}
+
+/** Types this book lets a player choose (Conversion / Buzzap). Catalog `EnergyTypes` is wider. */
+export function legalEnergyTypes(ruleset: Ruleset): EnergyType[] {
+  const extra = ruleset === "wotc-neo" ? new Set<EnergyType>(["Darkness", "Metal"]) : new Set<EnergyType>()
+  return EnergyTypes.filter(
+    (type) =>
+      type === "Grass" ||
+      type === "Fire" ||
+      type === "Water" ||
+      type === "Lightning" ||
+      type === "Psychic" ||
+      type === "Fighting" ||
+      type === "Colorless" ||
+      extra.has(type)
+  )
+}
+
+/** Defending Active is a Baby — attacker flips before the attack (Neo Baby rule). Off on `wotc-base`. */
+export function babyCoinOnAnnounce(gamestate: GameState, attacker: 1 | 2): boolean {
+  if (gamestate.ruleset !== "wotc-neo") return false
+  const defending = getSlot(gamestate, { player: opponent(attacker), slot: "active" })
+  return currentForm(gamestate, defending)?.subtypes?.includes("Baby") === true
 }
 
 /** Headache — timed `trainer_use` on that player's seats (Acid clock on `$defending`). */

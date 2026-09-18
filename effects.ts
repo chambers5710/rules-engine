@@ -1,4 +1,4 @@
-import { Op, type Expr, type Primitive } from "./dsl.js"
+import { Op, type CopyStrip, type Expr, type Primitive } from "./dsl.js"
 import { printedAttackDamage } from "./survey.js"
 import { type EffectRegistry, type SourceId, type StadiumUseLimit } from "./types.js"
 
@@ -95,8 +95,7 @@ function isStripEnergyLoop(step: Primitive): boolean {
   return step.op === Op.Loop && step.then.some(isSelfEnergyDiscard)
 }
 
-/** Metronome honesty: drop leading self-Energy pay and literal self recoil. */
-export function honestCopy(expr: Expr): Expr {
+function dropLeadingEnergyPay(expr: Expr): Expr {
   let i = 0
   while (i < expr.length) {
     if (isSelfEnergySelect(expr[i]) && expr[i + 1] && isSelfEnergyDiscard(expr[i + 1])) {
@@ -109,9 +108,21 @@ export function honestCopy(expr: Expr): Expr {
     }
     break
   }
-  return expr.slice(i).filter((step) => {
+  return expr.slice(i)
+}
+
+function dropSelfRecoil(expr: Expr): Expr {
+  return expr.filter((step) => {
     if (step.op !== Op.ApplyDamage) return true
     if (step.slot !== "$self_slot") return true
     return typeof step.amount !== "number" || step.amount <= 0
   })
+}
+
+/** Rewrite a copied attack. Empty `strip` is the attack as written. */
+export function stripCopy(expr: Expr, strip: readonly CopyStrip[] = []): Expr {
+  let next = expr
+  if (strip.includes("energy_pay")) next = dropLeadingEnergyPay(next)
+  if (strip.includes("recoil")) next = dropSelfRecoil(next)
+  return next
 }

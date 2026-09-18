@@ -17,10 +17,15 @@ export type EffectEntry = {
 
 export type EffectRegistry = Record<SourceId, EffectEntry>
 
+// Which rule book this match uses. Not a set id (`base1`) and not a format (legal cards).
+export const Rulesets = ["wotc-base", "wotc-neo"] as const
+export type Ruleset = typeof Rulesets[number]
+
 // Game — the full snapshot the engine reads and writes
 export type GameState = {
   id: string
   phase: Phase
+  ruleset: Ruleset
   players: { 1: Player; 2: Player }
   turnCount: number
   firstPlayer: 1 | 2
@@ -89,6 +94,7 @@ export type Slot = {
   status: StatusFlags
   energy: CardInstanceId[]
   tools: CardInstanceId[]
+  markers: string[] // named tokens; at most one of each name. Leave play with the pile.
   modifiers: Modifier[]
   evolvedThisTurn: boolean // played or evolved this turn; cannot evolve again yet. First-turn evolve and `block_evolve` are `mayEvolve`, not this flag.
   poisonCounters: number
@@ -126,7 +132,13 @@ export type EnergyTypeRewrite = { set: EnergyType }
 
 export type ClockPhase = "pending" | "active"
 
-export type EndOfTurnUntil = { beat: "end_of_turn"; player: 1 | 2; next?: true }
+export type EndOfTurnUntil = {
+  beat: "end_of_turn"
+  player: 1 | 2
+  next?: true
+  leave_active?: true
+  leave_play?: true
+}
 
 export type TurnClock = {
   until: EndOfTurnUntil
@@ -164,15 +176,29 @@ export type DamageVia =
   | "effect"
   | "trigger"
 
-export type GameEvent = {
-  kind: "damage_applied" | "pokemon_knocked_out"
-  targetCard: CardInstanceId
-  target: SlotId
-  sourceCard?: CardInstanceId
-  source?: SlotId
-  via: DamageVia
-  applied?: number
-}
+export type GameEvent =
+  | {
+      kind: "damage_applied"
+      targetCard: CardInstanceId
+      target: SlotId
+      sourceCard?: CardInstanceId
+      source?: SlotId
+      via: DamageVia
+      applied?: number
+    }
+  | {
+      kind: "pokemon_knocked_out"
+      targetCard: CardInstanceId
+      target: SlotId
+      sourceCard?: CardInstanceId
+      source?: SlotId
+      via: DamageVia
+    }
+  | {
+      kind: "evolved"
+      targetCard: CardInstanceId
+      target: SlotId
+    }
 
 // Printed Stadium text on the in-play card. GameState.stadium is the stick; this map is the writing.
 // `use` is a Turn action. `block_discard_to_hand` is Pokémon Tower. `power` / `trigger` kinds wait on later slices.
@@ -197,6 +223,7 @@ export type PowerSpec =
   | { kind: "coin_prevent_attack" }
   | { kind: "prevent_attacks"; on: "owner_bench" | "self"; from?: "evolved" }
   | { kind: "cannot_retreat"; on: "opponent_active" }
+  | { kind: "attach_energy"; type: EnergyType }
 
 export type TriggerSpec =
   | {
@@ -209,6 +236,11 @@ export type TriggerSpec =
   | {
       when: "pokemon_knocked_out"
       via: DamageVia[]
+      blockedByStatus: boolean
+      then: Expr
+    }
+  | {
+      when: "evolved"
       blockedByStatus: boolean
       then: Expr
     }

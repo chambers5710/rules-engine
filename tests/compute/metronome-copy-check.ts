@@ -1,13 +1,17 @@
-import cards from "../../data/cards/base1.json" with { type: "json" }
+import base from "../../data/cards/base1.json" with { type: "json" }
+import dump from "../../../effect-author/effects/effects_base1.json" with { type: "json" }
 import { Action, Op, type InterpretCtx } from "../../dsl.js"
+import { stripCopy } from "../../effects.js"
+import { initializeGameState } from "../../initialize.js"
 import { copiedAttackExpr, runExpr } from "../../machine.js"
-import type { Card, GameState } from "../../types.js"
-import {
-  initBoard, attachEnergy, copies, liveTurn, moveToActive, printed } from "../fixture.js"
+import type { Card, EffectRegistry, GameState } from "../../types.js"
+import { attachEnergy, copies, liveTurn, moveToActive, printed } from "../fixture.js"
 
-const set = cards as Card[]
+const set = base as Card[]
+const registry = dump as EffectRegistry
 const attacker = { player: 1, slot: "active" } as const
 const defending = { player: 2, slot: "active" } as const
+const metronomeStrip = ["energy_pay", "recoil"] as const
 
 function fail(message: string): never {
   throw new Error(message)
@@ -17,13 +21,12 @@ function expect(ok: boolean, message: string) {
   if (!ok) fail(message)
 }
 
-async function stage(defenderId: string, defenderEnergy: number): GameState {
-  const clefairy = printed(set, "base1-5")
-  const foe = printed(set, defenderId)
+function stage(defenderId: string, defenderEnergy: number): GameState {
   const energy = printed(set, "base1-100")
-  let gamestate = await initBoard(
-    [clefairy, ...copies(energy, 17)],
-    [foe, ...copies(energy, 17)]
+  let gamestate = initializeGameState(
+    [printed(set, "base1-5"), ...copies(energy, 40)],
+    [printed(set, defenderId), ...copies(energy, 40)],
+    registry
   )
   gamestate = moveToActive(gamestate, 1, "base1-5")
   gamestate = moveToActive(gamestate, 2, defenderId)
@@ -32,75 +35,121 @@ async function stage(defenderId: string, defenderEnergy: number): GameState {
   return liveTurn(gamestate)
 }
 
-function ctx(): InterpretCtx {
+function ctx(copy?: string): InterpretCtx {
   return {
     via: "attack",
-    bindings: { $self_slot: attacker, $defending: defending, $energy: { ...attacker, attachment: "energy" } },
+    bindings: {
+      $self_slot: attacker,
+      $defending: defending,
+      $energy: { ...attacker, attachment: "energy" },
+      $discard: { player: 1, zone: "discard" },
+      ...(copy ? { $copy: copy } : {}),
+    },
   }
 }
 
-function playCopy(gamestate: GameState, name: string): GameState {
-  return runExpr(gamestate, copiedAttackExpr(gamestate, defending, name), ctx(), 1, Action.Attack)
+function playStripped(gamestate: GameState, name: string): GameState {
+  return runExpr(
+    gamestate,
+    stripCopy(copiedAttackExpr(gamestate, defending, name), metronomeStrip),
+    ctx(),
+    1,
+    Action.Attack
+  )
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-4", 2), defending, "Fire Spin")
-  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Fire Spin copy drops pay")
-  expect(expr[0]?.op === Op.Attack, "Fire Spin copy is the hit")
+  const row = registry["base1-5"]?.attacks?.["Metronome"]
+  const run = row?.find((step) => step.op === Op.RunEffect)
+  expect(run?.op === Op.RunEffect && run.strip?.includes("energy_pay") === true, "Clefairy Metronome strips energy pay")
+  expect(run?.op === Op.RunEffect && run.strip?.includes("recoil") === true, "Clefairy Metronome strips recoil")
 }
 
 {
-  const before = await stage("base1-4", 2)
-  const gamestate = playCopy(before, "Fire Spin")
-  expect(gamestate.players[2].active.damage === 100, "Fire Spin copy deals 100")
-  expect(gamestate.players[1].active.energy.length === 2, "Fire Spin copy does not discard Clefairy Energy")
-  expect(gamestate.actionStack.length === 0, "Fire Spin copy does not pause")
+  const full = copiedAttackExpr(stage("base1-4", 2), defending, "Fire Spin")
+  expect(full.some((step) => step.op === Op.Select), "Fire Spin as written keeps pay")
+  const expr = stripCopy(full, metronomeStrip)
+  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Fire Spin Metronome drops pay")
+  expect(expr[0]?.op === Op.Attack, "Fire Spin Metronome is the hit")
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-16", 2), defending, "Thunderbolt")
-  expect(expr.every((step) => step.op !== Op.Loop), "Thunderbolt copy drops the strip loop")
-  expect(expr[0]?.op === Op.Attack, "Thunderbolt copy is the hit")
+  const before = stage("base1-4", 2)
+  const gamestate = playStripped(before, "Fire Spin")
+  expect(gamestate.players[2].active.damage === 100, "Fire Spin Metronome deals 100")
+  expect(gamestate.players[1].active.energy.length === 2, "Fire Spin Metronome does not discard Clefairy Energy")
+  expect(gamestate.actionStack.length === 0, "Fire Spin Metronome does not pause")
 }
 
 {
-  const gamestate = playCopy(await stage("base1-16", 2), "Thunderbolt")
-  expect(gamestate.players[2].active.damage === 100, "Thunderbolt copy deals 100")
-  expect(gamestate.players[1].active.energy.length === 2, "Thunderbolt copy does not strip Clefairy Energy")
+  const before = stage("base1-4", 2)
+  const gamestate = runExpr(
+    before,
+    [{ op: Op.RunEffect, attack: "$copy", slot: defending, strip: [...metronomeStrip] }],
+    ctx("Fire Spin"),
+    1,
+    Action.Attack
+  )
+  expect(gamestate.actionStack.length === 0, "run_effect strip is what drops pay")
+  expect(gamestate.players[1].active.energy.length === 2, "run_effect strip does not discard")
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-32", 1), defending, "Recover")
-  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Recover copy drops pay")
-  expect(expr.some((step) => step.op === Op.ApplyDamage), "Recover copy still heals")
+  const before = stage("base1-4", 2)
+  const gamestate = runExpr(
+    before,
+    [{ op: Op.RunEffect, attack: "$copy", slot: defending }],
+    ctx("Fire Spin"),
+    1,
+    Action.Attack
+  )
+  expect(gamestate.actionStack.length === 1, "full copy keeps Fire Spin pay")
 }
 
 {
-  let gamestate = await stage("base1-32", 1)
+  const expr = stripCopy(copiedAttackExpr(stage("base1-16", 2), defending, "Thunderbolt"), metronomeStrip)
+  expect(expr.every((step) => step.op !== Op.Loop), "Thunderbolt Metronome drops the strip loop")
+  expect(expr[0]?.op === Op.Attack, "Thunderbolt Metronome is the hit")
+}
+
+{
+  const gamestate = playStripped(stage("base1-16", 2), "Thunderbolt")
+  expect(gamestate.players[2].active.damage === 100, "Thunderbolt Metronome deals 100")
+  expect(gamestate.players[1].active.energy.length === 2, "Thunderbolt Metronome does not strip Clefairy Energy")
+}
+
+{
+  const expr = stripCopy(copiedAttackExpr(stage("base1-32", 1), defending, "Recover"), metronomeStrip)
+  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Recover Metronome drops pay")
+  expect(expr.some((step) => step.op === Op.ApplyDamage), "Recover Metronome still heals")
+}
+
+{
+  let gamestate = stage("base1-32", 1)
   gamestate.players[1].active.damage = 20
-  gamestate = playCopy(gamestate, "Recover")
-  expect(gamestate.players[1].active.damage === 0, "Recover copy heals")
-  expect(gamestate.players[1].active.energy.length === 2, "Recover copy does not discard Energy")
+  gamestate = playStripped(gamestate, "Recover")
+  expect(gamestate.players[1].active.damage === 0, "Recover Metronome heals")
+  expect(gamestate.players[1].active.energy.length === 2, "Recover Metronome does not discard Energy")
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-18", 1), defending, "Hyper Beam")
+  const expr = copiedAttackExpr(stage("base1-18", 1), defending, "Hyper Beam")
   expect(expr[0]?.op === Op.Attack, "Hyper Beam copy keeps the hit")
   expect(expr.some((step) => step.op === Op.If), "Hyper Beam copy keeps the defending discard")
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-3", 0), defending, "Double-edge")
+  const expr = stripCopy(copiedAttackExpr(stage("base1-3", 0), defending, "Double-edge"), metronomeStrip)
   expect(
     expr.every((step) => step.op !== Op.ApplyDamage || step.slot !== "$self_slot"),
-    "Double-edge copy still drops recoil"
+    "Double-edge Metronome drops recoil"
   )
 }
 
 {
-  const expr = copiedAttackExpr(await stage("base1-10", 1), defending, "Barrier")
-  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Barrier copy drops pay")
-  expect(expr.some((step) => step.op === Op.ApplyModifier), "Barrier copy still shields")
+  const expr = stripCopy(copiedAttackExpr(stage("base1-10", 1), defending, "Barrier"), metronomeStrip)
+  expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Barrier Metronome drops pay")
+  expect(expr.some((step) => step.op === Op.ApplyModifier), "Barrier Metronome still shields")
 }
 
 console.log("metronome-copy-check assertions passed")

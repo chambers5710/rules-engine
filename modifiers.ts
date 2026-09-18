@@ -166,9 +166,13 @@ export function abilityBanned(slot: Slot, name: string): boolean {
   return activeAbilityUse(slot).some((m) => m.ban === name)
 }
 
-/** Texture Magic: benching that Pokémon drops `leave_active` mods. Mutates a copied seat. */
+/** Texture Magic / Slashing Strike: benching that Pokémon drops `leave_active` clocks. Mutates a copied seat. */
 export function stripLeaveActive(slot: Slot): void {
-  slot.modifiers = slot.modifiers.filter((m) => m.until.beat !== "leave_active")
+  slot.modifiers = slot.modifiers.filter((m) => {
+    if (m.until.beat === "leave_active") return false
+    if (m.until.beat === "end_of_turn" && m.until.leave_active) return false
+    return true
+  })
 }
 
 /** Tail Wag / Snivel: benching or discarding Active drops target-scoped locks. Mutates a copied state. */

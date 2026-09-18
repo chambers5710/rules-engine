@@ -1,4 +1,4 @@
-import { Op, type BindingName, type CardFilter, type Expr, type Primitive, type SlotFilter } from "./dsl.js"
+import { CopyStrips, Op, type BindingName, type CardFilter, type Expr, type Primitive, type SlotFilter } from "./dsl.js"
 
 const SLOT_KINDS = new Set<SlotFilter["kind"]>([
   "has_counters",
@@ -12,6 +12,7 @@ const SLOT_KINDS = new Set<SlotFilter["kind"]>([
   "benched",
   "evolved_this_turn",
   "breeder",
+  "marker",
 ])
 
 const CARD_KINDS = new Set<CardFilter["kind"]>([
@@ -24,6 +25,7 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "trainer",
   "pokemon",
   "stage_2",
+  "baby",
   "other_than",
   "among",
   "pays",
@@ -123,6 +125,7 @@ function reads(step: Primitive, have: Set<string>): string | null {
     case Op.ApplyDamage:
       return read(have, step.amount, at) ?? read(have, step.slot, at)
     case Op.ApplyStatus:
+    case Op.ApplyMarker:
     case Op.RemoveStatus:
     case Op.SwapActive:
     case Op.DiscardSlot:
@@ -219,12 +222,20 @@ function reads(step: Primitive, have: Set<string>): string | null {
       return filterNeed(have, at, asFilters(step.filter))
     case Op.Calc:
       return read(have, step.a, at) ?? read(have, step.b, at)
-    case Op.RunEffect:
-      return read(have, step.attack, at) ?? read(have, step.slot, at)
+    case Op.RunEffect: {
+      const err = read(have, step.attack, at) ?? read(have, step.slot, at)
+      if (err) return err
+      for (const kind of step.strip ?? []) {
+        if (!(CopyStrips as readonly string[]).includes(kind)) return `run_effect: unknown strip ${kind}`
+      }
+      return null
+    }
     case Op.Draw:
       return read(have, step.count, at)
     case Op.Shuffle:
       return read(have, step.zone, at)
+    case Op.EndTurn:
+      return null
     case Op.Reorder:
       return read(have, step.zone, at) ?? read(have, step.cards, at)
     case Op.Push:

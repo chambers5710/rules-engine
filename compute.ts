@@ -12,10 +12,10 @@ import {
 import { isStadium } from "./card.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, cardEffect, hasStadiumSpec, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
-import { ifPasses, useGate } from "./interpret.js"
+import { gatePasses } from "./interpret.js"
 import { abilityBanned, attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
-import { canAttack, canRetreat, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, retreatCost } from "./reads.js"
+import { attachEnergyTaxed, canAttack, canRetreat, mayAttachEnergy, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, retreatCost } from "./reads.js"
 import { canPayEnergyCost, surveyCards } from "./survey.js"
 import { Phase } from "./types.js"
 import type { GameState, SlotId } from "./types.js"
@@ -160,13 +160,12 @@ function placeBench(gamestate: GameState, player: 1 | 2): AvailableAction[] {
 // Energy — one attach per turn, each energy in hand × each Pokémon in play
 function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
   if (gamestate.energyAttachedThisTurn) return []
-  return energyInHand(gamestate, player).flatMap((card) =>
-    pokemonInPlay(gamestate, player).map((slot) => ({
-      kind: Action.AttachEnergy,
-      player,
-      card,
-      slot,
-      expr: [
+  const discard = { player, zone: "discard" as const }
+  const actions: AvailableAction[] = []
+  for (const card of energyInHand(gamestate, player)) {
+    for (const slot of pokemonInPlay(gamestate, player)) {
+      if (!mayAttachEnergy(gamestate, slot, card)) continue
+      const expr: Expr = [
         {
           op: Op.MoveZoneToSlot,
           card,
@@ -174,9 +173,32 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
           dest: slot,
           attachment: "energy",
         },
-      ],
-    }))
-  )
+      ]
+      let seed: Record<string, unknown> | undefined
+      if (attachEnergyTaxed(gamestate, slot, card)) {
+        seed = { $self_slot: slot, $discard: discard }
+        expr.push(
+          {
+            op: Op.Select,
+            pick: "cards",
+            source: "$self_slot",
+            attachment: "energy",
+            bind: "$tax",
+          },
+          {
+            op: Op.MoveSlotToZone,
+            card: "$tax",
+            source: "$self_slot",
+            attachment: "energy",
+            dest: "$discard",
+            position: "bottom",
+          }
+        )
+      }
+      actions.push({ kind: Action.AttachEnergy, player, card, slot, expr, seed })
+    }
+  }
+  return actions
 }
 
 // Evolve — hand card whose evolvesFrom matches the current form; `mayEvolve` (first turn, evolvedThisTurn, block_evolve)
@@ -300,8 +322,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
         $opp_deck: { player: opponent(player), zone: "deck" },
         $opp_prize: { player: opponent(player), zone: "prize" },
       }
-      const gate = useGate(expr)
-      if (gate && !ifPasses(gamestate, gate, { bindings: seed })) continue
+      if (!gatePasses(gamestate, expr, seed)) continue
       if (!exprPlayable(gamestate, expr, seed, player, Action.Ability)) continue
       actions.push({
         kind: Action.Ability,
@@ -340,8 +361,7 @@ function attacksFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
         $opp_deck: { player: defending, zone: "deck" },
         $opp_discard: { player: defending, zone: "discard" },
       }
-      const gate = useGate(expr)
-      if (gate && !ifPasses(gamestate, gate, { bindings: seed })) return []
+      if (!gatePasses(gamestate, expr, seed)) return []
       if (!exprPlayable(gamestate, expr, seed, player, Action.Attack)) return []
       return [{ kind: Action.Attack, player, name: attack.name, expr, seed }]
     })

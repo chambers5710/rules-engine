@@ -1,7 +1,7 @@
 import { Action, computeAvailableActions } from "./compute.js"
 import { initializeGameState } from "./initialize.js"
 import { stateMachine } from "./machine.js"
-import type { Card, EffectRegistry, GameState, SlotId } from "./types.js"
+import type { Card, EffectRegistry, GameState, Ruleset, SlotId } from "./types.js"
 import { formatAction } from "./ui.js"
 
 export type Choice = {
@@ -29,8 +29,9 @@ export function createSession(
   p2Deck: Card[],
   registry: EffectRegistry,
   decks: { p1: string; p2: string },
+  ruleset?: Ruleset,
 ): PlaySession {
-  return createSessionFromState(initializeGameState(p1Deck, p2Deck, registry), decks)
+  return createSessionFromState(initializeGameState(p1Deck, p2Deck, registry, ruleset), decks)
 }
 
 export function createSessionFromState(

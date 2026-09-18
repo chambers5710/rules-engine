@@ -3,7 +3,8 @@ import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitiv
 import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
 import { foldedCard } from "./card.js"
 import { cardMatches, cardsAt } from "./survey.js"
-import { EnergyTypes, type Attachment, type GameState, type SlotId, type SlotRef, type ZoneRef } from "./types.js"
+import { legalEnergyTypes } from "./reads.js"
+import type { Attachment, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
 
 type SelectChoice =
   | { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId; expr: [] }
@@ -73,7 +74,12 @@ export function selectFrame(
     case "types":
       return { ...base, pick: "types", except: step.except ?? [] }
     case "names":
-      return { ...base, pick: "names", names: step.names }
+      return {
+        ...base,
+        pick: "names",
+        names: step.names,
+        chooser: step.chooser === "opponent" ? opponent(player) : player,
+      }
   }
 }
 
@@ -86,7 +92,7 @@ export function selectChoices(gamestate: GameState, frame: ActionFrame): SelectC
     case "attacks":
       return selectAttacks(gamestate, frame)
     case "types":
-      return selectTypes(frame)
+      return selectTypes(gamestate, frame)
     case "names":
       return selectNames(gamestate, frame)
   }
@@ -196,19 +202,24 @@ function selectNames(
     }
     actions.push({
       kind: Action.Choose,
-      player: frame.player,
+      player: frame.chooser,
       pick: "names",
       name: option.name,
       expr: [],
     })
   }
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
   return actions
 }
 
-function selectTypes(frame: Extract<ActionFrame, { pick: "types" }>): SelectChoice[] {
+function selectTypes(
+  gamestate: GameState,
+  frame: Extract<ActionFrame, { pick: "types" }>
+): SelectChoice[] {
   const skip = new Set(frame.except)
-  const actions: SelectChoice[] = EnergyTypes.filter((type) => !skip.has(type)).map((type) => ({
+  const actions: SelectChoice[] = legalEnergyTypes(gamestate.ruleset)
+    .filter((type) => !skip.has(type))
+    .map((type) => ({
     kind: Action.Choose,
     player: frame.player,
     pick: "types" as const,
@@ -260,7 +271,7 @@ function walkPlayable(
   for (let i = index; i < expr.length; i++) {
     const step = expr[i]
     if (step.op === Op.If || step.op === Op.Loop || step.op === Op.RunEffect) {
-      if (step.op === Op.If && i === index && useGate(expr) === step) {
+      if (step.op === Op.If && useGate(expr) === step) {
         if (!ifPasses(gamestate, step, ctx)) return false
         return walkPlayable(gamestate, step.then, ctx, player, kind, 0)
       }

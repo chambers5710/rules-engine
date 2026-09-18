@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Op } from "../../dsl.js"
+import { useGate } from "../../interpret.js"
 import { CATALOG_SEEDS, validateExpr } from "../../validate.js"
 import type { EffectRegistry } from "../../types.js"
 
@@ -78,10 +79,18 @@ function expect(ok: boolean, message: string) {
       expect(err === null, `${sourceId} ${name}: ${err}`)
     }
     for (const [name, spec] of Object.entries(entry.triggers ?? {})) {
-      const err = validateExpr(spec.then, ["$self_slot", "$attacker"])
+      const err = validateExpr(spec.then)
       expect(err === null, `${sourceId} ${name}: ${err}`)
     }
   }
+}
+
+{
+  expect(useGate(authored["base1-29"]?.attacks?.["Dream Eater"] ?? []) != null, "Dream Eater is a use-gate")
+  expect(useGate(authored["basep-19"]?.attacks?.["Synchronize"] ?? []) != null, "Synchronize is a gated bind If")
+  expect(useGate(authored["base1-22"]?.attacks?.["Mirror Move"] ?? []) == null, "Mirror Move is skip-then")
+  expect(useGate(authored["base1-39"]?.attacks?.["Conversion 1"] ?? []) == null, "Conversion 1 is skip-then")
+  expect(useGate(authored["base2-62"]?.attacks?.["Mirror Move"] ?? []) == null, "Jungle Mirror Move is skip-then")
 }
 
 console.log("validate-check assertions passed")

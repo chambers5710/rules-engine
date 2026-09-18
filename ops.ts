@@ -24,6 +24,7 @@ export function copySlot(slot: Slot): Slot {
     evolution: [...slot.evolution],
     energy: [...slot.energy],
     tools: [...slot.tools],
+    markers: [...slot.markers],
     modifiers: slot.modifiers.map((modifier) => ({ ...modifier })),
     status: { ...slot.status },
   }
@@ -148,13 +149,17 @@ const getSlotAttachment = (gamestate: GameState, ref: SlotRef): CardInstanceId[]
   return getSlot(gamestate, ref)[ref.attachment]
 }
 
-/** Same as evolving: all five flags off, `leave_play` mods drop. Mutates the copied seat. */
+/** Same as evolving: all five flags off, `leave_play` clocks drop. Mutates the copied seat. */
 export function asIfEvolved(gamestate: GameState, slotId: SlotId) {
   const pokemon = getSlot(gamestate, slotId)
   if (pokemon.evolution.length === 0) return
   pokemon.status = emptyStatus()
   pokemon.poisonCounters = 1
-  pokemon.modifiers = pokemon.modifiers.filter((m) => m.until.beat !== "leave_play")
+  pokemon.modifiers = pokemon.modifiers.filter((m) => {
+    if (m.until.beat === "leave_play") return false
+    if (m.until.beat === "end_of_turn" && m.until.leave_play) return false
+    return true
+  })
 }
 
 // A card landing on an already occupied evolution attachment is an evolve — all five flags off.
