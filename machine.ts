@@ -391,9 +391,11 @@ function chooseBinding(
 
 // Run an action's expr; Select pushes a frame and stops
 function runAction(gamestate: GameState, action: AvailableAction): GameState {
+  const named = "name" in action ? action.name : undefined
   const ctx: InterpretCtx = {
     bindings: { ...(action.seed ?? {}) },
-    ...(action.kind === Action.Attack ? { via: "attack" as const, attack: action.name } : {}),
+    ...(named ? { attack: named } : {}),
+    ...(action.kind === Action.Attack ? { via: "attack" as const } : {}),
   }
   return onComplete(runExpr(gamestate, action.expr, ctx, action.player, action.kind), action.kind, ctx)
 }
@@ -411,7 +413,7 @@ export function runExpr(
     budget.left -= 1
     const step = expr[i]
     if (step.op === Op.Select) {
-      const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1))
+      const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1), gamestate)
       const choices = frame ? selectChoices(gamestate, frame) : []
       if (!frame || (choices.length === 0 && !step.optional)) continue
       return {

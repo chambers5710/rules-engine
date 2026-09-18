@@ -4,7 +4,7 @@ import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretC
 import { foldedCard } from "./card.js"
 import { cardMatches, cardsAt } from "./survey.js"
 import { legalEnergyTypes } from "./reads.js"
-import type { Attachment, GameState, SlotId, SlotRef, ZoneRef } from "./types.js"
+import type { Attachment, GameState, SlotId, SlotRef, ZoneName, ZoneRef } from "./types.js"
 
 type SelectChoice =
   | { kind: Action.Choose; player: 1 | 2; pick: "slots"; slot: SlotId; expr: [] }
@@ -35,12 +35,117 @@ function cardSource(raw: unknown, attachment?: Attachment): ZoneRef | SlotRef | 
   return undefined
 }
 
+function firstOp(expr: Expr): Primitive | undefined {
+  for (const step of expr) {
+    if (step.op === Op.If || step.op === Op.Loop || step.op === Op.Each) {
+      const inner = firstOp(step.then)
+      if (inner) return inner
+      continue
+    }
+    if (step.op === Op.Count || step.op === Op.Calc || step.op === Op.Push) continue
+    return step
+  }
+}
+
+function boundZone(raw: unknown, ctx: InterpretCtx): ZoneName | undefined {
+  if (isZoneRef(raw)) return raw.zone
+  if (typeof raw !== "string") return undefined
+  const bound = ctx.bindings[raw]
+  return isZoneRef(bound) ? bound.zone : undefined
+}
+
+function cardNoun(filter: CardFilter | CardFilter[] | undefined): string {
+  for (const row of [filter ?? []].flat()) {
+    if ("kind" in row && row.kind === "trainer") return "TRAINER"
+    if ("kind" in row && row.kind === "energy") return "ENERGY"
+    if ("kind" in row && row.kind === "pokemon") return "POKÉMON"
+  }
+  return "CARD"
+}
+
+function selectCause(
+  ctx: InterpretCtx,
+  kind: Action,
+  gamestate?: GameState
+): { card?: string; name?: string } | undefined {
+  const played = ctx.bindings.$played
+  if (typeof played === "string" && played) {
+    return { card: played, ...(ctx.attack ? { name: ctx.attack } : {}) }
+  }
+  if (kind === Action.UseStadium && gamestate?.stadium) {
+    return { card: gamestate.stadium.card }
+  }
+  const slot = resolveSlot("$self_slot", ctx)
+  const card = slot && gamestate ? currentForm(gamestate, getSlot(gamestate, slot))?.instanceId : undefined
+  if (ctx.attack) return { card, name: ctx.attack }
+  if (card) return { card }
+}
+
+function destWord(next: Primitive | undefined, ctx: InterpretCtx): string | undefined {
+  if (!next) return undefined
+  if (next.op === Op.MoveZoneToZone || next.op === Op.MoveSlotToZone) return boundZone(next.dest, ctx)?.toUpperCase()
+  if (next.op === Op.MoveZoneToSlot || next.op === Op.MoveSlotToSlot) return "POKÉMON"
+  if (next.op === Op.MoveZoneToStadium) return "STADIUM"
+  if (next.op === Op.SwapActive) return "ACTIVE"
+  if (next.op === Op.Devolve) return (next.dest ?? "discard").toUpperCase()
+  return undefined
+}
+
+function sourceWord(step: Extract<Primitive, { op: Op.Select }>, ctx: InterpretCtx): string | undefined {
+  if (step.hidden) return "PRIZE"
+  if (step.pick === "cards") {
+    const zone = boundZone(step.source, ctx)
+    if (zone) return zone.toUpperCase()
+    if (step.attachment === "energy") return "ENERGY"
+  }
+  return undefined
+}
+
+function selectPhrase(from: string | undefined, to: string | undefined, fallback: string, skip: string) {
+  if (from && to) return `SELECT FROM ${from} TO ${to}${skip}`
+  if (from) return `SELECT FROM ${from}${skip}`
+  if (to) return `SELECT TO ${to}${skip}`
+  return `${fallback}${skip}`
+}
+
+function selectStep(
+  step: Extract<Primitive, { op: Op.Select }>,
+  remaining: Expr,
+  ctx: InterpretCtx
+): string {
+  const skip = step.optional ? " OR SKIP" : ""
+  const next = firstOp(remaining)
+  if (step.pick === "names") {
+    const names = step.names.map((row) => row.name)
+    if (names.includes("Yes") && names.includes("No")) return "SELECT YES OR NO"
+    return "SELECT LOOK"
+  }
+  if (step.pick === "types") return `SELECT TYPE${skip}`
+  if (step.pick === "attacks") return `SELECT ATTACK${skip}`
+  if (step.pick === "slots") {
+    const filters = [step.filter ?? []].flat()
+    if (next?.op === Op.SwapActive) return selectPhrase("BENCH", "ACTIVE", "SELECT POKÉMON", skip)
+    if (filters.some((row) => row.kind === "empty")) return `SELECT EMPTY BENCH${skip}`
+    if (filters.some((row) => row.kind === "has_energy") || (next?.op === Op.Select && "attachment" in next && next.attachment === "energy")) {
+      return `SELECT POKÉMON WITH ENERGY${skip}`
+    }
+    if (step.who === "opponent" && step.among === "bench") return `SELECT OPPONENT BENCH${skip}`
+    if (step.who === "opponent") return `SELECT OPPONENT POKÉMON${skip}`
+    if (step.among === "bench") return `SELECT BENCH${skip}`
+    return `SELECT POKÉMON${skip}`
+  }
+  const from = sourceWord(step, ctx)
+  const to = destWord(next, ctx)
+  return selectPhrase(from, to, `SELECT ${cardNoun(step.filter)}`, skip)
+}
+
 export function selectFrame(
   step: Extract<Primitive, { op: Op.Select }>,
   ctx: InterpretCtx,
   player: 1 | 2,
   kind: Action,
-  remaining: Expr
+  remaining: Expr,
+  gamestate?: GameState
 ): ActionFrame | undefined {
   const base = {
     remaining,
@@ -49,6 +154,8 @@ export function selectFrame(
     bind: step.bind,
     optional: step.optional,
     kind,
+    cause: selectCause(ctx, kind, gamestate),
+    step: selectStep(step, remaining, ctx),
   }
   switch (step.pick) {
     case "slots":
@@ -306,7 +413,7 @@ function walkPlayable(
     }
     if (step.op === Op.Select) {
       if (step.optional) continue
-      const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1))
+      const frame = selectFrame(step, ctx, player, kind, expr.slice(i + 1), gamestate)
       const choices = frame ? selectChoices(gamestate, frame) : []
       const answers = choices.filter((choice) => choice.pick !== "skip")
       if (answers.length === 0) return false

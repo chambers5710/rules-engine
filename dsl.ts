@@ -209,8 +209,10 @@ export type HistoryEntry =
   | { op: Op.SwapActive; slot: SlotId }
   | { op: Op.Shuffle; zone: ZoneRef }
   | { op: Op.EndTurn }
-  | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName }
+  | { op: Op.Reveal; cards: string[]; from: 1 | 2; to: RevealTo; zone?: ZoneName; player: 1 | 2 }
   | { op: Op.Reorder; zone: ZoneRef; cards: string[] }
+
+export type SelectCause = { card?: string; name?: string }
 
 type ActionFrameBase = {
   player: 1 | 2
@@ -218,6 +220,8 @@ type ActionFrameBase = {
   remaining: Expr
   ctx: InterpretCtx
   bind: BindingName
+  cause?: SelectCause
+  step: string
   optional?: true
   pendingTriggers?: Array<{
     seat: SlotId

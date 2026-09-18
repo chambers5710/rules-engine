@@ -1011,7 +1011,13 @@ export function interpret(
       const next = shown.zone === "prize" && primitive.to === "both"
         ? { ...gamestate, prizesPublic: true }
         : gamestate
-      return record(next, { op: Op.Reveal, ...shown, to: primitive.to })
+      const self = ctx.bindings["$self_slot"] as SlotId | undefined
+      return record(next, {
+        op: Op.Reveal,
+        ...shown,
+        to: primitive.to,
+        player: self?.player ?? shown.from,
+      })
     }
 
     case Op.Push: {
