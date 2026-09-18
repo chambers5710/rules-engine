@@ -77,6 +77,9 @@ export function physicalForm(gamestate: GameState, slot: Slot): CardInstance | u
 
 function powerLive(gamestate: GameState, slot: Slot): PowerSpec[] {
   if (slot.status.asleep || slot.status.paralyzed || slot.status.confused) return []
+  if (slot.modifiers.some((m) => m.field === "ability_use" && m.phase === "active" && m.ban === "all")) {
+    return []
+  }
   const form = physicalForm(gamestate, slot)
   if (!form) return []
   const powers = gamestate.effectRegistry[form.sourceId]?.powers

@@ -45,9 +45,11 @@ export function applyModifier(
       ? "active"
       : modifier.until.next
         ? "pending"
-        : modifier.until.player === gamestate.activePlayer
+        : modifier.field === "ability_use" && modifier.ban === "all"
           ? "active"
-          : "pending"
+          : modifier.until.player === gamestate.activePlayer
+            ? "active"
+            : "pending"
   const seat = getSlot(next, slot)
   if (modifier.field === "weakness_type" || modifier.field === "resistance_type") {
     seat.modifiers = seat.modifiers.filter((m) => m.field !== modifier.field)
@@ -163,7 +165,7 @@ export function attackBanned(slot: Slot, name: string): boolean {
 }
 
 export function abilityBanned(slot: Slot, name: string): boolean {
-  return activeAbilityUse(slot).some((m) => m.ban === name)
+  return activeAbilityUse(slot).some((m) => m.ban === name || m.ban === "all")
 }
 
 /** Texture Magic / Slashing Strike: benching that Pokémon drops `leave_active` clocks. Mutates a copied seat. */

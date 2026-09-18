@@ -126,6 +126,7 @@ export type AttackUseRewrite =
   | { flip: true }
   | { ban: string }
 
+/** Printed Power name, or `"all"` (Stare: every Power on that seat). */
 export type AbilityUseRewrite = { ban: string }
 
 export type EnergyTypeRewrite = { set: EnergyType }

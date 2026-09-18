@@ -129,10 +129,13 @@ export function mayPlayTrainer(gamestate: GameState, player: 1 | 2): boolean {
   return true
 }
 
-/** Base Pokémon Power: not Asleep / Confused / Paralyzed. `evenIf` later, on this helper. */
+/** Base Pokémon Power: not Asleep / Confused / Paralyzed, and not Stare `ability_use` `ban: "all"`. `evenIf` later, on this helper. */
 export function mayUsePokemonPower(slot: Slot): boolean {
   const s = slot.status
-  return !s.asleep && !s.paralyzed && !s.confused
+  if (s.asleep || s.paralyzed || s.confused) return false
+  return !slot.modifiers.some(
+    (m) => m.field === "ability_use" && m.phase === "active" && m.ban === "all"
+  )
 }
 
 /** Muk Toxic Gas — ignore other Pokémon Powers. Live `ignore_powers` stays on. */
