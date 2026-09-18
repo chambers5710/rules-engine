@@ -1,6 +1,6 @@
 import { foldedCard } from "./card.js"
 import { getSlot } from "./board.js"
-import { isStage2Pokemon } from "./lineage.js"
+import { isEvolutionPokemon, isStage2Pokemon } from "./lineage.js"
 import { foldedEnergyType } from "./modifiers.js"
 import { energyPaysAny } from "./reads.js"
 import type {
@@ -25,6 +25,8 @@ export type SurveyFilter =
   | { kind: "pokemon" }
   | { kind: "stage_2" }
   | { kind: "baby" }
+  | { kind: "evolution" }
+  | { kind: "name_contains"; name: string }
 
 // Cards at — ids in that zone or slot attachment, top-first
 export function cardsAt(gamestate: GameState, source: ZoneRef | SlotRef): CardInstanceId[] {
@@ -76,6 +78,11 @@ export function surveyEnergyValue(
 }
 
 // Units on a Pokémon — one entry per energyValue, typed as the card provides
+function paysAsAny(gamestate: GameState, cardId: CardInstanceId): boolean {
+  const sourceId = foldedCard(gamestate, cardId)?.sourceId
+  return sourceId != null && gamestate.effectRegistry[sourceId]?.energy?.paysAny === true
+}
+
 export function energyUnitsOn(gamestate: GameState, slot: SlotId): EnergyType[] {
   const units: EnergyType[] = []
   const energy = { ...slot, attachment: "energy" } as const
@@ -95,13 +102,23 @@ export function canPayEnergyCost(
   slot: SlotId,
   cost: EnergyType[]
 ): boolean {
-  const pool = energyUnitsOn(gamestate, slot)
+  const energy = { ...slot, attachment: "energy" } as const
   if (energyPaysAny(gamestate, getSlot(gamestate, slot))) {
-    return pool.length >= cost.length
+    return energyUnitsOn(gamestate, slot).length >= cost.length
   }
-  const typed = cost.filter((type) => type !== "Colorless")
+  const pool: Array<{ type: EnergyType; wild: boolean }> = []
+  for (const card of cardsAt(gamestate, energy)) {
+    const printed = foldedCard(gamestate, card)
+    const type = energyTypeOf(gamestate, card, energy)
+    const n = printed?.energyValue ?? 0
+    if (!type) continue
+    const wild = paysAsAny(gamestate, card)
+    for (let i = 0; i < n; i++) pool.push({ type, wild })
+  }
+  const typed = cost.filter((need) => need !== "Colorless")
   for (const need of typed) {
-    const i = pool.indexOf(need)
+    const exact = pool.findIndex((unit) => !unit.wild && unit.type === need)
+    const i = exact !== -1 ? exact : pool.findIndex((unit) => unit.wild)
     if (i === -1) return false
     pool.splice(i, 1)
   }
@@ -147,7 +164,9 @@ export function cardMatches(
   switch (filter.kind) {
     case "energy":
       if (!isEnergy(gamestate, cardId)) return false
-      if (filter.type && energyTypeOf(gamestate, cardId, source) !== filter.type) return false
+      if (filter.type && energyTypeOf(gamestate, cardId, source) !== filter.type && !paysAsAny(gamestate, cardId)) {
+        return false
+      }
       return true
     case "basic_energy":
       if (!isBasicEnergy(gamestate, cardId)) return false
@@ -159,6 +178,8 @@ export function cardMatches(
       return foldedCard(gamestate, cardId)?.evolvesFrom === filter.name
     case "name":
       return foldedCard(gamestate, cardId)?.name === filter.name
+    case "name_contains":
+      return foldedCard(gamestate, cardId)?.name.includes(filter.name) === true
     case "has_type":
       return foldedCard(gamestate, cardId)?.types?.includes(filter.type) === true
     case "trainer":
@@ -167,6 +188,8 @@ export function cardMatches(
       return foldedCard(gamestate, cardId)?.supertype === "Pokémon"
     case "stage_2":
       return isStage2Pokemon(gamestate, cardId)
+    case "evolution":
+      return isEvolutionPokemon(gamestate, cardId)
     case "baby":
       return isBabyPokemon(gamestate, cardId)
   }

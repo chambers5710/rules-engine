@@ -101,6 +101,7 @@ export type CardFilter =
   | { kind: "other_than"; bind: BindingName }
   | { kind: "among"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
+  | { kind: "any"; of: CardFilter[] }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10" | "half_down_10"
 
@@ -129,7 +130,7 @@ export type Primitive =
   | { op: Op.RemoveStatus; status: Status; slot: SlotId | BindingName }
   | { op: Op.FlipCoin; bind: BindingName; check?: Status }
   | { op: Op.Select; bind: BindingName; pick: "slots"; who: SeatWho; among?: SeatAmong; chooser?: "self" | "opponent"; filter?: SlotFilter | SlotFilter[]; optional?: true }
-  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: CardFilter | CardFilter[]; hidden?: true; optional?: true }
+  | { op: Op.Select; bind: BindingName; pick: "cards"; source: ZoneRef | SlotRef | BindingName; attachment?: Attachment; filter?: CardFilter | CardFilter[]; hidden?: true; optional?: true; chooser?: "self" | "opponent" }
   | { op: Op.Select; bind: BindingName; pick: "attacks"; slot: SlotId | BindingName; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "types"; except?: EnergyType[]; optional?: true }
   | { op: Op.Select; bind: BindingName; pick: "names"; names: NameOption[]; optional?: true; chooser?: "self" | "opponent" }
@@ -162,7 +163,7 @@ export type Primitive =
   | { op: Op.Count; kind: "attack_damage"; slot: SlotId | BindingName; attack: BindingName; bind: BindingName }
   | { op: Op.Count; kind: "last_attacked" | "last_hit" | "knocked_out"; slot: SlotId | BindingName; bind: BindingName }
   | { op: Op.Count; kind: "slots"; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName }
-  | { op: Op.Arm; who: "owner" | "opponent"; when: "pokemon_knocked_out"; via: DamageVia[]; blockedByStatus: boolean; then: Expr }
+  | { op: Op.Arm; who: "owner" | "opponent"; when: "pokemon_knocked_out" | "damage_applied"; via: DamageVia[]; minApplied?: number; blockedByStatus: boolean; then: Expr }
   | { op: Op.DiscardSlot; slot: SlotId | BindingName; dest?: ZoneName }
   | { op: Op.Devolve; slot: SlotId | BindingName; from: string | BindingName; dest?: ZoneName }
   | { op: Op.Each; who: SeatWho; among: SeatAmong; filter?: SlotFilter | SlotFilter[]; bind: BindingName; then: Expr }
@@ -218,13 +219,20 @@ type ActionFrameBase = {
   ctx: InterpretCtx
   bind: BindingName
   optional?: true
-  pendingTriggers?: Array<{ seat: SlotId; then: Expr; drop?: string; attacker?: SlotId }>
+  pendingTriggers?: Array<{
+    seat: SlotId
+    then: Expr
+    drop?: string
+    attacker?: SlotId
+    applied?: number
+    retreated?: SlotId
+  }>
 }
 
 // Paused expr — Select stopped here; remaining runs after the bind is written
 export type ActionFrame =
   | (ActionFrameBase & { pick: "slots"; who: SeatWho; among: SeatAmong; chooser: 1 | 2; filter?: SlotFilter | SlotFilter[] })
-  | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef; filter?: CardFilter | CardFilter[]; hidden?: true })
+  | (ActionFrameBase & { pick: "cards"; source: ZoneRef | SlotRef; filter?: CardFilter | CardFilter[]; hidden?: true; chooser: 1 | 2 })
   | (ActionFrameBase & { pick: "attacks"; slot: SlotId })
   | (ActionFrameBase & { pick: "types"; except: EnergyType[] })
   | (ActionFrameBase & { pick: "names"; names: NameOption[]; chooser: 1 | 2 })

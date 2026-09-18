@@ -9,6 +9,8 @@ export type TriggerJob = {
   then: Expr
   drop?: string
   attacker?: SlotId
+  applied?: number
+  retreated?: SlotId
 }
 
 export function triggerCtx(job: TriggerJob): InterpretCtx {
@@ -27,6 +29,8 @@ export function triggerCtx(job: TriggerJob): InterpretCtx {
       $opp_discard: { player: opponent(player), zone: "discard" },
       $opp_prize: { player: opponent(player), zone: "prize" },
       ...(job.attacker ? { $attacker: job.attacker } : {}),
+      ...(job.applied != null ? { $applied: job.applied } : {}),
+      ...(job.retreated ? { $retreated: job.retreated } : {}),
     },
   }
 }
@@ -61,10 +65,68 @@ export function tickSubscriptionsEnd(gamestate: GameState, endingPlayer: 1 | 2):
   }
 }
 
-// Standing damage: only the damaged instance. Evolve: any in-play seat whose current form lists `when: evolved`.
+// Standing damage: only the damaged instance. Play: only the played seat. Evolve / retreat: in-play listeners.
 export function matchTriggers(gamestate: GameState, event: GameEvent): TriggerJob[] {
   if (event.kind === "damage_applied") {
     if (event.source && event.source.player === event.target.player) return []
+    const jobs: TriggerJob[] = []
+    const slot = getSlot(gamestate, event.target)
+    const form = currentForm(gamestate, slot)
+    const triggers = form && form.instanceId === event.targetCard
+      ? gamestate.effectRegistry[form.sourceId]?.triggers
+      : undefined
+    if (triggers) {
+      for (const spec of Object.values(triggers)) {
+        if (spec.when !== "damage_applied") continue
+        if (!spec.via.includes(event.via)) continue
+        if ((event.applied ?? 0) < (spec.minApplied ?? 0)) continue
+        if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
+        jobs.push({ seat: event.target, then: spec.then, attacker: event.source, applied: event.applied })
+      }
+    }
+    for (const sub of gamestate.subscriptions) {
+      if (sub.phase !== "active") continue
+      const spec = sub.trigger
+      if (spec.when !== "damage_applied") continue
+      if (event.targetCard !== sub.sourceCard) continue
+      if (!spec.via.includes(event.via)) continue
+      if ((event.applied ?? 0) < (spec.minApplied ?? 0)) continue
+      if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
+      jobs.push({
+        seat: event.target,
+        then: spec.then,
+        attacker: event.source,
+        applied: event.applied,
+      })
+    }
+    return jobs
+  }
+  if (event.kind === "pokemon_knocked_out") {
+    const jobs: TriggerJob[] = []
+    const slot = getSlot(gamestate, event.target)
+    const form = currentForm(gamestate, slot)
+    const standing = form && form.instanceId === event.targetCard
+      ? gamestate.effectRegistry[form.sourceId]?.triggers
+      : undefined
+    if (standing) {
+      for (const spec of Object.values(standing)) {
+        if (spec.when !== "pokemon_knocked_out") continue
+        if (!spec.via.includes(event.via)) continue
+        if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
+        jobs.push({ seat: event.target, then: spec.then, attacker: event.source })
+      }
+    }
+    for (const sub of gamestate.subscriptions) {
+      if (sub.phase !== "active") continue
+      const spec = sub.trigger
+      if (spec.when !== "pokemon_knocked_out") continue
+      if (event.targetCard !== sub.sourceCard) continue
+      if (!spec.via.includes(event.via)) continue
+      jobs.push({ seat: event.target, then: spec.then, drop: sub.id, attacker: event.source })
+    }
+    return jobs
+  }
+  if (event.kind === "played") {
     const slot = getSlot(gamestate, event.target)
     const form = currentForm(gamestate, slot)
     const triggers = form && form.instanceId === event.targetCard
@@ -72,24 +134,12 @@ export function matchTriggers(gamestate: GameState, event: GameEvent): TriggerJo
       : undefined
     if (!triggers) return []
     return Object.values(triggers).flatMap((spec) => {
-      if (spec.when !== "damage_applied") return []
-      if (!spec.via.includes(event.via)) return []
-      if ((event.applied ?? 0) < (spec.minApplied ?? 0)) return []
+      if (spec.when !== "played") return []
       if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) return []
-      return [{ seat: event.target, then: spec.then, attacker: event.source }]
+      return [{ seat: event.target, then: spec.then }]
     })
   }
-  if (event.kind === "pokemon_knocked_out") {
-    return gamestate.subscriptions.flatMap((sub) => {
-      if (sub.phase !== "active") return []
-      const spec = sub.trigger
-      if (spec.when !== "pokemon_knocked_out") return []
-      if (event.targetCard !== sub.sourceCard) return []
-      if (!spec.via.includes(event.via)) return []
-      return [{ seat: event.target, then: spec.then, drop: sub.id, attacker: event.source }]
-    })
-  }
-  if (event.kind !== "evolved") return []
+  if (event.kind !== "evolved" && event.kind !== "retreated") return []
   const jobs: TriggerJob[] = []
   for (const player of [1, 2] as const) {
     for (const seat of pokemonInPlay(gamestate, player)) {
@@ -98,9 +148,14 @@ export function matchTriggers(gamestate: GameState, event: GameEvent): TriggerJo
       const triggers = form ? gamestate.effectRegistry[form.sourceId]?.triggers : undefined
       if (!triggers) continue
       for (const spec of Object.values(triggers)) {
-        if (spec.when !== "evolved") continue
+        if (spec.when !== event.kind) continue
+        if (event.kind === "retreated" && seat.player === event.target.player) continue
         if (spec.blockedByStatus && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
-        jobs.push({ seat, then: spec.then })
+        jobs.push({
+          seat,
+          then: spec.then,
+          ...(event.kind === "retreated" ? { retreated: event.target } : {}),
+        })
       }
     }
   }

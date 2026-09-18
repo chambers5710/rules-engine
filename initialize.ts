@@ -55,6 +55,7 @@ export function initializeGameState(
     energyAttachedThisTurn: false,
     retreatedThisTurn: false,
     stadiumUsedThisTurn: false,
+    prizesPublic: false,
     actionStack: [],
     history: [],
     subscriptions: [],

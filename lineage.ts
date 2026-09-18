@@ -18,3 +18,11 @@ export function stage2BasicName(gamestate: GameState, cardId: CardInstanceId): s
 export function isStage2Pokemon(gamestate: GameState, cardId: CardInstanceId): boolean {
   return foldedCard(gamestate, cardId)?.subtypes?.includes("Stage 2") === true
 }
+
+/** Stage 1 or Stage 2 — WOTC “Evolution card.” Not Basic / Baby. */
+export function isEvolutionPokemon(gamestate: GameState, cardId: CardInstanceId): boolean {
+  const printed = foldedCard(gamestate, cardId)
+  if (printed?.supertype !== "Pokémon") return false
+  const subtypes = printed.subtypes ?? []
+  return subtypes.includes("Stage 1") || subtypes.includes("Stage 2")
+}

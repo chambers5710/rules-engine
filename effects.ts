@@ -17,6 +17,10 @@ export function cardEffect(
   return registry[sourceId]?.[effectType]?.[name] ?? []
 }
 
+export function energyOnAttach(registry: EffectRegistry, sourceId: SourceId): Expr {
+  return registry[sourceId]?.energy?.onAttach ?? []
+}
+
 export function trainerEffect(
   registry: EffectRegistry,
   sourceId: SourceId

@@ -26,6 +26,9 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "pokemon",
   "stage_2",
   "baby",
+  "evolution",
+  "name_contains",
+  "any",
   "other_than",
   "among",
   "pays",
@@ -46,6 +49,8 @@ export const CATALOG_SEEDS: BindingName[] = [
   "$opp_prize",
   "$played",
   "$attacker",
+  "$applied",
+  "$retreated",
 ]
 
 function isBind(value: unknown): value is BindingName {
@@ -104,6 +109,7 @@ function walk(expr: Expr, have: Set<string>): string | null {
       const inner = new Set(have)
       inner.add("$attacker")
       inner.add("$self_slot")
+      inner.add("$applied")
       const nested = walk(step.then, inner)
       if (nested) return nested
     }

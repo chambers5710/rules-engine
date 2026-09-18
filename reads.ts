@@ -30,6 +30,7 @@ function aimedAt(gamestate: GameState, slot: SlotId): PowerSpec[] {
     const foe = gamestate.players[opponent(slot.player)].active
     for (const power of standingSpecs(gamestate, foe)) {
       if (power.kind === "cannot_retreat" && power.on === "opponent_active") aimed.push(power)
+      if (power.kind === "tax_retreat" && power.on === "opponent_active") aimed.push(power)
     }
   }
   return aimed
@@ -124,6 +125,13 @@ export function mayPlayTrainer(gamestate: GameState, player: 1 | 2): boolean {
   for (const id of pokemonInPlay(gamestate, player)) {
     if (getSlot(gamestate, id).modifiers.some((m) => m.field === "trainer_use" && m.phase === "active")) {
       return false
+    }
+  }
+  for (const who of PLAYERS) {
+    for (const id of pokemonInPlay(gamestate, who)) {
+      if (standingSpecs(gamestate, getSlot(gamestate, id)).some((power) => power.kind === "block_trainers")) {
+        return false
+      }
     }
   }
   return true
@@ -230,6 +238,23 @@ export function handIsPublic(gamestate: GameState, player: 1 | 2): boolean {
   return false
 }
 
+/** Here Comes Team Rocket — both prize piles stay face up. */
+export function prizeIsPublic(gamestate: GameState): boolean {
+  return gamestate.prizesPublic
+}
+
+/** Frenzy — extra damage this confused Pokémon deals. Not gated by `mayUsePokemonPower` (Confused would turn it off). */
+export function extraDamageIfConfused(gamestate: GameState, slot: Slot): number {
+  if (!slot.status.confused || powersSuppressed(gamestate)) return 0
+  const form = physicalForm(gamestate, slot)
+  const powers = form ? gamestate.effectRegistry[form.sourceId]?.powers : undefined
+  if (!powers) return 0
+  for (const power of Object.values(powers)) {
+    if (power.kind === "confused_damage") return power.add
+  }
+  return 0
+}
+
 /** Printed Active retreat, minus one Colorless per benched `reduce_retreat` Power that is on. */
 export function retreatCost(gamestate: GameState, player: 1 | 2): EnergyType[] {
   const printed = currentForm(gamestate, gamestate.players[player].active)?.retreatCost ?? []
@@ -238,7 +263,9 @@ export function retreatCost(gamestate: GameState, player: 1 | 2): EnergyType[] {
     const bench = gamestate.players[player].bench[index]
     if (standingSpecs(gamestate, bench).some((power) => power.kind === "reduce_retreat")) drop++
   }
-  if (drop === 0) return printed
+  const tax = aimedAt(gamestate, { player, slot: "active" }).reduce((sum, power) => {
+    return power.kind === "tax_retreat" ? sum + power.amount : sum
+  }, 0)
   const cost: EnergyType[] = []
   for (const type of printed) {
     if (type === "Colorless" && drop > 0) {
@@ -247,6 +274,7 @@ export function retreatCost(gamestate: GameState, player: 1 | 2): EnergyType[] {
     }
     cost.push(type)
   }
+  for (let i = 0; i < tax; i++) cost.push("Colorless")
   return cost
 }
 

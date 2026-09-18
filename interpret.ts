@@ -18,7 +18,7 @@ import {
   shuffle,
 } from "./ops.js"
 import { discardSlot, draw, swapActive } from "./helpers.js"
-import { coinPreventsAttack, halveAttackDamage, mayEvolve, preventsAttackDamage } from "./reads.js"
+import { extraDamageIfConfused, coinPreventsAttack, halveAttackDamage, mayEvolve, preventsAttackDamage } from "./reads.js"
 import { record } from "./history.js"
 import { stage2BasicName } from "./lineage.js"
 import { cardsAt, isBasicPokemon, printedAttackDamage, surveyCards, surveyCount, surveyEnergyValue } from "./survey.js"
@@ -126,6 +126,21 @@ function emitEvolved(ctx: InterpretCtx, gamestate: GameState, dest: SlotRef) {
   ctx.events.push({ kind: "evolved", targetCard, target })
 }
 
+function emitPlayed(ctx: InterpretCtx, gamestate: GameState, dest: SlotRef) {
+  const target = dest.slot === "bench"
+    ? { player: dest.player, slot: "bench" as const, index: dest.index }
+    : { player: dest.player, slot: "active" as const }
+  const targetCard = currentForm(gamestate, getSlot(gamestate, target))?.instanceId
+  if (!targetCard) return
+  ctx.events ??= []
+  ctx.events.push({ kind: "played", targetCard, target })
+}
+
+function emitRetreated(ctx: InterpretCtx, target: SlotId, targetCard: string) {
+  ctx.events ??= []
+  ctx.events.push({ kind: "retreated", targetCard, target })
+}
+
 function stampLastHit(
   gamestate: GameState,
   attacker: SlotId,
@@ -216,6 +231,7 @@ export function pipelineAttackDamage(
   matchup = true
 ): { damage: number; raw: number; weakness: boolean; resistance: boolean; prevented: boolean } {
   let damage = foldAttackBase(gamestate, attacker, base, attack)
+  damage += extraDamageIfConfused(gamestate, getSlot(gamestate, attacker))
   damage = foldBeforeMatchup(gamestate, defender, damage, attacker)
   let weakness = false
   let resistance = false
@@ -533,6 +549,9 @@ export function interpret(
       if (!source || !dest || !card) return gamestate
       const evolving = dest.attachment === "evolution" && getSlot(gamestate, dest).evolution.length > 0
       const next = moveZoneToSlot(gamestate, card, source, dest)
+      if (next !== gamestate && dest.attachment === "evolution" && source.zone === "hand") {
+        emitPlayed(ctx, next, dest)
+      }
       if (evolving && next !== gamestate) emitEvolved(ctx, next, dest)
       return next
     }
@@ -621,6 +640,9 @@ export function interpret(
       let amount = resolveAmount(primitive.amount, ctx)
       const source = resolveSlot("$self_slot", ctx)
       const via = applyDamageVia(ctx, slot, primitive.source)
+      if (source && amount > 0 && primitive.source !== "poison" && primitive.source !== "burn") {
+        amount += extraDamageIfConfused(gamestate, getSlot(gamestate, source))
+      }
       if (via === "attack" || via === "splash") {
         const seat = getSlot(gamestate, slot)
         amount = halveAttackDamage(gamestate, seat, amount)
@@ -808,12 +830,20 @@ export function interpret(
         {
           id: form.instanceId,
           sourceCard: form.instanceId,
-          trigger: {
-            when: primitive.when,
-            via: primitive.via,
-            blockedByStatus: primitive.blockedByStatus,
-            then: primitive.then,
-          },
+          trigger: primitive.when === "damage_applied"
+            ? {
+                when: "damage_applied",
+                via: primitive.via,
+                ...(primitive.minApplied != null ? { minApplied: primitive.minApplied } : {}),
+                blockedByStatus: primitive.blockedByStatus,
+                then: primitive.then,
+              }
+            : {
+                when: "pokemon_knocked_out",
+                via: primitive.via,
+                blockedByStatus: primitive.blockedByStatus,
+                then: primitive.then,
+              },
           until: { beat: "end_of_turn", player },
           phase: player === gamestate.activePlayer ? "active" : "pending",
         },
@@ -936,8 +966,11 @@ export function interpret(
       if (!slot || slot.slot !== "bench") return gamestate
       const shield = withAttackShield(gamestate, { player: slot.player, slot: "active" }, ctx)
       if (shield.blocked) return shield.gamestate
+      const leaving = currentForm(shield.gamestate, getSlot(shield.gamestate, { player: slot.player, slot: "active" }))
+        ?.instanceId
       const next = swapActive(shield.gamestate, slot.player, slot.index)
       if (next === shield.gamestate) return shield.gamestate
+      if (ctx.bindings.$retreating && leaving) emitRetreated(ctx, slot, leaving)
       return record(next, { op: Op.SwapActive, slot })
     }
 
@@ -975,7 +1008,10 @@ export function interpret(
     case Op.Reveal: {
       const shown = resolveReveal(gamestate, primitive.cards, ctx)
       if (shown.cards.length === 0) return gamestate
-      return record(gamestate, { op: Op.Reveal, ...shown, to: primitive.to })
+      const next = shown.zone === "prize" && primitive.to === "both"
+        ? { ...gamestate, prizesPublic: true }
+        : gamestate
+      return record(next, { op: Op.Reveal, ...shown, to: primitive.to })
     }
 
     case Op.Push: {

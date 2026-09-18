@@ -64,7 +64,14 @@ export function selectFrame(
       const raw = typeof step.source === "string" ? ctx.bindings[step.source] : step.source
       const source = cardSource(raw, step.attachment)
       if (!source) return undefined
-      return { ...base, pick: "cards", source, filter: step.filter, hidden: step.hidden }
+      return {
+        ...base,
+        pick: "cards",
+        source,
+        filter: step.filter,
+        hidden: step.hidden,
+        chooser: step.chooser === "opponent" ? opponent(player) : player,
+      }
     }
     case "attacks": {
       const slot = resolveSlot(step.slot, ctx)
@@ -126,6 +133,11 @@ function cardPasses(
   bindings: Record<string, unknown>
 ): boolean {
   for (const filter of filters) {
+    if (filter.kind === "any") {
+      const inner = filter.of
+      if (!inner.some((row) => cardPasses(gamestate, card, [row], source, bindings))) return false
+      continue
+    }
     if (filter.kind === "pays") continue
     if (filter.kind === "other_than") {
       const bound = bindings[filter.bind]
@@ -163,14 +175,14 @@ function selectCards(
     }
     actions.push({
       kind: Action.Choose,
-      player: frame.player,
+      player: frame.chooser,
       pick: "cards",
       card: cards[i],
       ...(frame.hidden ? { hidden: true as const, face: `Prize ${i + 1}` } : {}),
       expr: [],
     })
   }
-  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
+  if (frame.optional) actions.push({ kind: Action.Choose, player: frame.chooser, pick: "skip", expr: [] })
   return actions
 }
 

@@ -6,6 +6,11 @@ export type SourceId = string
 // Unique per copy; also the cardRegistry key
 export type CardInstanceId = string
 
+export type EnergySpec = {
+  paysAny?: true
+  onAttach?: Expr
+}
+
 export type EffectEntry = {
   attacks?: Record<string, Expr>
   abilities?: Record<string, Expr>
@@ -13,6 +18,7 @@ export type EffectEntry = {
   stadium?: Record<string, StadiumSpec>
   triggers?: Record<string, TriggerSpec>
   powers?: Record<string, PowerSpec>
+  energy?: EnergySpec
 }
 
 export type EffectRegistry = Record<SourceId, EffectEntry>
@@ -37,6 +43,7 @@ export type GameState = {
   energyAttachedThisTurn: boolean
   retreatedThisTurn: boolean
   stadiumUsedThisTurn: boolean
+  prizesPublic: boolean
   actionStack: ActionFrame[]
   history: HistoryEntry[]
   subscriptions: TriggerSubscription[]
@@ -200,6 +207,16 @@ export type GameEvent =
       targetCard: CardInstanceId
       target: SlotId
     }
+  | {
+      kind: "played"
+      targetCard: CardInstanceId
+      target: SlotId
+    }
+  | {
+      kind: "retreated"
+      targetCard: CardInstanceId
+      target: SlotId
+    }
 
 // Printed Stadium text on the in-play card. GameState.stadium is the stick; this map is the writing.
 // `use` is a Turn action. `block_discard_to_hand` is Pokémon Tower. `power` / `trigger` kinds wait on later slices.
@@ -225,6 +242,9 @@ export type PowerSpec =
   | { kind: "prevent_attacks"; on: "owner_bench" | "self"; from?: "evolved" }
   | { kind: "cannot_retreat"; on: "opponent_active" }
   | { kind: "attach_energy"; type: EnergyType }
+  | { kind: "block_trainers" }
+  | { kind: "tax_retreat"; on: "opponent_active"; amount: number }
+  | { kind: "confused_damage"; add: number }
 
 export type TriggerSpec =
   | {
@@ -242,6 +262,16 @@ export type TriggerSpec =
     }
   | {
       when: "evolved"
+      blockedByStatus: boolean
+      then: Expr
+    }
+  | {
+      when: "played"
+      blockedByStatus: boolean
+      then: Expr
+    }
+  | {
+      when: "retreated"
       blockedByStatus: boolean
       then: Expr
     }

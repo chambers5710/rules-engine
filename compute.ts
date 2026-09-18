@@ -11,7 +11,7 @@ import {
 } from "./board.js"
 import { isStadium } from "./card.js"
 import { Action, Op, type Expr } from "./dsl.js"
-import { attackExpr, cardEffect, hasStadiumSpec, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
+import { attackExpr, cardEffect, energyOnAttach, hasStadiumSpec, stadiumUseCappedThisTurn, stadiumUses, trainerAttaches, trainerEffect } from "./effects.js"
 import { gatePasses } from "./interpret.js"
 import { abilityBanned, attackBanned } from "./modifiers.js"
 import { exprPlayable, selectChoices } from "./select.js"
@@ -173,8 +173,9 @@ function placeEnergy(gamestate: GameState, player: 1 | 2): AvailableAction[] {
           dest: slot,
           attachment: "energy",
         },
+        ...energyOnAttach(gamestate.effectRegistry, gamestate.cardRegistry[card].sourceId),
       ]
-      let seed: Record<string, unknown> | undefined
+      let seed: Record<string, unknown> | undefined = { $self_slot: slot }
       if (attachEnergyTaxed(gamestate, slot, card)) {
         seed = { $self_slot: slot, $discard: discard }
         expr.push(
@@ -262,6 +263,8 @@ function playTrainer(gamestate: GameState, player: 1 | 2): AvailableAction[] {
       $opp_hand: { player: opponent(player), zone: "hand" },
       $opp_deck: { player: opponent(player), zone: "deck" },
       $opp_discard: { player: opponent(player), zone: "discard" },
+      $prize: { player, zone: "prize" },
+      $opp_prize: { player: opponent(player), zone: "prize" },
       $played: card,
     }
     if (!exprPlayable(gamestate, expr, seed, player, kind)) continue
@@ -417,7 +420,7 @@ function retreatFromActive(gamestate: GameState, player: 1 | 2): AvailableAction
     kind: Action.Retreat,
     player,
     expr,
-    seed: { $self_slot: slot, ...(need > 0 ? { $need: need } : {}) },
+    seed: { $self_slot: slot, $retreating: true, ...(need > 0 ? { $need: need } : {}) },
   }]
 }
 
