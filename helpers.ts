@@ -118,7 +118,7 @@ export function returnHandToDeck(gamestate: GameState, player: 1 | 2): GameState
   return gamestate
 }
 
-// Take prize — one card from prize into hand (top of prize)
+// Take prize — one card from prize into hand (top of prize; face-up KO picks use Select)
 export function takePrize(gamestate: GameState, player: 1 | 2): GameState {
   const card = gamestate.players[player].prize[0]
   if (!card) return gamestate

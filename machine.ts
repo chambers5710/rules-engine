@@ -14,7 +14,7 @@ import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, stadiumUseCappedThisTurn, stadiumUses, stripCopy } from "./effects.js"
 import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
-import { babyCoinOnAnnounce, canAttack, canRetreat, mayAttachEnergy, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, takesPrizeOnKo } from "./reads.js"
+import { babyCoinOnAnnounce, canAttack, canRetreat, mayAttachEnergy, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, prizeIsPublic, takesPrizeOnKo } from "./reads.js"
 import { abilityBanned, attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { gatePasses, ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
 import { matchTriggers, tickSubscriptionsEnd, tickSubscriptionsEnter, triggerCtx, type TriggerJob } from "./triggers.js"
@@ -234,6 +234,7 @@ function checkupPhase(gamestate: GameState): GameState {
   gamestate = checkupParalyzed(gamestate, gamestate.activePlayer)
 
   gamestate = resolveKnockouts(gamestate)
+  if (gamestate.actionStack.length > 0) return gamestate
   return afterKnockouts(gamestate)
 }
 
@@ -297,8 +298,9 @@ function checkupParalyzed(gamestate: GameState, player: 1 | 2): GameState {
   return interpret(gamestate, { op: Op.RemoveStatus, status: "paralyzed", slot })
 }
 
-// KO — discard that slot; opponent takes the default prize count
+// KO — discard that slot; opponent takes the default prize count (pick when face-up)
 function resolveKnockouts(gamestate: GameState): GameState {
+  const owed: Record<1 | 2, number> = { 1: 0, 2: 0 }
   for (const player of PLAYERS) {
     const refs: SlotId[] = [
       { player, slot: "active" },
@@ -314,12 +316,45 @@ function resolveKnockouts(gamestate: GameState): GameState {
       const form = currentForm(gamestate, seat)
       gamestate = discardSlot(gamestate, ref)
       if (!takesPrizeOnKo(form)) continue
-      for (let i = 0; i < PRIZES_ON_KO; i++) {
-        gamestate = takePrize(gamestate, opponent(player))
-      }
+      owed[opponent(player)] += PRIZES_ON_KO
     }
   }
-  return gamestate
+  if (!prizeIsPublic(gamestate)) {
+    for (const player of PLAYERS) {
+      for (let i = 0; i < owed[player]; i++) gamestate = takePrize(gamestate, player)
+    }
+    return gamestate
+  }
+  const acting: 1 | 2 = owed[1] > 0 ? 1 : 2
+  const steps: Expr = []
+  for (const player of PLAYERS) {
+    for (let i = 0; i < owed[player]; i++) {
+      steps.push(...prizeTakeSteps(player, acting))
+    }
+  }
+  if (steps.length === 0) return gamestate
+  return runExpr(gamestate, steps, { bindings: {} }, acting, Action.Choose)
+}
+
+function prizeTakeSteps(taker: 1 | 2, acting: 1 | 2): Expr {
+  const prize = { player: taker, zone: "prize" as const }
+  const hand = { player: taker, zone: "hand" as const }
+  return [
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: prize,
+      bind: "$take",
+      chooser: taker === acting ? "self" : "opponent",
+    },
+    {
+      op: Op.MoveZoneToZone,
+      card: "$take",
+      source: prize,
+      dest: hand,
+      position: "bottom",
+    },
+  ]
 }
 
 function endGame(gamestate: GameState): GameState {
@@ -489,6 +524,7 @@ export function copiedAttackExpr(gamestate: GameState, slot: SlotId, name: strin
 function onComplete(gamestate: GameState, kind: Action, ctx?: InterpretCtx): GameState {
   if (gamestate.actionStack.length > 0) return gamestate
   if (kind === Action.Attack || kind === Action.EndTurn || ctx?.endTurn) return enterCheckup(gamestate)
+  if (gamestate.phase === Phase.Checkup) return afterKnockouts(gamestate)
   return gamestate
 }
 
