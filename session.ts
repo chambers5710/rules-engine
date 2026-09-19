@@ -38,7 +38,7 @@ export async function fetchDeck(deckId: string): Promise<Card[]> {
 }
 
 async function fetchCard(id: string): Promise<Card> {
-  const response = await fetch(`${CARD_API}/api/cards/${id}`)
+  const response = await fetch(`${CARD_API}/api/cards/${encodeURIComponent(id)}`)
   if (!response.ok) throw new Error(`card ${id}: ${response.status}`)
   return (await response.json()) as Card
 }
@@ -47,6 +47,8 @@ export async function expandCompactDeck(deck: CompactDeck): Promise<Card[]> {
   const unique = [...new Set(deck.cards.map((entry) => entry.id))]
   const rows = await Promise.all(unique.map((id) => fetchCard(id)))
   const byId = new Map(rows.map((card) => [card.id, card]))
+  const missing = unique.filter((id) => !byId.has(id))
+  if (missing.length) throw new Error(`custom deck ${deck.id}: missing ${missing.join(", ")}`)
   const expanded = deck.cards.flatMap((entry) => {
     const card = byId.get(entry.id)
     if (!card) return []
