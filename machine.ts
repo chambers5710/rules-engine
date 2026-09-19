@@ -13,7 +13,7 @@ import {
 import { type AvailableAction } from "./compute.js"
 import { Action, Op, type Expr } from "./dsl.js"
 import { attackExpr, stadiumUseCappedThisTurn, stadiumUses, stripCopy } from "./effects.js"
-import { discardSlot, draw, placePrize, promote, takePrize } from "./helpers.js"
+import { discardSlot, draw, placePrize, promote } from "./helpers.js"
 import { babyCoinOnAnnounce, canAttack, canRetreat, mayAttachEnergy, mayEvolve, mayPlayTrainer, mayUsePokemonPower, powersSuppressed, prizeIsPublic, takesPrizeOnKo } from "./reads.js"
 import { abilityBanned, attackBanned, attackFlipGated, tickModifiersEnd, tickModifiersEnter } from "./modifiers.js"
 import { gatePasses, ifPasses, interpret, resolveSlot, surveySlots, type InterpretCtx } from "./interpret.js"
@@ -298,7 +298,7 @@ function checkupParalyzed(gamestate: GameState, player: 1 | 2): GameState {
   return interpret(gamestate, { op: Op.RemoveStatus, status: "paralyzed", slot })
 }
 
-// KO — discard that slot; opponent takes the default prize count (pick when face-up)
+// KO — discard that slot; opponent picks a prize into hand (face-down unless prizes are public)
 function resolveKnockouts(gamestate: GameState): GameState {
   const owed: Record<1 | 2, number> = { 1: 0, 2: 0 }
   for (const player of PLAYERS) {
@@ -319,24 +319,19 @@ function resolveKnockouts(gamestate: GameState): GameState {
       owed[opponent(player)] += PRIZES_ON_KO
     }
   }
-  if (!prizeIsPublic(gamestate)) {
-    for (const player of PLAYERS) {
-      for (let i = 0; i < owed[player]; i++) gamestate = takePrize(gamestate, player)
-    }
-    return gamestate
-  }
+  const faceUp = prizeIsPublic(gamestate)
   const acting: 1 | 2 = owed[1] > 0 ? 1 : 2
   const steps: Expr = []
   for (const player of PLAYERS) {
     for (let i = 0; i < owed[player]; i++) {
-      steps.push(...prizeTakeSteps(player, acting))
+      steps.push(...prizeTakeSteps(player, acting, faceUp))
     }
   }
   if (steps.length === 0) return gamestate
   return runExpr(gamestate, steps, { bindings: {} }, acting, Action.Choose)
 }
 
-function prizeTakeSteps(taker: 1 | 2, acting: 1 | 2): Expr {
+function prizeTakeSteps(taker: 1 | 2, acting: 1 | 2, faceUp: boolean): Expr {
   const prize = { player: taker, zone: "prize" as const }
   const hand = { player: taker, zone: "hand" as const }
   return [
@@ -346,6 +341,7 @@ function prizeTakeSteps(taker: 1 | 2, acting: 1 | 2): Expr {
       source: prize,
       bind: "$take",
       chooser: taker === acting ? "self" : "opponent",
+      ...(faceUp ? {} : { hidden: true as const }),
     },
     {
       op: Op.MoveZoneToZone,

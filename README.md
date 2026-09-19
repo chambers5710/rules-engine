@@ -191,7 +191,7 @@ while not Ended:
 - Both Ready → 6 prizes from deck top (no shuffle after prizes) → Turn, first-player draw
 - Turn: place Bench, attach Energy (once), play Trainers, attack, EndTurn
 - Attack ends the turn; empty deck on draw ends the game
-- Checkup: KO Active (discard seat, opponent takes `PRIZES_ON_KO`), then prizes / no Pokémon / next turn
+- Checkup: KO seats (discard, opponent **Select**s `PRIZES_ON_KO` from prize), then prizes / no Pokémon / next turn
 - Empty Active + occupied Bench → Promote, then draw
 - HTTP: `pnpm serve` (`index.ts`). Fixtures: `pnpm serve:alakazam`, `pnpm serve:scrunch`, `pnpm serve:chansey`, `pnpm serve:poison`, `pnpm serve:asleep`, `pnpm serve:paralyzed`, `pnpm serve:burn`, `pnpm serve:confuse-ray`, `pnpm serve:metronome`, `pnpm serve:count-damage`, `pnpm serve:trainers`, `pnpm serve:deck`, `pnpm serve:energy-pile`, `pnpm serve:tools`, `pnpm serve:leftover`, `pnpm serve:authored`, `pnpm serve:gate`, `pnpm serve:trans`, `pnpm serve:stretch`, `pnpm serve:energy-burn`, `pnpm serve:conversion`, `pnpm serve:leech`, `pnpm serve:init`
 
