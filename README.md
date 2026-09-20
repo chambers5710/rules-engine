@@ -235,6 +235,7 @@ Hydro Pump is authored: `count` Water on `$self_slot`, `calc` chain, bound `atta
 
 ```bash
 pnpm serve                 # HTTP session, default decks
+pnpm serve:fx              # Feel — status / KO / coin overlays (reset cycles; `-- checkup`)
 pnpm serve:init            # Init — Play Active
 pnpm serve:alakazam        # Alakazam vs Blastoise (Damage Swap)
 pnpm serve:scrunch         # Chansey vs Hitmonchan (Scrunch)
