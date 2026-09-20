@@ -199,16 +199,17 @@ function resolveReveal(
   return { cards: ids, from: from ?? self?.player ?? 1, zone }
 }
 
-function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho): {
+function endOfTurnUntil(slot: SlotId, until: EndOfTurnWho, ctx: InterpretCtx): {
   beat: "end_of_turn"
   player: 1 | 2
   next?: true
   leave_active?: true
   leave_play?: true
 } {
+  const actor = resolveSlot("$self_slot", ctx)?.player ?? slot.player
   return {
     beat: "end_of_turn",
-    player: until.who === "owner" ? slot.player : opponent(slot.player),
+    player: until.who === "owner" ? slot.player : opponent(actor),
     ...(until.next ? { next: true as const } : {}),
     ...(until.leave_active ? { leave_active: true as const } : {}),
     ...(until.leave_play ? { leave_play: true as const } : {}),
@@ -719,7 +720,7 @@ export function interpret(
           const until =
             primitive.until.beat === "leave_play"
               ? { beat: "leave_play" as const }
-              : endOfTurnUntil(slot, primitive.until)
+              : endOfTurnUntil(slot, primitive.until, ctx)
           const rewrite = useRewriteOf(primitive, (name) => String(ctx.bindings[name] ?? ""))
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
@@ -728,7 +729,7 @@ export function interpret(
           )
         }
         case "ability_use": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const rewrite = useRewriteOf({ ban: primitive.ban }, (name) => String(ctx.bindings[name] ?? ""))
           if (!("ban" in rewrite)) return gamestate
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
@@ -738,7 +739,7 @@ export function interpret(
           )
         }
         case "energy_type": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "energy_type", set: primitive.set, until, ...(card ? { card } : {}) }),
@@ -746,7 +747,7 @@ export function interpret(
           )
         }
         case "attack_damage": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const rewrite = rewriteOf(primitive)
           const from = primitive.from ? resolveInstance(gamestate, primitive.from, ctx) : undefined
           if (primitive.from && !from) return gamestate
@@ -770,7 +771,7 @@ export function interpret(
           )
         }
         case "cannot_retreat": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "cannot_retreat", until, ...(card ? { card } : {}) }),
@@ -778,7 +779,7 @@ export function interpret(
           )
         }
         case "trainer_use": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "trainer_use", until, ...(card ? { card } : {}) }),
@@ -788,7 +789,7 @@ export function interpret(
         case "can_attack": {
           const forbid = resolveInstance(gamestate, primitive.forbid, ctx)
           if (!forbid) return gamestate
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "can_attack", forbid, until, ...(card ? { card } : {}) }),
@@ -796,7 +797,7 @@ export function interpret(
           )
         }
         case "attack_effects": {
-          const until = endOfTurnUntil(slot, primitive.until)
+          const until = endOfTurnUntil(slot, primitive.until, ctx)
           const card = primitive.card ? resolveCard(primitive.card, ctx) : undefined
           return record(
             applyModifier(gamestate, slot, { field: "attack_effects", prevent: "all", until, ...(card ? { card } : {}) }),

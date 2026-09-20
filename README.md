@@ -137,7 +137,7 @@ Names on the interpret context. Every real attack uses them, not just tests.
 Read-only. Compute and card text ask the same questions.
 
 - **Where** — `ZoneRef` or `SlotRef` (zone vs slot attachment)
-- **Filter** — `energy` (optional `type`), `basic_energy` (optional `type`; subtype Basic only), `basic_pokemon`, `baby`, `evolution`, `name_contains`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`
+- **Filter** — `energy` (optional `type`), `basic_energy` (optional `type`; subtype Basic only), `basic_pokemon`, `baby`, `evolution`, `name_contains`, `evolves_from`, `name`, `has_type`, `trainer`, `pokemon`, `stage_2`. Card Select also has `breeder` (Stage 2 with a legal Basic seat).
 - **Reduce** — list, count, or sum of `energyValue`
 
 `Count` `kind: "cards"` / `"energy_value"` is one slot’s attachment (Hydro Pump: Water on `$self_slot`). `kind: "damage"` reads `slot.damage`. `kind: "hp"` is printed HP. `kind: "knocked_out"` is `isKnockedOut` as 1/0 (Hurricane). Zone `kind: "random"` binds one id without shuffling (Peek). `kind: "attack_damage"` is printed damage of a named attack on that seat (Metronome). On a zone or slot attachment: `kind: "first"` (first id; Scoop Up Basic) or `"last"` (current form; Buzzap). Zone `kind: "prefix"` binds the top `n` ids. `kind: "slots"` counts occupied seats. `Each` maps those seats. Slot filters (`name`, `has_type`, `has_counters`, …) live in `slotMatches` (interpret), shared with Select. See `coverage.md`.

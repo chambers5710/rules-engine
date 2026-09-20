@@ -1,18 +1,44 @@
+import { currentForm, getSlot, pokemonInPlay } from "./board.js"
 import { foldedCard } from "./card.js"
-import catalog from "./data/cards/base1.json" with { type: "json" }
-import type { Card, CardInstanceId, GameState } from "./types.js"
+import table from "./data/lineage.json" with { type: "json" }
+import { mayEvolve } from "./reads.js"
+import type { CardInstance, CardInstanceId, GameState } from "./types.js"
 
-const byName = new Map<string, Card>()
-for (const card of catalog as Card[]) {
-  if (card.supertype === "Pokémon" && !byName.has(card.name)) byName.set(card.name, card)
+const evolvesFromByName = table as Record<string, string>
+
+function evolvesFromName(gamestate: GameState, name: string): string | undefined {
+  const printed = evolvesFromByName[name]
+  if (printed) return printed
+  for (const card of Object.values(gamestate.cardRegistry)) {
+    if (card.name === name && card.evolvesFrom) return card.evolvesFrom
+  }
 }
 
-/** Basic name a Stage 2 can Breeder onto (Venusaur → Bulbasaur). */
+/** Basic name a Stage 2 can Breeder onto (Venusaur → Bulbasaur, Dark Vileplume → Oddish). */
 export function stage2BasicName(gamestate: GameState, cardId: CardInstanceId): string | undefined {
   const printed = foldedCard(gamestate, cardId)
   if (!printed?.subtypes?.includes("Stage 2") || !printed.evolvesFrom) return
-  const mid = byName.get(printed.evolvesFrom)
-  return mid?.evolvesFrom ?? undefined
+  return evolvesFromName(gamestate, printed.evolvesFrom)
+}
+
+function isBasicForm(form: CardInstance): boolean {
+  if (form.supertype !== "Pokémon") return false
+  const subtypes = form.subtypes ?? []
+  return subtypes.includes("Basic") || subtypes.includes("Baby")
+}
+
+/** True when this Stage 2 has a self in-play Basic that mayEvolve. */
+export function hasBreederSeat(gamestate: GameState, player: 1 | 2, evoId: CardInstanceId): boolean {
+  const basic = stage2BasicName(gamestate, evoId)
+  if (!basic) return false
+  for (const slotId of pokemonInPlay(gamestate, player)) {
+    const slot = getSlot(gamestate, slotId)
+    if (!mayEvolve(gamestate, player, slot)) continue
+    const form = currentForm(gamestate, slot)
+    if (!form || form.name !== basic || !isBasicForm(form)) continue
+    return true
+  }
+  return false
 }
 
 export function isStage2Pokemon(gamestate: GameState, cardId: CardInstanceId): boolean {

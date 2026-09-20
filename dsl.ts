@@ -102,6 +102,7 @@ export type CardFilter =
   | { kind: "among"; bind: BindingName }
   | { kind: "pays"; bind: BindingName }
   | { kind: "any"; of: CardFilter[] }
+  | { kind: "breeder" }
 
 export type CalcFn = "add" | "sub" | "mul" | "min" | "max" | "half_up_10" | "half_down_10"
 

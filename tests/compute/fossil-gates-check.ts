@@ -3,7 +3,7 @@ import cards3 from "../../data/cards/base3.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
 import { Action, Op, type Expr } from "../../dsl.js"
 import { runExpr } from "../../machine.js"
-import { abilityBanned, tickModifiersEnter } from "../../modifiers.js"
+import { abilityBanned, tickModifiersEnter, tickModifiersEnd } from "../../modifiers.js"
 import { swapActive } from "../../helpers.js"
 import type { Card, GameState } from "../../types.js"
 import {
@@ -144,6 +144,53 @@ async function stage(): Promise<GameState> {
   expect(!!action, "have Step In to run")
   gamestate = runExpr(gamestate, stepIn, { bindings: action!.seed ?? {} }, 1, Action.Ability)
   expect(abilityBanned(gamestate.players[1].active, "Step In"), "Step In bans itself after use")
+}
+
+{
+  let gamestate = await stage()
+  const goop: Expr = [
+    {
+      op: Op.Each,
+      who: "both",
+      among: "in_play",
+      bind: "$seat",
+      then: [
+        {
+          op: Op.ApplyModifier,
+          slot: "$seat",
+          field: "ability_use",
+          ban: "all",
+          until: { beat: "end_of_turn", who: "opponent" },
+        },
+      ],
+    },
+  ]
+  gamestate = { ...gamestate, activePlayer: 2 }
+  gamestate = runExpr(
+    gamestate,
+    goop,
+    { bindings: { $self_slot: { player: 2, slot: "active" } } },
+    2,
+    Action.PlayTrainer,
+  )
+  expect(abilityBanned(gamestate.players[1].active, "Step In"), "Goop Gas bans both sides")
+  expect(abilityBanned(gamestate.players[2].active, "Step In"), "Goop Gas bans the trainer's seats")
+  gamestate = tickModifiersEnd(gamestate, 2)
+  gamestate = { ...gamestate, activePlayer: 1 }
+  expect(abilityBanned(gamestate.players[1].active, "Step In"), "Goop Gas lasts through your turn")
+  expect(abilityBanned(gamestate.players[2].active, "Step In"), "Goop Gas still marks the opponent")
+}
+
+{
+  let gamestate = await stage()
+  gamestate = {
+    ...gamestate,
+    effectRegistry: {
+      ...gamestate.effectRegistry,
+      "base1-58": { powers: { "Toxic Gas": { kind: "ignore_powers" } } },
+    },
+  }
+  expect(!lists(gamestate, Action.Ability, "Step In"), "Toxic Gas hides other Powers")
 }
 
 console.log("fossil-gates-check assertions passed")

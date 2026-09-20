@@ -5,6 +5,7 @@ import {
   type Frame,
   type PlaySession,
 } from "./play.js"
+import { loadSavedState, type GameSave } from "./save.js"
 import type { Card, EffectRegistry, GameState, SourceId } from "./types.js"
 
 export type { Choice, Frame }
@@ -101,6 +102,8 @@ function withDecks(session: Session): Session {
   return {
     frame: () => attach(session.frame()),
     choose: (index) => attach(session.choose(index)),
+    rewind: (n) => attach(session.rewind(n)),
+    checkpoints: () => session.checkpoints(),
   }
 }
 
@@ -132,4 +135,10 @@ export function createSession(p1Deck: Card[], p2Deck: Card[], registry: EffectRe
 
 export function createSessionFromState(initial: GameState): Session {
   return playFromState(initial, loadedDecks)
+}
+
+export function openLoadedSession(save: GameSave): Session {
+  loadedDecks = save.decks
+  if (save.custom?.length) loadedCustom = save.custom
+  return withDecks(playFromState(loadSavedState(save), loadedDecks))
 }

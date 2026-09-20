@@ -32,6 +32,7 @@ const CARD_KINDS = new Set<CardFilter["kind"]>([
   "other_than",
   "among",
   "pays",
+  "breeder",
 ])
 
 /** Binds compute / trigger drain write before an authored stack runs. */

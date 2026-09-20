@@ -312,7 +312,7 @@ function abilitiesInPlay(gamestate: GameState, player: 1 | 2): AvailableAction[]
     const form = currentForm(gamestate, slot)
     if (!form) continue
     for (const ability of form.abilities ?? []) {
-      if (ability.type === "Pokémon Power" && (!mayUsePokemonPower(slot) || powersSuppressed(gamestate))) continue
+      if (!mayUsePokemonPower(slot) || powersSuppressed(gamestate)) continue
       const expr = cardEffect(gamestate.effectRegistry, form.sourceId, "abilities", ability.name)
       if (expr.length === 0) continue
       if (abilityBanned(slot, ability.name)) continue

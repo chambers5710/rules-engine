@@ -1,5 +1,7 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
+import rocket from "../../data/cards/base5.json" with { type: "json" }
 import { computeAvailableActions } from "../../compute.js"
+import { selectChoices, selectFrame } from "../../select.js"
 import { Action, Op } from "../../dsl.js"
 import { runExpr } from "../../machine.js"
 import { currentForm } from "../../board.js"
@@ -8,6 +10,7 @@ import {
   initBoard, copies, liveTurn, moveToActive, printed, toHand } from "../fixture.js"
 
 const set = cards as Card[]
+const teamRocket = rocket as Card[]
 
 function fail(message: string): never {
   throw new Error(message)
@@ -53,6 +56,63 @@ async function board(opts: { venusaur: boolean; basic: "bulb" | "ivy" }): GameSt
     !listsBreeder(await board({ venusaur: false, basic: "bulb" })),
     "Breeder is omitted with no Stage 2 in hand"
   )
+}
+
+{
+  const breeder = printed(set, "base1-76")
+  const oddish = printed(teamRocket, "base5-63")
+  const plume = printed(teamRocket, "base5-13")
+  const energy = printed(set, "base1-98")
+  let gamestate = await initBoard(
+    [breeder, oddish, plume, printed(set, "base1-58"), ...copies(energy, 16)],
+    [printed(set, "base1-58"), ...copies(energy, 17)]
+  )
+  gamestate = moveToActive(gamestate, 1, "base5-63")
+  gamestate = moveToActive(gamestate, 2, "base1-58")
+  gamestate = toHand(gamestate, 1, "base1-76", 1)
+  gamestate = toHand(gamestate, 1, "base5-13", 1)
+  gamestate = liveTurn(gamestate)
+  expect(
+    listsBreeder(gamestate),
+    "Breeder lists Dark Vileplume onto Oddish without Dark Gloom in the deck"
+  )
+}
+
+{
+  const breeder = printed(set, "base1-76")
+  const oddish = printed(teamRocket, "base5-63")
+  const plume = printed(teamRocket, "base5-13")
+  const saur = printed(set, "base1-15")
+  const energy = printed(set, "base1-98")
+  let gamestate = await initBoard(
+    [breeder, oddish, plume, saur, printed(set, "base1-58"), ...copies(energy, 15)],
+    [printed(set, "base1-58"), ...copies(energy, 17)]
+  )
+  gamestate = moveToActive(gamestate, 1, "base5-63")
+  gamestate = moveToActive(gamestate, 2, "base1-58")
+  gamestate = toHand(gamestate, 1, "base1-76", 1)
+  gamestate = toHand(gamestate, 1, "base5-13", 1)
+  gamestate = toHand(gamestate, 1, "base1-15", 1)
+  gamestate = liveTurn(gamestate)
+  const frame = selectFrame(
+    {
+      op: Op.Select,
+      pick: "cards",
+      source: { player: 1, zone: "hand" },
+      bind: "$evo",
+      filter: [{ kind: "stage_2" }, { kind: "breeder" }],
+    },
+    { bindings: {} },
+    1,
+    Action.PlayTrainer,
+    []
+  )
+  if (!frame) fail("breeder card select frame")
+  const ids = selectChoices(gamestate, frame).flatMap((choice) =>
+    choice.pick === "cards" ? [gamestate.cardRegistry[choice.card].sourceId] : []
+  )
+  expect(ids.includes("base5-13"), "Dark Vileplume is a matching Stage 2")
+  expect(!ids.includes("base1-15"), "Venusaur is omitted with no Bulbasaur in play")
 }
 
 {

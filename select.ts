@@ -2,6 +2,7 @@ import { opponent, getSlot, currentForm } from "./board.js"
 import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
 import { foldedCard } from "./card.js"
+import { hasBreederSeat } from "./lineage.js"
 import { cardMatches, cardsAt } from "./survey.js"
 import { legalEnergyTypes } from "./reads.js"
 import type { Attachment, GameState, SlotId, SlotRef, ZoneName, ZoneRef } from "./types.js"
@@ -237,15 +238,20 @@ function cardPasses(
   card: string,
   filters: CardFilter[],
   source: Extract<ActionFrame, { pick: "cards" }>["source"],
-  bindings: Record<string, unknown>
+  bindings: Record<string, unknown>,
+  player: 1 | 2
 ): boolean {
   for (const filter of filters) {
     if (filter.kind === "any") {
       const inner = filter.of
-      if (!inner.some((row) => cardPasses(gamestate, card, [row], source, bindings))) return false
+      if (!inner.some((row) => cardPasses(gamestate, card, [row], source, bindings, player))) return false
       continue
     }
     if (filter.kind === "pays") continue
+    if (filter.kind === "breeder") {
+      if (!hasBreederSeat(gamestate, player, card)) return false
+      continue
+    }
     if (filter.kind === "other_than") {
       const bound = bindings[filter.bind]
       if (Array.isArray(bound) ? bound.includes(card) : bound === card) return false
@@ -269,7 +275,7 @@ function selectCards(
   const pays = filters.find((filter) => filter.kind === "pays")
   const need = pays ? frame.ctx.bindings[pays.bind] : undefined
   const cards = cardsAt(gamestate, frame.source).filter((card) =>
-    cardPasses(gamestate, card, filters, frame.source, frame.ctx.bindings)
+    cardPasses(gamestate, card, filters, frame.source, frame.ctx.bindings, frame.player)
   )
   const values = cards.map((card) => foldedCard(gamestate, card)?.energyValue ?? 0)
   const actions: SelectChoice[] = []

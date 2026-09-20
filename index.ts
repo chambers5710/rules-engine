@@ -3,10 +3,12 @@ import { pathToFileURL } from "node:url"
 import {
   lastDecks,
   openDefaultSession,
+  openLoadedSession,
   openSession,
   type CompactDeck,
   type Session,
 } from "./session.js"
+import { parseGameSave } from "./save.js"
 
 const PORT = 8788
 
@@ -64,6 +66,28 @@ export function listen(
       return
     }
 
+    if (req.method === "POST" && url.pathname === "/rewind") {
+      try {
+        const body = JSON.parse((await readBody(req)) || "{}") as { n?: unknown }
+        const n = body.n === undefined ? 1 : Number(body.n)
+        send(res, 200, current.rewind(n))
+      } catch (error) {
+        send(res, 400, { error: error instanceof Error ? error.message : "rewind failed" })
+      }
+      return
+    }
+
+    if (req.method === "POST" && url.pathname === "/load") {
+      try {
+        const body = JSON.parse((await readBody(req)) || "null") as unknown
+        current = openLoadedSession(parseGameSave(body))
+        send(res, 200, current.frame())
+      } catch (error) {
+        send(res, 400, { error: error instanceof Error ? error.message : "load failed" })
+      }
+      return
+    }
+
     if (req.method === "POST" && url.pathname === "/reset") {
       try {
         const body = JSON.parse((await readBody(req)) || "{}") as ResetBody
@@ -77,7 +101,7 @@ export function listen(
 
     send(res, 404, { error: "not found" })
   }).listen(PORT, () => {
-    console.log(`session  GET /state  POST /choose  POST /reset  →  http://127.0.0.1:${PORT}`)
+    console.log(`session  GET /state  POST /choose  POST /rewind  POST /load  POST /reset  →  http://127.0.0.1:${PORT}`)
   })
 }
 

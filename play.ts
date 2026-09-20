@@ -17,11 +17,14 @@ export type Frame = {
   gamestate: GameState
   choices: Choice[]
   decks: { p1: string; p2: string }
+  rewindDepth: number
 }
 
 export type PlaySession = {
   frame: () => Frame
   choose: (index: number) => Frame
+  rewind: (n?: number) => Frame
+  checkpoints: () => GameState[]
 }
 
 export function createSession(
@@ -37,14 +40,17 @@ export function createSession(
 export function createSessionFromState(
   initial: GameState,
   decks: { p1: string; p2: string },
+  checkpoints: GameState[] = [],
 ): PlaySession {
   let gamestate = initial
   let actions = computeAvailableActions(gamestate)
+  const past: GameState[] = checkpoints.map((state) => structuredClone(state))
 
   const frame = (): Frame => ({
     type: "STATE",
     gamestate,
     decks,
+    rewindDepth: past.length,
     choices: actions.map((action, index) => ({
       index,
       label: formatAction(gamestate, action),
@@ -61,9 +67,22 @@ export function createSessionFromState(
     choose(index: number) {
       const action = actions[index]
       if (!action) throw new Error("not a listed choice")
+      past.push(structuredClone(gamestate))
       gamestate = stateMachine(gamestate, action)
       actions = computeAvailableActions(gamestate)
       return frame()
+    },
+    rewind(n = 1) {
+      if (!Number.isInteger(n) || n < 1) throw new Error("rewind needs a positive count")
+      if (n > past.length) throw new Error("not enough history to rewind")
+      let restored: GameState | undefined
+      for (let i = 0; i < n; i++) restored = past.pop()
+      gamestate = restored!
+      actions = computeAvailableActions(gamestate)
+      return frame()
+    },
+    checkpoints() {
+      return past
     },
   }
 }

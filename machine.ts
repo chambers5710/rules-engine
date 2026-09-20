@@ -124,10 +124,7 @@ function turnPhase(
     }
     case Action.Ability: {
       const seat = getSlot(gamestate, action.slot)
-      const kind = currentForm(gamestate, seat)?.abilities?.find((row) => row.name === action.name)?.type
-      if (kind === "Pokémon Power" && (!mayUsePokemonPower(seat) || powersSuppressed(gamestate))) {
-        return gamestate
-      }
+      if (!mayUsePokemonPower(seat) || powersSuppressed(gamestate)) return gamestate
       if (abilityBanned(seat, action.name)) return gamestate
       if (!gatePasses(gamestate, action.expr, action.seed)) return gamestate
       return runAction(gamestate, action)
