@@ -251,48 +251,54 @@ function afterKnockouts(gamestate: GameState): GameState {
   )
 }
 
-function checkupPoison(gamestate: GameState, player: 1 | 2): GameState {
+function checkupSlot(gamestate: GameState, player: 1 | 2) {
   const slot = { player, slot: "active" } as const
   const pokemon = getSlot(gamestate, slot)
-  if (!pokemon.status.poison) return gamestate
-  const counters = pokemon.poisonCounters ?? POISON_COUNTERS
+  if (isKnockedOut(gamestate, pokemon)) return null
+  return { slot, pokemon }
+}
+
+function checkupPoison(gamestate: GameState, player: 1 | 2): GameState {
+  const seat = checkupSlot(gamestate, player)
+  if (!seat || !seat.pokemon.status.poison) return gamestate
+  const counters = seat.pokemon.poisonCounters ?? POISON_COUNTERS
   return interpret(gamestate, {
     op: Op.ApplyDamage,
     amount: counters * DAMAGE_COUNTER,
-    slot,
+    slot: seat.slot,
     source: "poison",
   })
 }
 
 function checkupBurn(gamestate: GameState, player: 1 | 2): GameState {
-  const slot = { player, slot: "active" } as const
-  if (!getSlot(gamestate, slot).status.burn) return gamestate
+  const seat = checkupSlot(gamestate, player)
+  if (!seat || !seat.pokemon.status.burn) return gamestate
   gamestate = interpret(gamestate, {
     op: Op.ApplyDamage,
     amount: BURN_COUNTERS * DAMAGE_COUNTER,
-    slot,
+    slot: seat.slot,
     source: "burn",
   })
   const ctx: InterpretCtx = { bindings: {} }
   gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "burn" }, ctx)
   if (ctx.bindings.$coin !== "heads") return gamestate
-  return interpret(gamestate, { op: Op.RemoveStatus, status: "burn", slot })
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "burn", slot: seat.slot })
 }
 
 function checkupAsleep(gamestate: GameState, player: 1 | 2): GameState {
-  const slot = { player, slot: "active" } as const
-  if (!getSlot(gamestate, slot).status.asleep) return gamestate
+  const seat = checkupSlot(gamestate, player)
+  if (!seat || !seat.pokemon.status.asleep) return gamestate
   const ctx: InterpretCtx = { bindings: {} }
   gamestate = interpret(gamestate, { op: Op.FlipCoin, bind: "$coin", check: "asleep" }, ctx)
   if (ctx.bindings.$coin !== "heads") return gamestate
-  return interpret(gamestate, { op: Op.RemoveStatus, status: "asleep", slot })
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "asleep", slot: seat.slot })
 }
 
 function checkupParalyzed(gamestate: GameState, player: 1 | 2): GameState {
   if (player !== gamestate.activePlayer) return gamestate
-  const slot = { player, slot: "active" } as const
-  if (!getSlot(gamestate, slot).status.paralyzed) return gamestate
-  return interpret(gamestate, { op: Op.RemoveStatus, status: "paralyzed", slot })
+  const seat = checkupSlot(gamestate, player)
+  if (!seat || !seat.pokemon.status.paralyzed) return gamestate
+  return interpret(gamestate, { op: Op.RemoveStatus, status: "paralyzed", slot: seat.slot })
 }
 
 // KO — discard that slot; opponent picks a prize into hand (face-down unless prizes are public)
