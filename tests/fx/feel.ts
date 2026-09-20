@@ -3,7 +3,7 @@ import promos from "../../data/cards/basep.json" with { type: "json" }
 import { listen } from "../../index.js"
 import { applyModifier } from "../../modifiers.js"
 import { applyDamage, applyStatus } from "../../ops.js"
-import { createSessionFromState } from "../../session.js"
+import { createSessionFromState } from "../../src/session.js"
 import type { Card, GameState, SlotId } from "../../types.js"
 import { Phase } from "../../types.js"
 import {

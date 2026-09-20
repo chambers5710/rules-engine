@@ -1,7 +1,7 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { listen } from "../../index.js"
 import { applyStatus, moveZoneToSlot, moveZoneToZone } from "../../ops.js"
-import { createSessionFromState } from "../../session.js"
+import { createSessionFromState } from "../../src/session.js"
 import type { Card, GameState } from "../../types.js"
 import {
   initBoard,

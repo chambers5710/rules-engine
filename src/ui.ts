@@ -1,6 +1,6 @@
-import { currentForm, getSlot } from "./board.js"
-import { Action, type AvailableAction } from "./compute.js"
-import type { GameState } from "./types.js"
+import { currentForm, getSlot } from "../board.js"
+import { Action, type AvailableAction } from "../compute.js"
+import type { GameState } from "../types.js"
 
 function wrapText(text: string, width: number): string[] {
   const words = text.split(/\s+/)

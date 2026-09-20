@@ -1,6 +1,6 @@
 import cards from "../../data/cards/base1.json" with { type: "json" }
 import { initializeGameState } from "../../initialize.js"
-import { createSessionFromState } from "../../play.js"
+import { createSessionFromState } from "../../src/play.js"
 import type { Card, GameState } from "../../types.js"
 import { copies, printed } from "../fixture.js"
 

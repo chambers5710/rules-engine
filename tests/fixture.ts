@@ -1,7 +1,7 @@
 import { initializeGameState } from "../initialize.js"
 import { placePrize } from "../helpers.js"
 import { moveZoneToSlot, moveZoneToZone } from "../ops.js"
-import { fetchEffects } from "../session.js"
+import { fetchEffects } from "../src/session.js"
 import type { Card, GameState, SlotId, ZoneName } from "../types.js"
 import { Phase } from "../types.js"
 

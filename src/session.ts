@@ -5,16 +5,12 @@ import {
   type Frame,
   type PlaySession,
 } from "./play.js"
-import { loadSavedState, type GameSave } from "./save.js"
-import type { Card, EffectRegistry, GameState, SourceId } from "./types.js"
+import { cardApi } from "./env.js"
+import { loadSavedState, type GameSave } from "../save.js"
+import type { Card, EffectRegistry, GameState, SourceId } from "../types.js"
 
 export type { Choice, Frame }
 export type Session = PlaySession
-
-export const DECKS = {
-  1:  "d-base1-1",
-  2: "d-base1-2"
-} as const
 
 export type CompactDeck = {
   id: string
@@ -23,23 +19,14 @@ export type CompactDeck = {
   cards: { id: string; name: string; rarity?: string; count: number }[]
 }
 
-let loadedDecks: { p1: string; p2: string } = { p1: DECKS[1], p2: DECKS[2] }
-let loadedCustom: CompactDeck[] = []
-
-export function lastDecks() {
-  return loadedDecks
-}
-
-const CARD_API = "http://localhost:8787"
-
 export async function fetchDeck(deckId: string): Promise<Card[]> {
-  const response = await fetch(`${CARD_API}/api/decks/${deckId}`)
+  const response = await fetch(`${cardApi()}/api/decks/${deckId}`)
   if (!response.ok) throw new Error(`deck ${deckId}: ${response.status}`)
   return (await response.json()) as Card[]
 }
 
 async function fetchCard(id: string): Promise<Card> {
-  const response = await fetch(`${CARD_API}/api/cards/${encodeURIComponent(id)}`)
+  const response = await fetch(`${cardApi()}/api/cards/${encodeURIComponent(id)}`)
   if (!response.ok) throw new Error(`card ${id}: ${response.status}`)
   return (await response.json()) as Card
 }
@@ -49,18 +36,18 @@ export async function expandCompactDeck(deck: CompactDeck): Promise<Card[]> {
   const rows = await Promise.all(unique.map((id) => fetchCard(id)))
   const byId = new Map(rows.map((card) => [card.id, card]))
   const missing = unique.filter((id) => !byId.has(id))
-  if (missing.length) throw new Error(`custom deck ${deck.id}: missing ${missing.join(", ")}`)
+  if (missing.length) throw new Error(`compact deck ${deck.id}: missing ${missing.join(", ")}`)
   const expanded = deck.cards.flatMap((entry) => {
     const card = byId.get(entry.id)
     if (!card) return []
     return Array.from({ length: entry.count }, () => card)
   })
-  if (!expanded.length) throw new Error(`custom deck ${deck.id}: no cards`)
+  if (!expanded.length) throw new Error(`compact deck ${deck.id}: no cards`)
   return expanded
 }
 
-export async function resolveDeck(id: string, custom: CompactDeck[] = []): Promise<Card[]> {
-  const stored = custom.find((deck) => deck.id === id)
+export async function resolveDeck(id: string, compactDecks: CompactDeck[] = []): Promise<Card[]> {
+  const stored = compactDecks.find((deck) => deck.id === id)
   if (stored) return expandCompactDeck(stored)
   return fetchDeck(id)
 }
@@ -69,7 +56,7 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
   const unique = [...new Set(ids.filter(Boolean))]
   if (unique.length === 0) return {}
   const response = await fetch(
-    `${CARD_API}/api/effects?ids=${encodeURIComponent(unique.join(","))}`
+    `${cardApi()}/api/effects?ids=${encodeURIComponent(unique.join(","))}`
   )
   if (!response.ok) throw new Error(`effects: ${response.status}`)
   const rows = (await response.json()) as Array<{
@@ -97,48 +84,36 @@ export async function fetchEffects(ids: SourceId[]): Promise<EffectRegistry> {
   return registry
 }
 
-function withDecks(session: Session): Session {
-  const attach = (frame: Frame): Frame => ({ ...frame, decks: loadedDecks })
-  return {
-    frame: () => attach(session.frame()),
-    choose: (index) => attach(session.choose(index)),
-    rewind: (n) => attach(session.rewind(n)),
-    checkpoints: () => session.checkpoints(),
-  }
-}
-
 export async function openSession(
   p1Id: string,
   p2Id: string,
-  custom: CompactDeck[] = [],
+  compactDecks: CompactDeck[] = [],
 ): Promise<Session> {
-  loadedDecks = { p1: p1Id, p2: p2Id }
-  if (custom.length) loadedCustom = custom
-  const rows = custom.length
-    ? custom
-    : loadedCustom.filter((deck) => deck.id === p1Id || deck.id === p2Id)
+  const decks = { p1: p1Id, p2: p2Id }
   const [p1, p2] = await Promise.all([
-    resolveDeck(p1Id, rows),
-    resolveDeck(p2Id, rows),
+    resolveDeck(p1Id, compactDecks),
+    resolveDeck(p2Id, compactDecks),
   ])
   const registry = await fetchEffects([...p1, ...p2].map((card) => card.id))
-  return withDecks(createSession(p1, p2, registry))
+  return playCreateSession(p1, p2, registry, decks)
 }
 
-export async function openDefaultSession(): Promise<Session> {
-  return openSession(DECKS[1], DECKS[2])
+export function createSession(
+  p1Deck: Card[],
+  p2Deck: Card[],
+  registry: EffectRegistry,
+  decks: { p1: string; p2: string },
+): Session {
+  return playCreateSession(p1Deck, p2Deck, registry, decks)
 }
 
-export function createSession(p1Deck: Card[], p2Deck: Card[], registry: EffectRegistry): Session {
-  return playCreateSession(p1Deck, p2Deck, registry, loadedDecks)
-}
-
-export function createSessionFromState(initial: GameState): Session {
-  return playFromState(initial, loadedDecks)
+export function createSessionFromState(
+  initial: GameState,
+  decks: { p1: string; p2: string } = { p1: "", p2: "" },
+): Session {
+  return playFromState(initial, decks)
 }
 
 export function openLoadedSession(save: GameSave): Session {
-  loadedDecks = save.decks
-  if (save.custom?.length) loadedCustom = save.custom
-  return withDecks(playFromState(loadSavedState(save), loadedDecks))
+  return playFromState(loadSavedState(save), save.decks)
 }

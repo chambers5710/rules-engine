@@ -1,7 +1,7 @@
-import { Action, computeAvailableActions } from "./compute.js"
-import { initializeGameState } from "./initialize.js"
-import { stateMachine } from "./machine.js"
-import type { Card, EffectRegistry, GameState, Ruleset, SlotId } from "./types.js"
+import { Action, computeAvailableActions } from "../compute.js"
+import { initializeGameState } from "../initialize.js"
+import { stateMachine } from "../machine.js"
+import type { Card, EffectRegistry, GameState, Ruleset, SlotId } from "../types.js"
 import { formatAction } from "./ui.js"
 
 export type Choice = {
