@@ -1,6 +1,6 @@
 import { currentForm, getSlot, pokemonInPlay } from "./board.js"
 import { foldedCard } from "./card.js"
-import table from "./data/lineage.json" with { type: "json" }
+import table from "./lineage.json" with { type: "json" }
 import { mayEvolve } from "./reads.js"
 import type { CardInstance, CardInstanceId, GameState } from "./types.js"
 

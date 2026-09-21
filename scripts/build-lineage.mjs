@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url"
 const SETS = ["base1", "base2", "base3", "base4", "base5", "base6", "basep"]
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..")
-const cardsDir = join(root, "data/cards")
-const outPath = join(root, "data/lineage.json")
+const cardsDir = join(root, "../data/cards/en")
+const outPath = join(root, "lineage.json")
 
 const files = new Set(await readdir(cardsDir))
 const table = {}
@@ -27,4 +27,4 @@ for (const setId of SETS) {
 const names = Object.keys(table).sort()
 const ordered = Object.fromEntries(names.map((name) => [name, table[name]]))
 await writeFile(outPath, `${JSON.stringify(ordered, null, 2)}\n`)
-console.log(`wrote ${names.length} names to data/lineage.json`)
+console.log(`wrote ${names.length} names to lineage.json`)
