@@ -91,7 +91,7 @@ Stop using `from` for three jobs. The field is the role:
 ```
 Select  pick "slots"    among  self | opponent     →  menu of SlotId
 Select  pick "cards"    source ZoneRef | SlotRef | bind  →  menu of card ids
-Select  pick "attacks"  slot   SlotId | bind       →  menu of attack names
+Select  pick "attacks"  slot   SlotId | bind       →  menu of attack names (omits copy-an-attack exprs)
 ```
 
 `kind: "in_play"` was “list that player’s seats.” That is `pick: "slots"` + `among`. Not a zone, not a `SlotId`.
@@ -210,7 +210,7 @@ run_effect  $copy
 2. **`actionStack` is the paused expr** — `runAction` hits Select, stop, push a frame. Machine does not Checkup until the stack is empty. The Attack action is gone; the **frame owns** `remaining` (unread tail) and `ctx` (`InterpretCtx`). Select last → `remaining` is `[]`.
 3. **Compute has two modes** — stack empty: today’s Turn menu. Frame on top: only that Select’s answers. Choosing one is not a new Attack; it writes the bind and pops.
 4. **Resume** — write the bind, interpret the rest of the frame. Nested Selects push again. `run_effect` still fetches `cardEffect` for a bound name when a later full copy needs it.
-5. **Metronome** — Select defending attacks, `run_effect` with `strip`. No special case in `attacksFromActive`. Mini-Metronome is the same Select without `strip`.
+5. **Metronome** — Select defending attacks, `run_effect` with `strip`. No special case in `attacksFromActive`. Mini-Metronome is the same Select without `strip`. The menu omits attacks whose expr itself Selects attacks (Clefable vs Clefable, Ditto Transform).
 6. **Copy policy** — default `run_effect` is the attack as written. `strip` names Energy pay and/or recoil. Weakness uses the copier because `$self_slot` is still Clefairy / Togepi.
 
 **Done:** (1)–(5). **Not done:** (6).

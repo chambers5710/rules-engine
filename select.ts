@@ -1,5 +1,6 @@
-import { opponent, getSlot, currentForm } from "./board.js"
+import { opponent, getSlot, currentForm, attackSourceId } from "./board.js"
 import { Action, Op, type ActionFrame, type CardFilter, type Expr, type Primitive } from "./dsl.js"
+import { attackExpr } from "./effects.js"
 import { ifPasses, interpret, resolveSlot, surveySlots, useGate, type InterpretCtx } from "./interpret.js"
 import { foldedCard } from "./card.js"
 import { hasBreederSeat } from "./lineage.js"
@@ -299,18 +300,33 @@ function selectCards(
   return actions
 }
 
+function copiesAttack(expr: Expr): boolean {
+  for (const step of expr) {
+    if (step.op === Op.Select && step.pick === "attacks") return true
+    if ((step.op === Op.If || step.op === Op.Loop || step.op === Op.Each) && copiesAttack(step.then)) {
+      return true
+    }
+  }
+  return false
+}
+
 function selectAttacks(
   gamestate: GameState,
   frame: Extract<ActionFrame, { pick: "attacks" }>
 ): SelectChoice[] {
   const form = currentForm(gamestate, getSlot(gamestate, frame.slot))
-  const actions: SelectChoice[] = (form?.attacks ?? []).map((attack) => ({
-    kind: Action.Choose,
-    player: frame.player,
-    pick: "attacks" as const,
-    name: attack.name,
-    expr: [] as const,
-  }))
+  const sourceId = form ? (attackSourceId(gamestate, frame.slot.player) ?? form.sourceId) : undefined
+  const actions: SelectChoice[] = []
+  for (const attack of form?.attacks ?? []) {
+    if (sourceId && copiesAttack(attackExpr(gamestate.effectRegistry, sourceId, attack))) continue
+    actions.push({
+      kind: Action.Choose,
+      player: frame.player,
+      pick: "attacks" as const,
+      name: attack.name,
+      expr: [] as const,
+    })
+  }
   if (frame.optional) actions.push({ kind: Action.Choose, player: frame.player, pick: "skip", expr: [] })
   return actions
 }

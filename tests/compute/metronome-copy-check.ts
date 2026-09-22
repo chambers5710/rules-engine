@@ -1,5 +1,6 @@
 import base from "../../data/cards/base1.json" with { type: "json" }
 import dump from "../../../effect-author/effects/effects_base1.json" with { type: "json" }
+import { computeAvailableActions } from "../../compute.js"
 import { Action, Op, type InterpretCtx } from "../../dsl.js"
 import { stripCopy } from "../../effects.js"
 import { initializeGameState } from "../../initialize.js"
@@ -150,6 +151,18 @@ function playStripped(gamestate: GameState, name: string): GameState {
   const expr = stripCopy(copiedAttackExpr(stage("base1-10", 1), defending, "Barrier"), metronomeStrip)
   expect(expr.every((step) => step.op !== Op.Select && step.op !== Op.MoveSlotToZone), "Barrier Metronome drops pay")
   expect(expr.some((step) => step.op === Op.ApplyModifier), "Barrier Metronome still shields")
+}
+
+{
+  const expr = registry["base1-5"]?.attacks?.["Metronome"]
+  if (!expr) fail("no Metronome dump")
+  const gamestate = runExpr(stage("base1-5", 0), expr, ctx(), 1, Action.Attack)
+  expect(gamestate.actionStack.length === 1, "Metronome vs Clefairy pauses")
+  const names = computeAvailableActions(gamestate).flatMap((row) =>
+    row.kind === Action.Choose && row.pick === "attacks" ? [row.name] : []
+  )
+  expect(names.includes("Sing"), "Metronome can copy Sing")
+  expect(!names.includes("Metronome"), "Metronome cannot copy Metronome")
 }
 
 console.log("metronome-copy-check assertions passed")

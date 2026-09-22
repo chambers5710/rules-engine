@@ -234,6 +234,7 @@ export function pipelineAttackDamage(
   let damage = foldAttackBase(gamestate, attacker, base, attack)
   damage += extraDamageIfConfused(gamestate, getSlot(gamestate, attacker))
   damage = foldBeforeMatchup(gamestate, defender, damage, attacker)
+  const beforeMatchup = Math.max(0, damage)
   let weakness = false
   let resistance = false
   if (matchup && defender.player !== attacker.player) {
@@ -260,7 +261,8 @@ export function pipelineAttackDamage(
     raw,
     weakness,
     resistance,
-    prevented: raw > 0 && damage === 0,
+    // W/R is before `$raw`. Resistance flooring a positive hit is still a block.
+    prevented: (raw > 0 && damage === 0) || (resistance && beforeMatchup > 0 && damage === 0),
   }
 }
 
